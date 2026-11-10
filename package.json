@@ -1,0 +1,193 @@
+{
+  "name": "prompteur",
+  "displayName": "Prompteur",
+  "description": "Git-friendly local YAML prompts with categories, tags, and clipboard generation.",
+  "version": "0.4.4",
+  "publisher": "dmundt",
+  "icon": "resources/icon.png",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.96.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./dist/extension.js",
+  "extensionKind": [
+    "ui"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "Workspace library writes and prompt generation require Workspace Trust."
+    },
+    "virtualWorkspaces": false
+  },
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "prompteur",
+          "title": "Prompteur",
+          "icon": "resources/activity/prompts.svg"
+        }
+      ]
+    },
+    "views": {
+      "prompteur": [
+        {
+          "id": "prompteur.prompts",
+          "name": "Prompts"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "prompteur.addStarters",
+        "title": "Add Starter Library",
+        "category": "Prompteur",
+        "icon": "$(library)"
+      },
+      {
+        "command": "prompteur.newPrompt",
+        "title": "New Prompt",
+        "category": "Prompteur",
+        "icon": "$(add)"
+      },
+      {
+        "command": "prompteur.edit",
+        "title": "Edit YAML",
+        "category": "Prompteur",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "prompteur.delete",
+        "title": "Delete",
+        "category": "Prompteur",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "prompteur.duplicate",
+        "title": "Duplicate Prompt",
+        "category": "Prompteur",
+        "icon": "$(files)"
+      },
+      {
+        "command": "prompteur.copy",
+        "title": "Copy Prompt",
+        "category": "Prompteur",
+        "icon": "$(copy)"
+      },
+      {
+        "command": "prompteur.preview",
+        "title": "Preview",
+        "category": "Prompteur",
+        "icon": "$(open-preview)"
+      },
+      {
+        "command": "prompteur.search",
+        "title": "Filter Prompts",
+        "category": "Prompteur",
+        "icon": "$(search)"
+      },
+      {
+        "command": "prompteur.clearSearch",
+        "title": "Clear Filter",
+        "category": "Prompteur",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "prompteur.refresh",
+        "title": "Reload Libraries",
+        "category": "Prompteur",
+        "icon": "$(refresh)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "prompteur.addStarters",
+          "when": "view == prompteur.prompts",
+          "group": "create"
+        },
+        {
+          "command": "prompteur.newPrompt",
+          "when": "view == prompteur.prompts",
+          "group": "navigation@1"
+        },
+        {
+          "command": "prompteur.search",
+          "when": "view =~ /^prompteur\\./",
+          "group": "navigation@3"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "prompteur.copy",
+          "when": "view =~ /^prompteur\\./ && viewItem == prompt",
+          "group": "inline@1"
+        },
+        {
+          "command": "prompteur.preview",
+          "when": "view =~ /^prompteur\\./ && viewItem == prompt",
+          "group": "2_prompt"
+        },
+        {
+          "command": "prompteur.edit",
+          "when": "view =~ /^prompteur\\./ && viewItem =~ /^(prompt|problem)$/",
+          "group": "edit@1"
+        },
+        {
+          "command": "prompteur.duplicate",
+          "when": "view =~ /^prompteur\\./ && viewItem == prompt",
+          "group": "2_prompt"
+        },
+        {
+          "command": "prompteur.delete",
+          "when": "view =~ /^prompteur\\./ && viewItem == prompt",
+          "group": "3_delete"
+        },
+        {
+          "command": "prompteur.newPrompt",
+          "when": "view == prompteur.prompts && viewItem =~ /^(scope|category)$/",
+          "group": "create"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "build": "npm run check && npm run schemas && esbuild src/extension.ts --bundle --platform=node --external:vscode --outfile=dist/extension.js --sourcemap --minify",
+    "schemas": "esbuild scripts/schemas.ts --bundle --platform=node --packages=external --outfile=dist/schema.cjs && node dist/schema.cjs",
+    "check": "tsc --noEmit",
+    "test": "vitest run",
+    "test:host": "npm run build && esbuild tests/host/smoke.ts --bundle --platform=node --external:vscode --outfile=dist/host-smoke.cjs && node scripts/run-host-tests.mjs",
+    "coverage": "vitest run --coverage",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "package": "vsce package --allow-missing-repository --no-rewrite-relative-links --no-dependencies",
+    "vscode:prepublish": "npm run build"
+  },
+  "dependencies": {
+    "yaml": "^2.8.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "@types/node": "^22.0.0",
+    "@types/vscode": "^1.96.0",
+    "@vitest/coverage-v8": "^5.1.0",
+    "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "^4.1.0",
+    "@xmldom/xmldom": "^0.9.12",
+    "esbuild": "^0.28.2",
+    "eslint": "^9.0.0",
+    "prettier": "^3.5.0",
+    "typescript": "^5.7.0",
+    "typescript-eslint": "^8.0.0",
+    "vitest": "^5.1.0"
+  },
+  "overrides": {
+    "minimatch": "^11.0.5"
+  }
+}
