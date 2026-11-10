@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "version": { "type": "number", "const": 1 },
+    "name": { "type": "string", "minLength": 1 },
+    "description": { "default": "", "type": "string" },
+    "category": { "default": "misc", "type": "string", "minLength": 1 },
+    "tags": {
+      "default": [],
+      "maxItems": 128,
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "content": { "type": "string" }
+  },
+  "required": ["version", "name", "content"],
+  "additionalProperties": false
+}

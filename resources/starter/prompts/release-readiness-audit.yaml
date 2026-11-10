@@ -1,0 +1,27 @@
+version: 1
+name: Release Readiness Audit
+description: >
+  Assess release blockers across build, tests, packaging, activation, workflows, and documentation.
+category: audit
+tags: [audit, release, packaging, verification]
+content: |
+  Audit release readiness for {{workspace}} with this scope:
+
+  {{selection}}
+
+  Identify the exact artifact or source revision/version being assessed.
+  If selection is empty, inspect accessible release/workspace context and
+  state scope; request context if unavailable.
+  Inspect available release configuration and implementation. Check build,
+  type checks, tests, package contents, activation, contributed commands,
+  critical user workflows, and documentation consistency where applicable.
+  Use existing validation commands when feasible; avoid publishing, installing
+  into a user profile, or modifying source as part of this audit.
+  For each finding, provide severity, evidence with verified file/line
+  references, confidence, user impact, smallest fix, and verification steps.
+  Separate release blockers from optional improvements. List commands run,
+  results, and untested areas. Conclude ready, conditional, or blocked;
+  do not infer readiness from passing tests alone or treat missing evidence
+  as proof that a feature works.
+  Failed mandatory checks block release. Untested mandatory checks prevent
+  an unconditional ready verdict; list the evidence needed to resolve them.
