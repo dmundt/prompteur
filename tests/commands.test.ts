@@ -9,14 +9,18 @@ import type { PromptTree, TreeNode } from '../src/workbench/tree';
 import {
   collections,
   commands,
+  commandExecutions,
+  configurationChanged,
   env,
   FakeDocument,
   FakeEditor,
   FakeMemento,
   handlers,
   inputBoxes,
+  MarkdownString,
   messages,
   providers,
+  quickPicks,
   reset,
   responses,
   saveDocument,
@@ -125,7 +129,11 @@ describe('release commands', () => {
     const manifest = JSON.parse(await fs.readFile('package.json', 'utf8')) as {
       contributes: {
         commands: { command: string; title: string }[];
-        menus: { 'view/item/context': { command: string; when: string; group: string }[] };
+        configuration: { properties: Record<string, unknown> };
+        menus: {
+          'view/item/context': { command: string; when: string; group: string }[];
+          'view/title': { command: string; when: string; group: string }[];
+        };
       };
     };
     expect([...handlers.keys()].sort()).toEqual(
@@ -136,6 +144,22 @@ describe('release commands', () => {
       ].sort(),
     );
     expect(manifest.contributes).not.toHaveProperty('keybindings');
+    expect(manifest.contributes.menus['view/title']).toContainEqual({
+      command: 'prompteur.openSettings',
+      when: 'view == prompteur.prompts',
+      group: 'navigation@4',
+    });
+    expect(manifest.contributes.configuration).toMatchObject({
+      properties: {
+        'prompteur.defaultScope': {
+          type: 'string',
+          default: 'ask',
+          enum: ['ask', 'user', 'workspace'],
+        },
+        'prompteur.preferredCategory': { type: 'string', default: '' },
+        'prompteur.showTags': { type: 'boolean', default: true },
+      },
+    });
     const promptMenu = manifest.contributes.menus['view/item/context'].filter(
       (item) =>
         item.when.includes('viewItem == prompt') ||
@@ -182,6 +206,11 @@ describe('release commands', () => {
     await run('preview', node);
     expect(context.globalState.values).toEqual(before);
     expect(providers.size).toBe(0);
+    await run('openSettings');
+    expect(commandExecutions.at(-1)).toEqual({
+      id: 'workbench.action.openSettings',
+      args: ['@ext:dmundt.prompteur'],
+    });
   });
   it('creates readable names, suffixes collisions, inherits categories, duplicates and edits', async () => {
     responses.input.push('Code review', 'Code review');
@@ -500,25 +529,120 @@ describe('release commands', () => {
     );
     expect((await entries()).some((item) => item.entry.data.name === 'User prompt')).toBe(true);
   });
+  it('uses configured defaults for untargeted writes and preserves explicit targets', async () => {
+    const showQuickPick = vi.spyOn(window, 'showQuickPick');
+    workspace.configuration.set('prompteur.defaultScope', 'user');
+    responses.quick.push('Review');
+    responses.input.push('Default User Prompt');
+    await run('newPrompt');
+    expect(showQuickPick).not.toHaveBeenCalled();
+    expect(
+      (await entries('user')).some((node) => node.entry.data.name === 'Default User Prompt'),
+    ).toBe(true);
+
+    workspace.configuration.set('prompteur.defaultScope', 'workspace');
+    responses.quick.push('Test');
+    responses.input.push('Default Workspace Prompt');
+    await run('newPrompt');
+    expect(
+      (await entries('workspace')).some(
+        (node) => node.entry.data.name === 'Default Workspace Prompt',
+      ),
+    ).toBe(true);
+
+    responses.quick.push('Plan');
+    responses.input.push('Explicit User Prompt');
+    await run('newPrompt', scopeNode('user'));
+    expect(
+      (await entries('user')).some((node) => node.entry.data.name === 'Explicit User Prompt'),
+    ).toBe(true);
+  });
+  it('uses the default for starters and paste, but never falls back from unavailable Workspace', async () => {
+    workspace.configuration.set('prompteur.defaultScope', 'workspace');
+    await run('addStarters');
+    expect(await entries('workspace')).toHaveLength(16);
+    expect(await entries('user')).toHaveLength(0);
+
+    const source = await addPrompt('default-paste', 'Copied');
+    await run('copyPrompt', source);
+    await run('pastePrompt');
+    expect(
+      (await entries('workspace')).some((node) => node.entry.data.name === 'default-paste'),
+    ).toBe(true);
+
+    workspace.isTrusted = false;
+    responses.quick.push('Review');
+    responses.input.push('Untrusted Workspace Prompt');
+    await expect(run('newPrompt')).rejects.toThrow('Trust');
+    expect(await entries('workspace')).toHaveLength(17);
+
+    for (const disposable of context.subscriptions.splice(0)) disposable.dispose();
+    workspace.workspaceFolders = [];
+    await activate(context as unknown as vscode.ExtensionContext);
+    await expect(run('addStarters')).rejects.toThrow('Workspace library is unavailable');
+    expect(await entries('user')).toHaveLength(1);
+    expect((await entries('user'))[0]?.entry.data.name).toBe('default-paste');
+  });
   it('offers built-in categories and category approval when creating at scope level', async () => {
     const showQuickPick = vi.spyOn(window, 'showQuickPick');
     responses.quick.push('Debug');
     responses.input.push('Triage');
     await run('newPrompt', scopeNode('user'));
-    expect(showQuickPick).toHaveBeenCalledWith(
-      [
-        { label: 'Explain', value: 'explain' },
-        { label: 'Plan', value: 'plan' },
-        { label: 'Implement', value: 'implement' },
-        { label: 'Review', value: 'review' },
-        { label: 'Test', value: 'test' },
-        { label: 'Debug', value: 'debug' },
-        { label: 'Document', value: 'document' },
-        { label: '$(add) Add Category...', value: '__add_category__' },
-      ],
-      { title: 'Choose category' },
-    );
+    expect(showQuickPick).not.toHaveBeenCalled();
+    expect(quickPicks.at(-1)?.items).toEqual([
+      { label: 'Explain', value: 'explain' },
+      { label: 'Plan', value: 'plan' },
+      { label: 'Implement', value: 'implement' },
+      { label: 'Review', value: 'review' },
+      { label: 'Test', value: 'test' },
+      { label: 'Debug', value: 'debug' },
+      { label: 'Document', value: 'document' },
+      { label: '$(add) Add Category...', value: '__add_category__' },
+    ]);
     expect((await entries('user'))[0]?.entry.data.category).toBe('debug');
+  });
+  it('preselects an approved category without forcing that choice', async () => {
+    workspace.configuration.set('prompteur.preferredCategory', ' REVIEW ');
+    responses.quick.push('Plan');
+    responses.input.push('Chosen Category');
+    await run('newPrompt', scopeNode('user'));
+    expect(quickPicks.at(-1)?.activeItems.map((item) => item.value)).toEqual(['review']);
+    expect((await entries('user'))[0]?.entry.data.category).toBe('plan');
+
+    workspace.configuration.set('prompteur.preferredCategory', 'not-approved');
+    responses.quick.push('Debug');
+    responses.input.push('Unmatched Preference');
+    await run('newPrompt', scopeNode('user'));
+    expect(quickPicks.at(-1)?.activeItems).toEqual([]);
+    expect(
+      (await entries('user')).find((node) => node.entry.data.name === 'Unmatched Preference')?.entry
+        .data.category,
+    ).toBe('debug');
+  });
+  it('shows prompt tags by default and refreshes row descriptions when hidden', async () => {
+    const node = await addPrompt('tag-visibility', 'safe');
+    await fs.writeFile(
+      join(userRoot(), node.entry.path),
+      encodeMarkdown({ ...node.entry.data, tags: ['security', 'quality'] }),
+    );
+    await run('refresh');
+    const taggedNode = (await entries()).find((item) => item.entry.data.name === 'tag-visibility')!;
+    expect(tree().getTreeItem(taggedNode).description).toBe('#security #quality');
+
+    const refresh = vi.spyOn(tree(), 'refresh');
+    workspace.configuration.set('prompteur.showTags', false);
+    configurationChanged.fire({
+      affectsConfiguration: (section) => section === 'prompteur.showTags',
+    });
+    expect(refresh).toHaveBeenCalled();
+    expect(tree().getTreeItem(taggedNode).description).toBeUndefined();
+    expect((tree().getTreeItem(taggedNode).tooltip as MarkdownString).value).toContain('#security');
+
+    workspace.configuration.set('prompteur.showTags', true);
+    configurationChanged.fire({
+      affectsConfiguration: (section) => section === 'prompteur.showTags',
+    });
+    expect(tree().getTreeItem(taggedNode).description).toBe('#security #quality');
   });
   it('requires confirmation to add a profile category and shares it across libraries', async () => {
     responses.quick.push('$(add) Add Category...');
@@ -545,13 +669,14 @@ describe('release commands', () => {
       '',
     ]);
     await activate(context as unknown as vscode.ExtensionContext);
-    const showQuickPick = vi.spyOn(window, 'showQuickPick');
+    workspace.configuration.set('prompteur.preferredCategory', ' Research ');
     responses.quick.push('Research');
     responses.input.push('Research prompt');
     await run('newPrompt', scopeNode('user'));
-    const choices = showQuickPick.mock.calls[0]?.[0] as { label: string }[];
+    const choices = quickPicks.at(-1)?.items ?? [];
     expect(choices.map((choice) => choice.label)).toContain('Research');
     expect(choices.filter((choice) => choice.label === 'Review')).toHaveLength(1);
+    expect(quickPicks.at(-1)?.activeItems.map((item) => item.value)).toEqual(['research']);
     expect((await entries('user'))[0]?.entry.data.category).toBe('research');
   });
   it('does not add or create a category when approval is cancelled', async () => {

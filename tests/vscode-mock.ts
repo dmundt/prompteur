@@ -129,6 +129,9 @@ const willSave = new EventEmitter<{
   waitUntil: (edits: Promise<unknown>) => void;
 }>();
 const activeChanged = new EventEmitter<FakeEditor | undefined>();
+export const configurationChanged = new EventEmitter<{
+  affectsConfiguration: (section: string) => boolean;
+}>();
 
 export class FakeDocument {
   isDirty = false;
@@ -210,6 +213,8 @@ export const responses = {
   input: [] as (string | null)[],
   warning: [] as (string | null)[],
 };
+export const quickPicks: FakeQuickPick[] = [];
+export const commandExecutions: { id: string; args: unknown[] }[] = [];
 export const messages = {
   errors: [] as string[],
   warnings: [] as string[],
@@ -241,6 +246,40 @@ export class FakeInputBox {
     this.hidden.dispose();
   }
 }
+export class FakeQuickPick {
+  title = '';
+  items: { label: string; value: string }[] = [];
+  activeItems: { label: string; value: string }[] = [];
+  selectedItems: { label: string; value: string }[] = [];
+  private readonly accepted = new EventEmitter<void>();
+  private readonly hidden = new EventEmitter<void>();
+  onDidAccept = this.accepted.event;
+  onDidHide = this.hidden.event;
+  show() {
+    quickPicks.push(this);
+    const response = responses.quick.length ? responses.quick.shift() : undefined;
+    if (response === null) {
+      this.hidden.fire();
+      return;
+    }
+    const selected =
+      typeof response === 'number'
+        ? this.items[response]
+        : typeof response === 'string'
+          ? this.items.find((item) => item.label === response || item.value === response)
+          : (this.activeItems[0] ?? this.items[0]);
+    if (!selected) {
+      this.hidden.fire();
+      return;
+    }
+    this.selectedItems = [selected];
+    this.accepted.fire();
+  }
+  dispose() {
+    this.accepted.dispose();
+    this.hidden.dispose();
+  }
+}
 export const inputBoxes: FakeInputBox[] = [];
 export const window = {
   activeTextEditor: undefined as FakeEditor | undefined,
@@ -256,6 +295,7 @@ export const window = {
     inputBoxes.push(box);
     return box;
   },
+  createQuickPick: () => new FakeQuickPick(),
   async showInputBox(options?: { validateInput?: (value: string) => string | undefined }) {
     const value = responses.input.length ? (responses.input.shift() ?? undefined) : 'Test';
     if (value !== undefined && options?.validateInput?.(value)) return undefined;
@@ -331,6 +371,11 @@ export const workspace = {
   workspaceFolders: [] as { uri: Uri; name: string }[],
   isTrusted: true,
   textDocuments: [] as FakeDocument[],
+  configuration: new Map<string, unknown>(),
+  getConfiguration: (section = '') => ({
+    get: (key: string, fallback?: unknown) =>
+      workspace.configuration.get(section ? `${section}.${key}` : key) ?? fallback,
+  }),
   async openTextDocument(options: { language: string; content: string }) {
     const document = new FakeDocument(
       new Uri(`/Untitled-${workspace.textDocuments.length + 1}`, 'untitled'),
@@ -358,6 +403,7 @@ export const workspace = {
   onDidOpenTextDocument: opened.event,
   onDidChangeTextDocument: changed.event,
   onDidCloseTextDocument: closed.event,
+  onDidChangeConfiguration: configurationChanged.event,
   onWillSaveTextDocument: willSave.event,
   fs: {
     stat: async (uri: Uri) => fs.stat(uri.fsPath),
@@ -382,6 +428,8 @@ export const commands = {
     return new Disposable(() => handlers.delete(id));
   },
   async executeCommand(id: string, ...args: unknown[]) {
+    commandExecutions.push({ id, args });
+    if (id === 'workbench.action.openSettings') return;
     if (id === 'markdown.showPreviewToSide') {
       messages.preview = providers.get('prompteur-preview')!.provideTextDocumentContent();
       return;
@@ -398,9 +446,13 @@ export function reset() {
   workspace.textDocuments = [];
   workspace.workspaceFolders = [];
   workspace.isTrusted = true;
+  workspace.configuration.clear();
+  configurationChanged.dispose();
   window.activeTextEditor = undefined;
   window.visibleTextEditors = [];
   handlers.clear();
+  commandExecutions.splice(0);
+  quickPicks.splice(0);
   views.clear();
   providers.clear();
   collections.splice(0);

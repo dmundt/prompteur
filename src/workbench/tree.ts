@@ -28,6 +28,7 @@ export class PromptTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dis
     private readonly service: LibraryService,
     private readonly workspaceAvailable: () => boolean,
     private readonly report: (error: unknown) => void,
+    private readonly showTags: () => boolean = () => true,
   ) {
     this.unsubscribe = service.subscribe(() => this.refresh());
   }
@@ -77,7 +78,7 @@ export class PromptTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dis
     item.id = entry.key;
     item.contextValue = 'prompt';
     const tags = entry.data.tags.map((tag) => `#${tag}`).join(' ');
-    item.description = tags;
+    if (this.showTags()) item.description = tags;
     const tooltip = new vscode.MarkdownString();
     if (entry.data.description) {
       tooltip.appendText(entry.data.description);

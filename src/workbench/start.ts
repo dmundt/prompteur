@@ -65,6 +65,7 @@ class Workbench implements vscode.Disposable {
       this.service,
       () => this.roots.has('workspace'),
       (error) => this.report(error),
+      () => vscode.workspace.getConfiguration('prompteur').get<boolean>('showTags', true),
     );
     this.disposables.push(
       this.editor,
@@ -72,6 +73,11 @@ class Workbench implements vscode.Disposable {
       vscode.window.createTreeView('prompteur.prompts', {
         treeDataProvider: this.tree,
         showCollapseAll: true,
+      }),
+    );
+    this.disposables.push(
+      vscode.workspace.onDidChangeConfiguration((event) => {
+        if (event.affectsConfiguration('prompteur.showTags')) this.tree.refresh();
       }),
     );
     this.target = vscode.window.activeTextEditor;
@@ -93,6 +99,12 @@ class Workbench implements vscode.Disposable {
       pastePrompt: (node) => this.pastePrompt(node),
       preview: (node) => this.preview(node),
       search: () => this.search(),
+      openSettings: async () => {
+        await vscode.commands.executeCommand(
+          'workbench.action.openSettings',
+          '@ext:dmundt.prompteur',
+        );
+      },
       clearSearch: async () => {
         this.tree.query = '';
         if (this.searchBox) this.searchBox.value = '';
@@ -193,6 +205,15 @@ class Workbench implements vscode.Disposable {
 
   private async scope(node?: TreeNode): Promise<Scope | undefined> {
     if (node) return node.scope;
+    const defaultScope = vscode.workspace
+      .getConfiguration('prompteur')
+      .get<unknown>('defaultScope', 'ask');
+    if (defaultScope === 'user') return 'user';
+    if (defaultScope === 'workspace') {
+      if (!this.roots.has('workspace'))
+        throw new Error('Workspace library is unavailable in this window');
+      return 'workspace';
+    }
     if (!this.roots.has('workspace')) return 'user';
     return (
       await vscode.window.showQuickPick(
@@ -212,7 +233,29 @@ class Workbench implements vscode.Disposable {
       value: category,
     }));
     choices.push({ label: '$(add) Add Category...', value: addCategoryValue });
-    const choice = await vscode.window.showQuickPick(choices, { title });
+    const preferredCategory = vscode.workspace
+      .getConfiguration('prompteur')
+      .get<unknown>('preferredCategory', '');
+    const preferred =
+      typeof preferredCategory === 'string'
+        ? choices.find((choice) => choice.value === this.categoryValue(preferredCategory))
+        : undefined;
+    const choice = await new Promise<(typeof choices)[number] | undefined>((resolve) => {
+      const picker = vscode.window.createQuickPick<(typeof choices)[number]>();
+      let settled = false;
+      const finish = (selected?: (typeof choices)[number]) => {
+        if (settled) return;
+        settled = true;
+        picker.dispose();
+        resolve(selected);
+      };
+      picker.title = title;
+      picker.items = choices;
+      picker.activeItems = preferred ? [preferred] : [];
+      picker.onDidAccept(() => finish(picker.selectedItems[0] ?? picker.activeItems[0]));
+      picker.onDidHide(() => finish());
+      picker.show();
+    });
     if (!choice) return undefined;
     return choice.value === addCategoryValue ? this.addCategory() : choice.value;
   }
