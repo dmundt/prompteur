@@ -108,6 +108,27 @@ describe('native tree interactions', () => {
     expect(children.map((node) => tree.getTreeItem(node).label)).toEqual(['Plan', 'Review']);
     tree.dispose();
   });
+  it('batches flat prompt rows without hiding repair problems', async () => {
+    const { port, files } = memoryFiles();
+    for (let index = 0; index < 201; index++)
+      files.set(`user:prompts/${index}.prompt.md`, encodeMarkdown(newPrompt(String(index))));
+    files.set('user:prompts/bad.prompt.md', '---\nversion: [\n---\n');
+    const tree = new PromptTree(
+      new LibraryService(port),
+      () => false,
+      vi.fn(),
+      () => true,
+      () => 'filtered',
+      () => false,
+    );
+
+    const batches = await tree.getChildren({ kind: 'scope', scope: 'user' });
+    expect(batches.map((node) => tree.getTreeItem(node).label)).toEqual(['1-200', '201-202']);
+    const lastBatch = await tree.getChildren(batches[1]!);
+    expect(lastBatch.map((node) => node.kind)).toContain('problem');
+    expect(lastBatch.filter((node) => node.kind === 'entry')).toHaveLength(1);
+    tree.dispose();
+  });
   it('shows filtered, total, or hidden category counts without changing category filtering', async () => {
     const { port, files } = memoryFiles();
     files.set(
