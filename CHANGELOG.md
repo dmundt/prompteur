@@ -5,6 +5,7 @@
 - Link tooltip tags/categories to exact filters and Markdown files.
 - Adopt `.prompt.md` with YAML frontmatter; ignore YAML prompts; remove category migration.
 - Add built-in and profile-approved categories.
+- Add safe removal for unused profile-approved categories.
 - Add Default Scope, Preferred Category, Show Tags, and Settings gear.
 - Add window-local prompt copy/paste, separate from generated-text Copy.
 - Rewrite README introduction; rename Personal to User and use `person` icon.

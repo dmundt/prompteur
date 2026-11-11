@@ -77,6 +77,11 @@
         "icon": "$(library)"
       },
       {
+        "command": "prompteur.removeCategory",
+        "title": "Remove Prompt Category",
+        "category": "Prompteur"
+      },
+      {
         "command": "prompteur.newPrompt",
         "title": "New Prompt",
         "category": "Prompteur",

@@ -16,6 +16,9 @@ import { NativeEditor } from './editor';
 import { PromptTree, type TreeNode } from './tree';
 import { watchLibrary } from './watch';
 
+const addCategoryValue = '__add_category__';
+const removeCategoryValue = '__remove_category__';
+
 class Workbench implements vscode.Disposable {
   private readonly disposables: vscode.Disposable[] = [];
   private readonly roots = new Map<Scope, vscode.Uri>();
@@ -91,6 +94,7 @@ class Workbench implements vscode.Disposable {
     const actions: Record<string, (node?: TreeNode) => Promise<unknown>> = {
       newPrompt: (node) => this.create(node),
       addStarters: (node) => this.addStarters(node),
+      removeCategory: () => this.removeApprovedCategory(),
       edit: (node) => this.edit(node),
       delete: (node) => this.remove(node),
       duplicate: (node) => this.duplicate(node),
@@ -227,12 +231,13 @@ class Workbench implements vscode.Disposable {
   }
 
   private async pickCategory(title = 'Choose category'): Promise<string | undefined> {
-    const addCategoryValue = '__add_category__';
     const choices = this.allowedCategories().map((category) => ({
       label: category.charAt(0).toUpperCase() + category.slice(1),
       value: category,
     }));
     choices.push({ label: '$(add) Add Category...', value: addCategoryValue });
+    if (this.approvedCategories.size)
+      choices.push({ label: '$(remove) Remove Category...', value: removeCategoryValue });
     const preferredCategory = vscode.workspace
       .getConfiguration('prompteur')
       .get<unknown>('preferredCategory', '');
@@ -257,7 +262,12 @@ class Workbench implements vscode.Disposable {
       picker.show();
     });
     if (!choice) return undefined;
-    return choice.value === addCategoryValue ? this.addCategory() : choice.value;
+    if (choice.value === addCategoryValue) return this.addCategory();
+    if (choice.value === removeCategoryValue) {
+      await this.removeApprovedCategory();
+      return undefined;
+    }
+    return choice.value;
   }
 
   private async addCategory(): Promise<string | undefined> {
@@ -268,7 +278,11 @@ class Workbench implements vscode.Disposable {
         const category = input.trim().toLowerCase();
         if (!category) return 'Category name is required';
         if (category.length > 64) return 'Category name must be 64 characters or fewer';
-        if (this.categoryValue(category) || category === '__add_category__')
+        if (
+          this.categoryValue(category) ||
+          category === addCategoryValue ||
+          category === removeCategoryValue
+        )
           return 'Category is already approved';
         return undefined;
       },
@@ -300,6 +314,65 @@ class Workbench implements vscode.Disposable {
       }
     }
     return category;
+  }
+
+  private async removeApprovedCategory(): Promise<void> {
+    const categories = [...this.approvedCategories].sort((left, right) =>
+      left.localeCompare(right),
+    );
+    if (!categories.length) {
+      void vscode.window.showInformationMessage('No approved custom categories to remove.');
+      return;
+    }
+    const choice = await vscode.window.showQuickPick(
+      categories.map((category) => ({
+        label: category.charAt(0).toUpperCase() + category.slice(1),
+        value: category,
+      })),
+      { title: 'Remove approved category' },
+    );
+    if (!choice) return;
+
+    let usageCount = 0;
+    for (const scope of this.roots.keys()) {
+      await this.service.refresh(scope);
+      usageCount += (await this.service.get(scope)).entries.filter(
+        (entry) => entry.data.category === choice.value,
+      ).length;
+    }
+    if (usageCount) {
+      const promptNoun = usageCount === 1 ? 'prompt' : 'prompts';
+      const promptVerb = usageCount === 1 ? 'uses' : 'use';
+      throw new Error(
+        `Cannot remove "${choice.value}" while ${usageCount} ${promptNoun} ${promptVerb} it. Reassign them first.`,
+      );
+    }
+
+    const answer = await vscode.window.showWarningMessage(
+      `Remove "${choice.value}" from this VS Code profile's approved categories?`,
+      { modal: true },
+      'Remove Category',
+    );
+    if (answer !== 'Remove Category') return;
+
+    this.approvedCategories.delete(choice.value);
+    try {
+      await this.context.globalState.update(
+        'approvedPromptCategories',
+        [...this.approvedCategories].sort((left, right) => left.localeCompare(right)),
+      );
+    } catch (error) {
+      this.approvedCategories.add(choice.value);
+      throw error;
+    }
+    for (const scope of this.roots.keys()) {
+      try {
+        await this.service.refresh(scope);
+      } catch (error) {
+        this.report(error);
+      }
+    }
+    void vscode.window.showInformationMessage(`Removed "${choice.value}".`);
   }
 
   private assertTrusted(entry: Entry): void {
