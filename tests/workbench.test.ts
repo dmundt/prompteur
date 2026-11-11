@@ -16,7 +16,12 @@ describe('native tree interactions', () => {
     const { port, files } = memoryFiles();
     files.set(
       'user:prompts/review/a.prompt.md',
-      encodeMarkdown({ ...newPrompt('Review'), category: 'review', tags: ['security'] }),
+      encodeMarkdown({
+        ...newPrompt('Review'),
+        category: 'review',
+        description: 'Review overview',
+        tags: ['security'],
+      }),
     );
     files.set('user:rules/r.yaml', 'version: 1\nname: Rule\nenabled: false\ncontent: Hi\n');
     files.set('user:prompts/bad.prompt.md', '---\nversion: [\n---\n');
@@ -43,6 +48,7 @@ describe('native tree interactions', () => {
     expect(prompts[0]!.kind === 'entry' && prompts[0]!.entry.data.category).toBe('review');
     expect(tree.getTreeItem(prompts[0]!).description).toBe('#security');
     const tooltip = tree.getTreeItem(prompts[0]!).tooltip as MarkdownString;
+    expect(tooltip.value).toContain('Review overview');
     expect(tooltip.value).toContain('[review](command:prompteur.filterFromTooltip?');
     expect(tooltip.value).toContain('[#security](command:prompteur.filterFromTooltip?');
     expect(tooltip.value).toContain(
@@ -101,16 +107,16 @@ describe('native tree interactions', () => {
       () => countMode,
     );
     const scope: TreeNode = { kind: 'scope', scope: 'user' };
-    const labels = async () =>
-      (await tree.getChildren(scope)).map((node) => tree.getTreeItem(node).label);
+    const labels = (nodes: TreeNode[]) => nodes.map((node) => tree.getTreeItem(node).label);
 
-    expect(await labels()).toEqual(['Plan (1)', 'Review (2)']);
+    expect(labels(await tree.getChildren(scope))).toEqual(['Plan (1)', 'Review (2)']);
     tree.query = 'needle';
-    expect(await labels()).toEqual(['Plan (1)', 'Review (1)']);
+    const filteredNodes = await tree.getChildren(scope);
+    expect(labels(filteredNodes)).toEqual(['Plan (1)', 'Review (1)']);
     countMode = 'total';
-    expect(await labels()).toEqual(['Plan (1)', 'Review (2)']);
+    expect(labels(filteredNodes)).toEqual(['Plan (1)', 'Review (2)']);
     countMode = 'hidden';
-    expect(await labels()).toEqual(['Plan', 'Review']);
+    expect(labels(filteredNodes)).toEqual(['Plan', 'Review']);
     expect(
       await tree.getChildren({ kind: 'category', scope: 'user', category: 'review' }),
     ).toHaveLength(1);
