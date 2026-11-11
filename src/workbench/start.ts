@@ -14,6 +14,7 @@ import {
 import { generate, variableTokens, type Context } from '../core/render';
 import { NativeEditor } from './editor';
 import { PromptTree, type TreeNode } from './tree';
+import { UserPromptSync } from './user-prompt-sync';
 import { watchLibrary } from './watch';
 
 const addCategoryValue = '__add_category__';
@@ -23,6 +24,7 @@ class Workbench implements vscode.Disposable {
   private readonly disposables: vscode.Disposable[] = [];
   private readonly roots = new Map<Scope, vscode.Uri>();
   private readonly service: LibraryService;
+  private readonly userPromptSync: UserPromptSync;
   private readonly editor: NativeEditor;
   private readonly tree: PromptTree;
   private target: vscode.TextEditor | undefined;
@@ -47,22 +49,24 @@ class Workbench implements vscode.Disposable {
     const workspace = vscode.workspace.workspaceFolders?.[0];
     if (workspace?.uri.scheme === 'file')
       this.roots.set('workspace', vscode.Uri.joinPath(workspace.uri, '.vscode', 'prompts'));
+    const files = new LocalFiles(
+      (scope) => {
+        const root = this.roots.get(scope);
+        if (!root || root.scheme !== 'file')
+          throw new Error('Only local filesystem libraries are supported');
+        return root.fsPath;
+      },
+      (scope) => {
+        if (scope === 'workspace' && !vscode.workspace.isTrusted)
+          throw new Error('Trust this workspace before modifying its library');
+      },
+    );
     this.service = new LibraryService(
-      new LocalFiles(
-        (scope) => {
-          const root = this.roots.get(scope);
-          if (!root || root.scheme !== 'file')
-            throw new Error('Only local filesystem libraries are supported');
-          return root.fsPath;
-        },
-        (scope) => {
-          if (scope === 'workspace' && !vscode.workspace.isTrusted)
-            throw new Error('Trust this workspace before modifying its library');
-        },
-      ),
+      files,
       (error) => this.report(error),
       () => this.allowedCategories(),
     );
+    this.userPromptSync = new UserPromptSync(context.globalState, files);
     this.editor = new NativeEditor(this.service, this.roots, () => this.allowedCategories());
     this.tree = new PromptTree(
       this.service,
@@ -73,6 +77,7 @@ class Workbench implements vscode.Disposable {
         vscode.workspace
           .getConfiguration('prompteur')
           .get<'filtered' | 'total' | 'hidden'>('categoryCountMode', 'filtered'),
+      () => vscode.workspace.getConfiguration('prompteur').get<boolean>('groupByCategory', true),
     );
     this.disposables.push(
       this.editor,
@@ -86,9 +91,12 @@ class Workbench implements vscode.Disposable {
       vscode.workspace.onDidChangeConfiguration((event) => {
         if (
           event.affectsConfiguration('prompteur.showTags') ||
-          event.affectsConfiguration('prompteur.categoryCountMode')
+          event.affectsConfiguration('prompteur.categoryCountMode') ||
+          event.affectsConfiguration('prompteur.groupByCategory')
         )
           this.tree.refresh();
+        if (event.affectsConfiguration('prompteur.syncUserPrompts'))
+          void this.configurePromptSync().catch((error) => this.report(error));
       }),
     );
     this.target = vscode.window.activeTextEditor;
@@ -97,8 +105,6 @@ class Workbench implements vscode.Disposable {
         if (editor && this.isDestination(editor)) this.target = editor;
       }),
     );
-    for (const [scope, root] of this.roots)
-      this.disposables.push(watchLibrary(root, scope, this.service, (error) => this.report(error)));
     const actions: Record<string, (node?: TreeNode) => Promise<unknown>> = {
       newPrompt: (node) => this.create(node),
       addStarters: (node) => this.addStarters(node),
@@ -123,6 +129,7 @@ class Workbench implements vscode.Disposable {
         this.tree.refresh();
       },
       refresh: async () => {
+        await this.userPromptSync.reconcile();
         for (const scope of this.roots.keys()) await this.service.refresh(scope);
       },
     };
@@ -616,11 +623,37 @@ class Workbench implements vscode.Disposable {
     box.show();
   }
 
+  async initialize(): Promise<void> {
+    try {
+      await this.configurePromptSync();
+    } catch (error) {
+      this.report(error);
+    }
+    this.disposables.push({
+      dispose: this.service.subscribe((scope) => {
+        if (scope === 'user')
+          void this.userPromptSync.persist().catch((error) => this.report(error));
+      }),
+    });
+    for (const [scope, root] of this.roots)
+      this.disposables.push(watchLibrary(root, scope, this.service, (error) => this.report(error)));
+  }
+
+  private async configurePromptSync(): Promise<void> {
+    const enabled = vscode.workspace
+      .getConfiguration('prompteur')
+      .get<boolean>('syncUserPrompts', true);
+    await this.userPromptSync.configure(enabled);
+    if (enabled) await this.service.refresh('user');
+  }
+
   dispose(): void {
     for (const disposable of this.disposables.reverse()) disposable.dispose();
   }
 }
 
-export function start(context: vscode.ExtensionContext): void {
-  context.subscriptions.push(new Workbench(context));
+export async function start(context: vscode.ExtensionContext): Promise<void> {
+  const workbench = new Workbench(context);
+  context.subscriptions.push(workbench);
+  await workbench.initialize();
 }

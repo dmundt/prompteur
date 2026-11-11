@@ -107,12 +107,40 @@ describe('release commands', () => {
     await run('addStarters', scopeNode());
     expect(await entries()).toHaveLength(16);
   });
+  it('syncs User prompts through VS Code state and supports a flat tree', async () => {
+    expect(context.globalState.syncedKeys).toEqual([
+      'syncedUserPrompts',
+      'approvedPromptCategories',
+    ]);
+    const remotePrompt = encodeMarkdown(newPrompt('Remote Sync'));
+    await context.globalState.update('syncedUserPrompts', {
+      version: 1,
+      files: { 'prompts/remote-sync.prompt.md': remotePrompt },
+      deleted: [],
+    });
+    for (const disposable of context.subscriptions.splice(0)) disposable.dispose();
+    await activate(context as unknown as vscode.ExtensionContext);
+    expect(await fs.readFile(join(userRoot(), 'prompts', 'remote-sync.prompt.md'), 'utf8')).toBe(
+      remotePrompt,
+    );
+    expect((await entries()).some((node) => node.entry.data.name === 'Remote Sync')).toBe(true);
+
+    await addPrompt('local-sync', 'local content');
+    const synced = context.globalState.get<{ files: Record<string, string> }>('syncedUserPrompts')!;
+    expect(synced.files['prompts/local-sync.prompt.md']).toContain('local content');
+
+    workspace.configuration.set('prompteur.groupByCategory', false);
+    configurationChanged.fire({
+      affectsConfiguration: (section) => section === 'prompteur.groupByCategory',
+    });
+    const rows = await tree().getChildren(scopeNode('user'));
+    expect(rows.every((node) => node.kind === 'entry')).toBe(true);
+  });
   it('exposes one view and no removed commands or persistent state mutations', async () => {
     context.globalState.values.set('usageMetadata', {
       version: 1,
       records: { legacy: 'preserve' },
     });
-    const before = new Map(context.globalState.values);
     expect([...views.keys()]).toEqual(['prompteur.prompts']);
     for (const command of [
       'favorite',
@@ -163,6 +191,12 @@ describe('release commands', () => {
           enum: ['filtered', 'total', 'hidden'],
           default: 'filtered',
         },
+        'prompteur.groupByCategory': { type: 'boolean', default: true },
+        'prompteur.syncUserPrompts': {
+          type: 'boolean',
+          default: true,
+          scope: 'application',
+        },
       },
     });
     const promptMenu = manifest.contributes.menus['view/item/context'].filter(
@@ -207,6 +241,7 @@ describe('release commands', () => {
       ['prompteur.preview', 'Preview'],
     ]);
     const node = await addPrompt('plain', 'Plain');
+    const before = new Map(context.globalState.values);
     await run('copy', node);
     await run('preview', node);
     expect(context.globalState.values).toEqual(before);
@@ -290,10 +325,11 @@ describe('release commands', () => {
     expect(env.clipboard.value).toBe('Review code in main.ts');
     expect(target.document.getText()).toBe('code');
     const plain = await addPrompt('plain', '{{clipboard}} {{workspace}}');
+    const before = new Map(context.globalState.values);
     env.clipboard.value = '{{selection}}';
     await run('copy', plain);
     expect(env.clipboard.value).toBe('{{selection}} project');
-    expect(context.globalState.values.size).toBe(0);
+    expect(context.globalState.values).toEqual(before);
   });
   it('copies prompt records across scopes and categories without using the OS clipboard', async () => {
     const data = {
@@ -365,10 +401,15 @@ describe('release commands', () => {
     await run('refresh');
     workspace.isTrusted = false;
     await run('pastePrompt', scopeNode('user'));
+    await run('refresh');
     const userCopy = (await entries('user')).find((node) => node.entry.data.name === data.name);
     expect(userCopy?.entry.data).toMatchObject(data);
     expect(await fs.readFile(path, 'utf8')).toContain('name: Changed');
-    expect(context.globalState.values.size).toBe(0);
+    expect(
+      context.globalState.get<{ files: Record<string, string> }>('syncedUserPrompts')?.files[
+        'prompts/workspace-source.prompt.md'
+      ],
+    ).toContain('name: Workspace Source');
   });
   it('allows empty selections for copy and preview without warnings', async () => {
     const node = await addPrompt('optional', 'Audit workspace: {{selection}}');

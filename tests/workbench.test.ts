@@ -84,6 +84,30 @@ describe('native tree interactions', () => {
     expect(await tree.getChildren({ kind: 'scope', scope: 'workspace' })).toEqual([]);
     tree.dispose();
   });
+  it('lists prompts directly when category grouping is disabled', async () => {
+    const { port, files } = memoryFiles();
+    files.set(
+      'user:prompts/review.prompt.md',
+      encodeMarkdown({ ...newPrompt('Review'), category: 'review' }),
+    );
+    files.set(
+      'user:prompts/plan.prompt.md',
+      encodeMarkdown({ ...newPrompt('Plan'), category: 'plan' }),
+    );
+    const tree = new PromptTree(
+      new LibraryService(port),
+      () => false,
+      vi.fn(),
+      () => true,
+      () => 'filtered',
+      () => false,
+    );
+
+    const children = await tree.getChildren({ kind: 'scope', scope: 'user' });
+    expect(children.map((node) => node.kind)).toEqual(['entry', 'entry']);
+    expect(children.map((node) => tree.getTreeItem(node).label)).toEqual(['Plan', 'Review']);
+    tree.dispose();
+  });
   it('shows filtered, total, or hidden category counts without changing category filtering', async () => {
     const { port, files } = memoryFiles();
     files.set(

@@ -10,6 +10,7 @@
 - Add safe removal for unused profile-approved categories.
 - Add Default Scope, Preferred Category, Show Tags, and Settings gear.
 - Add configurable category counts: filtered matches, total prompts, or hidden.
+- Sync User prompts through VS Code Settings Sync by default; add flat-list view setting.
 - Add window-local prompt copy/paste, separate from generated-text Copy.
 - Rewrite README introduction; rename Personal to User and use `person` icon.
 
