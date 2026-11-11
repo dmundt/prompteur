@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.0
+
+- Promote the 0.5.0 beta to the first stable release; prompt format remains version 1.
+
 ## 0.5.0
 
 - Refine the Activity Bar tent icon with thinner, square-ended 45-degree geometry.
