@@ -1,5 +1,7 @@
 # Prompteur
 
+[![Local Extension Quality](https://github.com/dmundt/prompteur/actions/workflows/quality.yml/badge.svg)](https://github.com/dmundt/prompteur/actions/workflows/quality.yml)
+
 - Local, Git-friendly Markdown prompts for developers who reuse prompts across projects.
 - Category/tag organization and full-text search.
 - Copy or preview generated text with selection, clipboard, filename, and workspace variables.
