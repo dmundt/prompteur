@@ -158,6 +158,11 @@ describe('release commands', () => {
         },
         'prompteur.preferredCategory': { type: 'string', default: '' },
         'prompteur.showTags': { type: 'boolean', default: true },
+        'prompteur.categoryCountMode': {
+          type: 'string',
+          enum: ['filtered', 'total', 'hidden'],
+          default: 'filtered',
+        },
       },
     });
     const promptMenu = manifest.contributes.menus['view/item/context'].filter(
@@ -643,6 +648,13 @@ describe('release commands', () => {
       affectsConfiguration: (section) => section === 'prompteur.showTags',
     });
     expect(tree().getTreeItem(taggedNode).description).toBe('#security #quality');
+
+    const previousRefreshCount = refresh.mock.calls.length;
+    workspace.configuration.set('prompteur.categoryCountMode', 'total');
+    configurationChanged.fire({
+      affectsConfiguration: (section) => section === 'prompteur.categoryCountMode',
+    });
+    expect(refresh).toHaveBeenCalledTimes(previousRefreshCount + 1);
   });
   it('requires confirmation to add a profile category and shares it across libraries', async () => {
     responses.quick.push('$(add) Add Category...');

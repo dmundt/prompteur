@@ -33,7 +33,7 @@ describe('native tree interactions', () => {
     const children = await tree.getChildren(roots[0]);
     expect(children.map((node) => node.kind)).toEqual(['category', 'problem']);
     expect(tree.getTreeItem(children[0]!).contextValue).toBe('category');
-    expect(tree.getTreeItem(children[0]!).label).toBe('Review');
+    expect(tree.getTreeItem(children[0]!).label).toBe('Review (1)');
     expect(tree.getTreeItem(children[1]!).contextValue).toBe('problem');
     expect(tree.getTreeItem(children[0]!).iconPath).toBeUndefined();
     expect(tree.getTreeItem(children[1]!).iconPath).toMatchObject({ id: 'warning' });
@@ -76,6 +76,44 @@ describe('native tree interactions', () => {
     expect(children).toHaveLength(200);
     vi.mocked(port.list).mockRejectedValueOnce(new Error('Disk unavailable'));
     expect(await tree.getChildren({ kind: 'scope', scope: 'workspace' })).toEqual([]);
+    tree.dispose();
+  });
+  it('shows filtered, total, or hidden category counts without changing category filtering', async () => {
+    const { port, files } = memoryFiles();
+    files.set(
+      'user:prompts/review-one.prompt.md',
+      encodeMarkdown({ ...newPrompt('Review One'), category: 'review', content: 'needle' }),
+    );
+    files.set(
+      'user:prompts/review-two.prompt.md',
+      encodeMarkdown({ ...newPrompt('Review Two'), category: 'review', content: 'other' }),
+    );
+    files.set(
+      'user:prompts/plan.prompt.md',
+      encodeMarkdown({ ...newPrompt('Plan'), category: 'plan', content: 'needle' }),
+    );
+    let countMode: 'filtered' | 'total' | 'hidden' = 'filtered';
+    const tree = new PromptTree(
+      new LibraryService(port),
+      () => false,
+      vi.fn(),
+      () => true,
+      () => countMode,
+    );
+    const scope: TreeNode = { kind: 'scope', scope: 'user' };
+    const labels = async () =>
+      (await tree.getChildren(scope)).map((node) => tree.getTreeItem(node).label);
+
+    expect(await labels()).toEqual(['Plan (1)', 'Review (2)']);
+    tree.query = 'needle';
+    expect(await labels()).toEqual(['Plan (1)', 'Review (1)']);
+    countMode = 'total';
+    expect(await labels()).toEqual(['Plan (1)', 'Review (2)']);
+    countMode = 'hidden';
+    expect(await labels()).toEqual(['Plan', 'Review']);
+    expect(
+      await tree.getChildren({ kind: 'category', scope: 'user', category: 'review' }),
+    ).toHaveLength(1);
     tree.dispose();
   });
   it('escapes tag labels in trusted prompt tooltip links', async () => {

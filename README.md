@@ -42,6 +42,7 @@ code --install-extension prompteur-0.4.4.vsix
   - **Default Scope**: User, Workspace, or Ask for untargeted New Prompt/Add Starter Library/Paste Prompt. Ask shows the picker when both libraries exist; otherwise it selects User. Explicit tree targets win.
   - **Preferred Category**: preselect approved category; user confirmation remains required.
   - **Show Tags**: show/hide row labels; default On. Search and tooltips remain unchanged.
+  - **Category Count Mode**: Filtered (default), Total, or Hidden. Search still controls which categories appear.
 
 - Built-in virtual categories: Explain, Plan, Implement, Review, Test, Debug, Document.
 - Add profile-wide categories only after confirmation. Remove unused categories with **Remove Prompt Category**; reassign prompts first.
