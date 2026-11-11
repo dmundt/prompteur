@@ -120,10 +120,13 @@ describe('release commands', () => {
     });
     for (const disposable of context.subscriptions.splice(0)) disposable.dispose();
     await activate(context as unknown as vscode.ExtensionContext);
-    expect(await fs.readFile(join(userRoot(), 'prompts', 'remote-sync.prompt.md'), 'utf8')).toBe(
-      remotePrompt,
-    );
-    expect((await entries()).some((node) => node.entry.data.name === 'Remote Sync')).toBe(true);
+    // Initial sync runs in the background so activation stays within its time budget.
+    await vi.waitFor(async () => {
+      expect(await fs.readFile(join(userRoot(), 'prompts', 'remote-sync.prompt.md'), 'utf8')).toBe(
+        remotePrompt,
+      );
+      expect((await entries()).some((node) => node.entry.data.name === 'Remote Sync')).toBe(true);
+    });
 
     await addPrompt('local-sync', 'local content');
     const synced = context.globalState.get<{ files: Record<string, string> }>('syncedUserPrompts')!;

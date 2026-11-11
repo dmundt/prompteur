@@ -624,11 +624,9 @@ class Workbench implements vscode.Disposable {
   }
 
   async initialize(): Promise<void> {
-    try {
-      await this.configurePromptSync();
-    } catch (error) {
-      this.report(error);
-    }
+    // Initial sync runs in the background so activation stays within its time budget.
+    // Operations are serialized by UserPromptSync's queue, so later persist calls remain ordered.
+    void this.configurePromptSync().catch((error) => this.report(error));
     this.disposables.push({
       dispose: this.service.subscribe((scope) => {
         if (scope === 'user')
