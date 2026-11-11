@@ -7,6 +7,7 @@
 - Copy or preview generated text with selection, clipboard, filename, and workspace variables.
 - User library in profile storage; Workspace library in `.vscode/prompts`.
 - No Prompteur account, direct network service, AI provider, or telemetry. User prompts sync through VS Code Settings Sync by default. Workspace writes, generation, and preview require Trust.
+- Public beta: features and prompt formats may change before 1.0.
 
 ## Install and Run
 
@@ -17,11 +18,11 @@
 npm ci
 npm run build
 npm run package
-code --install-extension prompteur-0.4.4.vsix
+code --install-extension prompteur-0.5.0.vsix
 ```
 
 - Press F5 to open Extension Development Host.
-- Packaging creates local VSIX; it does not publish.
+- Packaging creates local VSIX; it does not publish. Publishing a GitHub release triggers Marketplace publication after CI passes.
 
 ## Daily Workflow
 

@@ -2,10 +2,18 @@
   "name": "prompteur",
   "displayName": "Prompteur",
   "description": "Git-friendly local Markdown prompts with categories, tags, and clipboard generation.",
-  "version": "0.4.4",
+  "version": "0.5.0",
   "publisher": "dmundt",
   "icon": "resources/icon.png",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dmundt/prompteur.git"
+  },
+  "bugs": {
+    "url": "https://github.com/dmundt/prompteur/issues"
+  },
+  "homepage": "https://github.com/dmundt/prompteur#readme",
   "engines": {
     "vscode": "^1.96.0"
   },

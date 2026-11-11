@@ -1,0 +1,59 @@
+name: Publish Extension
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check release tag
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          node -e '
+            const version = require("./package.json").version;
+            const tag = process.env.RELEASE_TAG;
+            if (tag !== version && tag !== `v${version}`) {
+              throw new Error(`Release tag ${tag} does not match package version ${version}`);
+            }
+          '
+
+  verify:
+    needs: validate
+    uses: ./.github/workflows/quality.yml
+
+  publish:
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: prompteur-local-package
+      - name: Publish verified package
+        env:
+          PRERELEASE: ${{ github.event.release.prerelease }}
+        run: |
+          version=$(node -p 'require("./package.json").version')
+          if [ "$PRERELEASE" = "true" ]; then
+            npx vsce publish --oidc --pre-release --packagePath "prompteur-${version}.vsix"
+          else
+            npx vsce publish --oidc --packagePath "prompteur-${version}.vsix"
+          fi

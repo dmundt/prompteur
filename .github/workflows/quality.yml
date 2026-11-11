@@ -4,6 +4,7 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
@@ -39,7 +40,9 @@ jobs:
           VSCODE_TEST_VERSION: ${{ matrix.vscode-version }}
           PROMPTEUR_TEST_ENFORCE_ACTIVATION: ${{ matrix.os == 'ubuntu-latest' && matrix.vscode-version == 'stable' }}
       - run: npm run package
-        if: matrix.os == 'ubuntu-latest' && matrix.vscode-version == 'stable'
+        if: matrix.os == 'ubuntu-latest' && matrix.vscode-version == 'stable' && !github.event.release.prerelease
+      - run: npm run package -- --pre-release
+        if: matrix.os == 'ubuntu-latest' && matrix.vscode-version == 'stable' && github.event.release.prerelease
       - uses: actions/upload-artifact@v4
         if: matrix.os == 'ubuntu-latest' && matrix.vscode-version == 'stable'
         with:
