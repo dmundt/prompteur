@@ -2,7 +2,13 @@ import * as vscode from 'vscode';
 import { basename } from 'node:path';
 import { LocalFiles } from '../platform/local-files';
 import { LibraryService, messageOf } from '../application/library';
-import { newPrompt, promptFolder, type Entry, type Scope } from '../core/documents';
+import {
+  newPrompt,
+  promptFolder,
+  type Entry,
+  type PromptData,
+  type Scope,
+} from '../core/documents';
 import { generate, variableTokens, type Context } from '../core/render';
 import { NativeEditor } from './editor';
 import { PromptTree, type TreeNode } from './tree';
@@ -15,6 +21,7 @@ class Workbench implements vscode.Disposable {
   private readonly editor: NativeEditor;
   private readonly tree: PromptTree;
   private target: vscode.TextEditor | undefined;
+  private copiedPrompt: { data: PromptData; source: string } | undefined;
 
   constructor(private readonly context: vscode.ExtensionContext) {
     const userStorage =
@@ -69,6 +76,8 @@ class Workbench implements vscode.Disposable {
       delete: (node) => this.remove(node),
       duplicate: (node) => this.duplicate(node),
       copy: (node) => this.copy(node),
+      copyPrompt: (node) => this.copyPrompt(node),
+      pastePrompt: (node) => this.pastePrompt(node),
       preview: (node) => this.preview(node),
       search: () => this.search(),
       clearSearch: async () => {
@@ -250,6 +259,40 @@ class Workbench implements vscode.Disposable {
     );
     await this.service.save(entry.scope, path, data, undefined, entry.source);
     await vscode.window.showTextDocument(this.uri({ scope: entry.scope, path }));
+  }
+
+  private async copyPrompt(node?: TreeNode): Promise<void> {
+    const entry = await this.pick(node);
+    if (!entry) return;
+    this.assertTrusted(entry);
+    this.copiedPrompt = {
+      data: { ...entry.data, tags: [...entry.data.tags] },
+      source: entry.source,
+    };
+    void vscode.window.showInformationMessage(
+      'Prompt copied. Paste Prompt to create a library copy.',
+    );
+  }
+
+  private async pastePrompt(node?: TreeNode): Promise<void> {
+    if (!this.copiedPrompt) {
+      void vscode.window.showInformationMessage('Copy a prompt before pasting.');
+      return;
+    }
+    if (node && node.kind !== 'scope' && node.kind !== 'category')
+      throw new Error('Choose a library or category to paste into.');
+    const scope = await this.scope(node);
+    if (!scope) return;
+    if (scope === 'workspace' && !vscode.workspace.isTrusted)
+      throw new Error('Trust this workspace before modifying its library');
+    const data = {
+      ...this.copiedPrompt.data,
+      tags: [...this.copiedPrompt.data.tags],
+      category: node?.kind === 'category' ? node.category : this.copiedPrompt.data.category,
+    };
+    const path = await this.availablePath(scope, data.name);
+    await this.service.save(scope, path, data, undefined, this.copiedPrompt.source);
+    await vscode.window.showTextDocument(this.uri({ scope, path }));
   }
 
   private async generate(entry: Entry, target: vscode.TextEditor | undefined) {

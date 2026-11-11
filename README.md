@@ -31,7 +31,7 @@ Press F5 to open an Extension Development Host. Packaging creates a local VSIX; 
 
 Selection comes from the current or most recently active non-library, non-preview editor in the same window and is read when generating. Selecting a placeholder inside prompt YAML does not supply context. Separate VS Code windows do not share editor selections; copy in the source window, then paste in the other window.
 
-Prompt item menus offer edit, duplicate, delete, copy, and preview. All actions are also available from the Command Palette under **Prompteur**. **Clear Filter** resets the search; **Reload Libraries** rescans both libraries.
+Prompt item menus offer edit, duplicate, delete, **Copy Prompt**, and preview. **Copy Prompt** stores the prompt in this VS Code window; **Paste Prompt** on a User/Workspace scope or category creates a new file. Pasting on a category changes the copy's category. The existing **Copy** action still generates prompt text to the OS clipboard. Workspace source copies and Workspace destination writes require trust. All commands are available from the Command Palette under **Prompteur**. **Clear Filter** resets the search; **Reload Libraries** rescans both libraries.
 
 Categories are free-text virtual groups, not physical folders. Tags are cross-category labels shown beside names. Search is case-insensitive across names, descriptions, categories, tags, content, and paths. Multiple `tag:` filters must all match. Prompts sort alphabetically.
 
@@ -90,7 +90,7 @@ No library settings or usage state is read or written. Existing `settings.yaml`,
 
 Installation is opt-in. Run the command again to add missing starters after an update. Existing destination files, including invalid files, are never replaced. Each file is written safely; installation is not an all-or-nothing transaction, and failures report how many files were added.
 
-No import/export commands are provided. Copy ordinary YAML files between library directories using your filesystem.
+No file import/export commands or bundles are provided. In-app prompt copies use a temporary, window-local buffer; use the filesystem to transfer files between VS Code windows or outside VS Code.
 
 ## Validation and Safe Writes
 

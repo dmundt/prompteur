@@ -30,6 +30,6 @@ Budgets remain 1 MiB per file, 128 MiB of cached library source, 50,000 files/di
 
 ## Starters and File Copies
 
-No import/export commands or bundle formats remain. Users can copy ordinary YAML files directly between library directories.
+There are no file import/export commands or bundle formats. **Copy Prompt/Paste Prompt** keep a prompt record in a window-local memory buffer and create a new YAML file on paste; the source remains unchanged. Pasting on a category changes the copy's category. For file transfer between VS Code windows or outside VS Code, copy ordinary YAML files directly between library directories.
 
 Starters are ordinary editable copies. Installation skips all existing destination files, including invalid ones. Each addition is atomic; the entire installation is not. Failures report partial progress.
