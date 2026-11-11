@@ -77,7 +77,7 @@ export class PromptTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dis
       .filter(Boolean)
       .join('\n');
     item.iconPath = new vscode.ThemeIcon('note');
-    item.command = { command: 'prompteur.edit', title: 'Edit YAML', arguments: [node] };
+    item.command = { command: 'prompteur.edit', title: 'Edit', arguments: [node] };
     return item;
   }
 

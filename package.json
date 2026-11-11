@@ -56,7 +56,7 @@
       },
       {
         "command": "prompteur.edit",
-        "title": "Edit YAML",
+        "title": "Edit",
         "category": "Prompteur",
         "icon": "$(edit)"
       },
@@ -68,13 +68,13 @@
       },
       {
         "command": "prompteur.duplicate",
-        "title": "Duplicate Prompt",
+        "title": "Duplicate",
         "category": "Prompteur",
         "icon": "$(files)"
       },
       {
         "command": "prompteur.copy",
-        "title": "Copy Prompt",
+        "title": "Copy",
         "category": "Prompteur",
         "icon": "$(copy)"
       },
@@ -128,24 +128,29 @@
           "group": "inline@1"
         },
         {
-          "command": "prompteur.preview",
+          "command": "prompteur.copy",
           "when": "view =~ /^prompteur\\./ && viewItem == prompt",
-          "group": "2_prompt"
-        },
-        {
-          "command": "prompteur.edit",
-          "when": "view =~ /^prompteur\\./ && viewItem =~ /^(prompt|problem)$/",
-          "group": "edit@1"
+          "group": "1_prompt@1"
         },
         {
           "command": "prompteur.duplicate",
           "when": "view =~ /^prompteur\\./ && viewItem == prompt",
-          "group": "2_prompt"
+          "group": "1_prompt@2"
+        },
+        {
+          "command": "prompteur.preview",
+          "when": "view =~ /^prompteur\\./ && viewItem == prompt",
+          "group": "1_prompt@3"
+        },
+        {
+          "command": "prompteur.edit",
+          "when": "view =~ /^prompteur\\./ && viewItem =~ /^(prompt|problem)$/",
+          "group": "2_edit@1"
         },
         {
           "command": "prompteur.delete",
           "when": "view =~ /^prompteur\\./ && viewItem == prompt",
-          "group": "3_delete"
+          "group": "3_delete@1"
         },
         {
           "command": "prompteur.newPrompt",

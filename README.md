@@ -20,7 +20,7 @@ Press F5 to open an Extension Development Host. Packaging creates a local VSIX; 
 1. Open **Prompteur**, then **New Prompt**. Choose Personal or Workspace.
 2. Edit and save the YAML in VS Code's ordinary text editor.
 3. Browse category groups or use **Filter Prompts**. Search text or combine exact tag filters, such as `tag:security review`.
-4. Open source code and select text if needed, then use **Copy Prompt** from the tree or Command Palette.
+4. Open source code and select text if needed, then use **Copy** from the tree or Command Palette.
 5. Paste generated text into Chat or another application, including another window. Copy preserves source text; Prompteur does not insert into editors or directly into Chat.
 
 Selection comes from the current or most recently active non-library, non-preview editor in the same window and is read when generating. Selecting a placeholder inside prompt YAML does not supply context. Separate VS Code windows do not share editor selections; copy in the source window, then paste in the other window.
