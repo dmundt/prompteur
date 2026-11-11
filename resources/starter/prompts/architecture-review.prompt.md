@@ -1,7 +1,7 @@
 ---
 version: 1
-name: Architecture Review
-description: Assess architecture against requirements, failure modes, and constraints.
+name: Review Architecture
+description: Review architecture against requirements, failure modes, and constraints.
 category: review
 tags: [architecture, review, scalability, tradeoffs, reliability, resilience]
 ---

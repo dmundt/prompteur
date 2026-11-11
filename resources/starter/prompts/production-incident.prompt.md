@@ -1,7 +1,7 @@
 ---
 version: 1
-name: Production Incident
-description: Assess incident impact and reversible stabilization options from evidence.
+name: Triage Production Incident
+description: Triage incident impact and reversible stabilization options against evidence.
 category: debug
 tags: [incident, production, observability, monitoring, troubleshooting, runbook]
 ---

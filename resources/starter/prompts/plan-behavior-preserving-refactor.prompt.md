@@ -1,7 +1,7 @@
 ---
 version: 1
 name: Plan Behavior-Preserving Refactor
-description: Plan a small refactor with verified behavior invariants and regression tests.
+description: Plan a small refactor against verified behavior invariants and regression tests.
 category: plan
 tags: [refactoring, behavior, maintainability, planning]
 ---

@@ -1,7 +1,7 @@
 ---
 version: 1
-name: Accessibility Audit
-description: Audit keyboard, assistive-technology, and visual accessibility.
+name: Audit Accessibility
+description: Audit keyboard, assistive-technology, and visual accessibility against defined criteria.
 category: review
 tags: [audit, accessibility, keyboard, usability]
 ---

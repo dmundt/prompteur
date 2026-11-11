@@ -1,7 +1,7 @@
 ---
 version: 1
 name: Clarify Requirements
-description: Convert an incomplete request into testable requirements and open decisions.
+description: Plan testable requirements and open decisions from an incomplete request.
 category: plan
 tags: [requirements, scope, acceptance]
 ---
