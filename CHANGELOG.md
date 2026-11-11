@@ -6,6 +6,7 @@
 - Link tooltip tags/categories to exact filters and Markdown files.
 - Adopt `.prompt.md` with YAML frontmatter; ignore YAML prompts; remove category migration.
 - Add built-in and profile-approved categories.
+- Standardize starter names and filenames on action-first task labels.
 - Add safe removal for unused profile-approved categories.
 - Add Default Scope, Preferred Category, Show Tags, and Settings gear.
 - Add configurable category counts: filtered matches, total prompts, or hidden.

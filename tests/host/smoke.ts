@@ -38,14 +38,14 @@ export async function run(): Promise<void> {
     'resources',
     'starter',
     'prompts',
-    'code-review.prompt.md',
+    'review-code.prompt.md',
   );
   const original = await vscode.workspace.fs.readFile(bundled);
   await vscode.commands.executeCommand('prompteur.addStarters', { kind: 'scope', scope: 'user' });
   const starter = {
     kind: 'entry',
     scope: 'user',
-    entry: { path: 'prompts/code-review.prompt.md' },
+    entry: { path: 'prompts/review-code.prompt.md' },
   };
   if (!skipClipboard) {
     const clipboard = await vscode.env.clipboard.readText();

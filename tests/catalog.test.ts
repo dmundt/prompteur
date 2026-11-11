@@ -18,12 +18,20 @@ describe('bundled prompt starters', () => {
     for (const entry of snapshot.entries) {
       const { content, ...metadata } = entry.data;
       expect(promptFrontmatterSchema.parse(metadata)).toEqual(metadata);
-      expect(entry.source.startsWith('---\n')).toBe(true);
-      const closingDelimiter = entry.source.indexOf('\n---\n', 4);
-      expect(closingDelimiter).toBeGreaterThan(0);
-      expect(entry.source.slice(0, closingDelimiter)).not.toContain('content:');
-      expect(entry.source.slice(closingDelimiter + 5)).toBe(content);
+      const frontmatter = entry.source.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n/);
+      expect(frontmatter).not.toBeNull();
+      expect(frontmatter?.[1]).not.toContain('content:');
+      expect(entry.source.slice(frontmatter?.[0].length)).toBe(content);
       expect(promptCategories).toContain(entry.data.category);
+      const filename = entry.path
+        .split('/')
+        .at(-1)
+        ?.replace(/\.prompt\.md$/, '');
+      const nameSlug = entry.data.name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '');
+      expect(filename).toBe(nameSlug);
       expect(paths.has(entry.path)).toBe(false);
       paths.add(entry.path);
       expect(names.has(entry.data.name)).toBe(false);
@@ -44,18 +52,18 @@ describe('bundled prompt starters', () => {
           .at(-1)
           ?.replace(/\.prompt\.md$/, ''),
       );
-    expect(ids('security')).toEqual(expect.arrayContaining(['security-review']));
+    expect(ids('security')).toEqual(expect.arrayContaining(['review-security']));
     expect(ids('review')).toEqual(
-      expect.arrayContaining(['code-review', 'complexity-review', 'architecture-review']),
+      expect.arrayContaining(['review-code', 'review-complexity', 'review-architecture']),
     );
     expect(ids('incident')).toEqual(
-      expect.arrayContaining(['production-incident', 'root-cause-analysis']),
+      expect.arrayContaining(['triage-production-incident', 'analyze-root-cause']),
     );
     expect(ids('tag:audit')).toEqual(
       expect.arrayContaining([
-        'release-readiness-audit',
-        'implementation-completeness-audit',
-        'accessibility-audit',
+        'audit-release-readiness',
+        'audit-implementation-completeness',
+        'audit-accessibility',
       ]),
     );
     for (const name of [

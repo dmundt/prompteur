@@ -248,7 +248,7 @@ describe('release commands', () => {
     expect((await entries('user'))[0]?.entry.data.category).toBe('review');
   });
   it('ignores old settings and preserves existing starter files, even invalid ones', async () => {
-    const bundled = resolve('resources/starter/prompts/code-review.prompt.md');
+    const bundled = resolve('resources/starter/prompts/review-code.prompt.md');
     const original = await fs.readFile(bundled, 'utf8');
     await fs.mkdir(join(userRoot(), 'prompts'), { recursive: true });
     await fs.writeFile(
@@ -273,10 +273,10 @@ describe('release commands', () => {
     await run('addStarters', scopeNode());
     expect(await entries()).toHaveLength(16);
     const node = (await entries()).find((item) =>
-      item.entry.path.endsWith('code-review.prompt.md'),
+      item.entry.path.endsWith('review-code.prompt.md'),
     )!;
     expect(await fs.readFile(join(userRoot(), node.entry.path), 'utf8')).toBe(
-      await fs.readFile(resolve('resources/starter/prompts/code-review.prompt.md'), 'utf8'),
+      await fs.readFile(resolve('resources/starter/prompts/review-code.prompt.md'), 'utf8'),
     );
     await destination();
     await run('copy', node);
