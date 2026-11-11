@@ -4,7 +4,7 @@ import * as fs from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { activate } from '../src/extension';
-import { encodeYaml, newPrompt } from '../src/core/documents';
+import { decodeYaml, encodeYaml, newPrompt } from '../src/core/documents';
 import type { PromptTree, TreeNode } from '../src/workbench/tree';
 import {
   collections,
@@ -140,6 +140,7 @@ describe('release commands', () => {
       promptMenu.filter((item) => item.group !== 'inline@1').map((item) => item.command),
     ).toEqual([
       'prompteur.copy',
+      'prompteur.copyPrompt',
       'prompteur.duplicate',
       'prompteur.preview',
       'prompteur.edit',
@@ -147,6 +148,12 @@ describe('release commands', () => {
     ]);
     expect(promptMenu).toContainEqual(
       expect.objectContaining({ command: 'prompteur.copy', group: 'inline@1' }),
+    );
+    expect(manifest.contributes.menus['view/item/context']).toContainEqual(
+      expect.objectContaining({
+        command: 'prompteur.pastePrompt',
+        when: expect.stringContaining('viewItem =~ /^(scope|category)$/'),
+      }),
     );
     expect(
       manifest.contributes.commands
@@ -226,6 +233,76 @@ describe('release commands', () => {
     env.clipboard.value = '{{selection}}';
     await run('copy', plain);
     expect(env.clipboard.value).toBe('{{selection}} project');
+    expect(context.globalState.values.size).toBe(0);
+  });
+  it('copies prompt records across scopes and categories without using the OS clipboard', async () => {
+    const data = {
+      ...newPrompt('Shared Prompt'),
+      description: 'Reusable description',
+      category: 'review',
+      tags: ['security', 'quality'],
+      content: 'Review this source',
+    };
+    const source = `# Preserve this note\n${encodeYaml(data)}`;
+    const sourcePath = join(userRoot(), 'prompts', 'source.yaml');
+    await fs.mkdir(join(userRoot(), 'prompts'), { recursive: true });
+    await fs.writeFile(sourcePath, source);
+    const occupiedPath = join(workspaceRoot(), 'prompts', 'shared-prompt.prompt.yaml');
+    await fs.mkdir(join(workspaceRoot(), 'prompts'), { recursive: true });
+    await fs.writeFile(occupiedPath, encodeYaml(newPrompt('Occupied')));
+    await run('refresh');
+
+    const sourceNode = (await entries('user')).find((node) => node.entry.data.name === data.name)!;
+    env.clipboard.value = 'Leave OS clipboard unchanged';
+    await run('copyPrompt', sourceNode);
+    expect(env.clipboard.value).toBe('Leave OS clipboard unchanged');
+
+    const target: TreeNode = { kind: 'category', scope: 'workspace', category: 'planning' };
+    workspace.isTrusted = false;
+    await expect(run('pastePrompt', target)).rejects.toThrow('Trust');
+    await expect(
+      fs.access(join(workspaceRoot(), 'prompts', 'shared-prompt-2.prompt.yaml')),
+    ).rejects.toThrow();
+
+    workspace.isTrusted = true;
+    await run('pastePrompt', target);
+    const workspaceCopyPath = join(workspaceRoot(), 'prompts', 'shared-prompt-2.prompt.yaml');
+    expect(decodeYaml(await fs.readFile(workspaceCopyPath, 'utf8'))).toEqual({
+      ...data,
+      category: 'planning',
+    });
+    expect(await fs.readFile(workspaceCopyPath, 'utf8')).toContain('# Preserve this note');
+    expect(await fs.readFile(sourcePath, 'utf8')).toBe(source);
+    expect(window.activeTextEditor!.document.uri.fsPath).toBe(workspaceCopyPath);
+
+    await run('pastePrompt', scopeNode('user'));
+    const userCopy = (await entries('user')).find(
+      (node) => node.entry.data.name === data.name && node.entry.path !== 'prompts/source.yaml',
+    );
+    expect(userCopy?.entry.data.category).toBe('review');
+  });
+  it('requires trusted Workspace source copy and reports paste without a buffer', async () => {
+    await run('pastePrompt', scopeNode('user'));
+    expect(messages.info.at(-1)).toContain('Copy a prompt');
+
+    const data = { ...newPrompt('Workspace Source'), category: 'debugging', content: 'Source' };
+    const path = join(workspaceRoot(), 'prompts', 'workspace-source.yaml');
+    await fs.mkdir(join(workspaceRoot(), 'prompts'), { recursive: true });
+    await fs.writeFile(path, encodeYaml(data));
+    await run('refresh');
+    const source = (await entries('workspace')).find((node) => node.entry.data.name === data.name)!;
+    workspace.isTrusted = false;
+    await expect(run('copyPrompt', source)).rejects.toThrow('Trust');
+
+    workspace.isTrusted = true;
+    await run('copyPrompt', source);
+    await fs.writeFile(path, encodeYaml({ ...newPrompt('Changed'), category: 'review' }));
+    await run('refresh');
+    workspace.isTrusted = false;
+    await run('pastePrompt', scopeNode('user'));
+    const userCopy = (await entries('user')).find((node) => node.entry.data.name === data.name);
+    expect(userCopy?.entry.data).toMatchObject(data);
+    expect(await fs.readFile(path, 'utf8')).toContain('name: Changed');
     expect(context.globalState.values.size).toBe(0);
   });
   it('allows empty selections for copy and preview without warnings', async () => {

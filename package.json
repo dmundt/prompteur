@@ -79,6 +79,18 @@
         "icon": "$(copy)"
       },
       {
+        "command": "prompteur.copyPrompt",
+        "title": "Copy Prompt",
+        "category": "Prompteur",
+        "icon": "$(copy)"
+      },
+      {
+        "command": "prompteur.pastePrompt",
+        "title": "Paste Prompt",
+        "category": "Prompteur",
+        "icon": "$(clippy)"
+      },
+      {
         "command": "prompteur.preview",
         "title": "Preview",
         "category": "Prompteur",
@@ -133,14 +145,19 @@
           "group": "1_prompt@1"
         },
         {
-          "command": "prompteur.duplicate",
+          "command": "prompteur.copyPrompt",
           "when": "view =~ /^prompteur\\./ && viewItem == prompt",
           "group": "1_prompt@2"
         },
         {
-          "command": "prompteur.preview",
+          "command": "prompteur.duplicate",
           "when": "view =~ /^prompteur\\./ && viewItem == prompt",
           "group": "1_prompt@3"
+        },
+        {
+          "command": "prompteur.preview",
+          "when": "view =~ /^prompteur\\./ && viewItem == prompt",
+          "group": "1_prompt@4"
         },
         {
           "command": "prompteur.edit",
@@ -153,9 +170,14 @@
           "group": "3_delete@1"
         },
         {
+          "command": "prompteur.pastePrompt",
+          "when": "view == prompteur.prompts && viewItem =~ /^(scope|category)$/",
+          "group": "create@2"
+        },
+        {
           "command": "prompteur.newPrompt",
           "when": "view == prompteur.prompts && viewItem =~ /^(scope|category)$/",
-          "group": "create"
+          "group": "create@1"
         }
       ]
     }
