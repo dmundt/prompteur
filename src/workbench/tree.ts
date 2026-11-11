@@ -51,7 +51,6 @@ export class PromptTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dis
       const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.Collapsed);
       item.id = `${node.scope}:category:${node.category.toLowerCase()}`;
       item.contextValue = 'category';
-      item.iconPath = new vscode.ThemeIcon('folder');
       return item;
     }
     if (node.kind === 'problem') {
@@ -76,7 +75,6 @@ export class PromptTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dis
     ]
       .filter(Boolean)
       .join('\n');
-    item.iconPath = new vscode.ThemeIcon('note');
     item.command = { command: 'prompteur.edit', title: 'Edit', arguments: [node] };
     return item;
   }

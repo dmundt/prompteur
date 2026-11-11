@@ -28,13 +28,18 @@ describe('native tree interactions', () => {
     const roots = await tree.getChildren();
     expect(roots).toHaveLength(2);
     expect(tree.getTreeItem(roots[0]!).label).toBe('Personal');
+    expect(tree.getTreeItem(roots[0]!).iconPath).toMatchObject({ id: 'account' });
+    expect(tree.getTreeItem(roots[1]!).iconPath).toMatchObject({ id: 'root-folder' });
     const children = await tree.getChildren(roots[0]);
     expect(children.map((node) => node.kind)).toEqual(['category', 'problem']);
     expect(tree.getTreeItem(children[0]!).contextValue).toBe('category');
     expect(tree.getTreeItem(children[0]!).label).toBe('Review');
     expect(tree.getTreeItem(children[1]!).contextValue).toBe('problem');
+    expect(tree.getTreeItem(children[0]!).iconPath).toBeUndefined();
+    expect(tree.getTreeItem(children[1]!).iconPath).toMatchObject({ id: 'warning' });
     const prompts = await tree.getChildren(children[0]);
     expect(tree.getTreeItem(prompts[0]!).contextValue).toBe('prompt');
+    expect(tree.getTreeItem(prompts[0]!).iconPath).toBeUndefined();
     expect(prompts[0]!.kind === 'entry' && prompts[0]!.entry.data.category).toBe('review');
     expect(tree.getTreeItem(prompts[0]!).description).toBe('#security');
     expect(await tree.getChildren(prompts[0])).toEqual([]);
