@@ -1,7 +1,7 @@
 ---
 version: 1
-name: Release Readiness Audit
-description: Find release blockers across build, tests, package, activation, workflows, and docs.
+name: Audit Release Readiness
+description: Audit build, tests, package, activation, workflows, and docs against release criteria.
 category: review
 tags: [audit, release, packaging, verification]
 ---

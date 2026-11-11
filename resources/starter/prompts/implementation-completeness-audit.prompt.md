@@ -1,7 +1,7 @@
 ---
 version: 1
-name: Implementation Completeness Audit
-description: Trace requirements through implementation, tests, and workflows; find gaps.
+name: Audit Implementation Completeness
+description: Audit implementation against requirements, tests, and workflows for gaps.
 category: review
 tags: [audit, requirements, completeness, integration]
 ---

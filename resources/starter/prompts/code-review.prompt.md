@@ -1,7 +1,7 @@
 ---
 version: 1
-name: Code Review
-description: Find evidence-backed defects and risks in a source change.
+name: Review Code
+description: Review source change against defect and risk evidence.
 category: review
 tags: [review, quality, maintainability, security]
 ---

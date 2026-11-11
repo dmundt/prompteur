@@ -1,7 +1,7 @@
 ---
 version: 1
-name: Security Review
-description: Trace untrusted data and sensitive operations for concrete security risks.
+name: Review Security
+description: Review untrusted data and sensitive operations against concrete security risks.
 category: review
 tags: [security, review, audit, validation, trust-boundaries]
 ---

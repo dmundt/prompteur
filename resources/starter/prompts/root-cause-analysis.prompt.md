@@ -1,7 +1,7 @@
 ---
 version: 1
-name: Root Cause Analysis
-description: Trace a failure to its origin using falsifiable, evidence-based hypotheses.
+name: Analyze Root Cause
+description: Analyze a failure's root cause using falsifiable, evidence-based hypotheses.
 category: debug
 tags: [debugging, incident, production, root-cause-analysis, observability]
 ---

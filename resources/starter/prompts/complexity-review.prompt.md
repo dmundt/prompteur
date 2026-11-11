@@ -1,7 +1,7 @@
 ---
 version: 1
-name: Complexity Review
-description: Find accidental complexity and propose small, behavior-preserving reductions.
+name: Review Complexity
+description: Review code against complexity and behavior-preservation criteria.
 category: review
 tags: [review, complexity, refactoring, static-analysis, technical-debt, clean-code]
 ---
