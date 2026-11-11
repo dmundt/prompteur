@@ -1,5 +1,11 @@
 import * as vscode from 'vscode';
-import { decodeYaml, type Entry, type Scope, promptFolder } from '../core/documents';
+import {
+  decodeYaml,
+  promptCategories,
+  type Entry,
+  type Scope,
+  promptFolder,
+} from '../core/documents';
 import { variableTokens } from '../core/render';
 import { LibraryService, messageOf } from '../application/library';
 
@@ -19,6 +25,7 @@ export class NativeEditor implements vscode.Disposable {
   constructor(
     private readonly service: LibraryService,
     private readonly roots: ReadonlyMap<Scope, vscode.Uri>,
+    private readonly allowedCategories: () => readonly string[] = () => promptCategories,
   ) {
     this.disposables.push(
       vscode.workspace.onDidOpenTextDocument((document) => {
@@ -62,7 +69,7 @@ export class NativeEditor implements vscode.Disposable {
     );
     if (!document) return entry;
     const source = document.getText();
-    return { ...entry, source, data: decodeYaml(source) };
+    return { ...entry, source, data: decodeYaml(source, this.allowedCategories()) };
   }
 
   private async validate(document: vscode.TextDocument): Promise<void> {
@@ -70,7 +77,7 @@ export class NativeEditor implements vscode.Disposable {
       const location = await this.locate(document.uri);
       if (!location) return;
       const source = document.getText();
-      const data = decodeYaml(source);
+      const data = decodeYaml(source, this.allowedCategories());
       variableTokens(data.content);
       this.diagnostics.set(document.uri, []);
       const ranges = [

@@ -11,7 +11,7 @@ npm run package
 
 Coverage gates remain 91% for lines, statements, functions, and branches across `src/`, including native VS Code adapters. Tests are updated with removed features, not retained as compatibility scaffolding.
 
-Unit/integration suites cover six-field schemas and canonical categories, comments, unknown-field rejection, malformed YAML/aliases/depth, path identity, concurrent conflict-safe writes, recovery, bounded resources, symlink/junction confinement, exact tag/full-text search, 10,000-entry cached search, category grouping, batches, watchers, variable substitution, CRUD, snapshot previews, window-local prompt copy/paste, reviewed category migration, cancellation, and Workspace Trust.
+Unit/integration suites cover six-field schemas and approved categories, comments, unknown-field rejection, malformed YAML/aliases/depth, path identity, concurrent conflict-safe writes, recovery, bounded resources, symlink/junction confinement, exact tag/category and full-text search, quoted filter values, linked tooltip filtering/path opening, 10,000-entry cached search, category grouping, batches, watchers, variable substitution, CRUD, snapshot previews, window-local prompt copy/paste, profile-wide category approval/reuse, reviewed category migration, cancellation, and Workspace Trust.
 
 Filesystem regressions check conflicts, stale writes/deletes, path confinement, and oversized input. Release-boundary tests check the sole view/command manifest, absence of import/export commands, and preservation of old settings/state. Native save tests verify that user formatting is preserved.
 

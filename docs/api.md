@@ -4,9 +4,9 @@ No public integration/provider API is exported. Asynchronous command failures di
 
 `LibraryService` accepts a filesystem port with `list`, `read`, expected-source `write`, and expected-source `remove`. It provides lazy `get`, incremental/full `refresh`, case-insensitive `search`, validated `save`/`writeSource`, `delete`, and subscriptions. Snapshots contain entries and validation problems; consumers treat them as immutable.
 
-Prompt categories are limited to `explain`, `plan`, `implement`, `review`, `test`, `debug`, and `document`. `prompteur.migrateCategories` previews and confirms conversion of existing categories; `misc` and missing values require per-prompt selection. The migration uses expected-source writes and does not run automatically.
+The built-in prompt categories are `explain`, `plan`, `implement`, `review`, `test`, `debug`, and `document`; users may explicitly approve additional profile-wide values. Runtime library validation checks this approved list. The generated JSON Schema describes category as a nonempty string up to 64 characters because approved categories vary by profile. `prompteur.migrateCategories` previews and confirms conversion of existing categories; `misc` and missing values require per-prompt selection. Migration uses expected-source writes and does not run automatically.
 
-`SearchIndex` reuses normalized text for unchanged entries and applies full-text/exact-tag filters with alphabetical results. `generate(content, context)` returns `{ text, missing }` for the four supported variables and condenses repeated blank lines in generated output.
+`SearchIndex` reuses normalized text for unchanged entries and applies full-text, exact-tag, and exact-category filters with alphabetical results. Filters use AND semantics; quoted filter values support spaces (for example `tag:"security review"` and `category:"review"`). Prompt tooltips link tags/categories to the live filter and the relative YAML path to the source editor. Link commands are internal and re-resolve paths against the current library. `generate(content, context)` returns `{ text, missing }` for the four supported variables and condenses repeated blank lines in generated output.
 
 | Command                       | Action                                     |
 | ----------------------------- | ------------------------------------------ |

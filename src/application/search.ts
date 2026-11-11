@@ -1,5 +1,68 @@
 import type { Entry } from '../core/documents';
 
+type SearchTerm = { kind: 'text' | 'tag' | 'category'; value: string };
+
+function tokenize(query: string): string[] {
+  const tokens: string[] = [];
+  let index = 0;
+  while (index < query.length) {
+    while (/\s/.test(query[index] ?? '')) index++;
+    if (index >= query.length) break;
+    const start = index;
+    const quotedFilter = /^(tag|category):"/i.exec(query.slice(index));
+    if (quotedFilter) {
+      index += quotedFilter[0].length;
+      let escaped = false;
+      let closed = false;
+      while (index < query.length) {
+        const character = query[index++]!;
+        if (escaped) escaped = false;
+        else if (character === '\\') escaped = true;
+        else if (character === '"') {
+          closed = true;
+          break;
+        }
+      }
+      if (!closed) {
+        index = start;
+        while (index < query.length && !/\s/.test(query[index]!)) index++;
+      }
+    } else {
+      while (index < query.length && !/\s/.test(query[index]!)) index++;
+    }
+    tokens.push(query.slice(start, index));
+  }
+  return tokens;
+}
+
+function parseTerm(token: string): SearchTerm {
+  const separator = token.indexOf(':');
+  if (separator > 0) {
+    const kind = token.slice(0, separator).toLowerCase();
+    if (kind === 'tag' || kind === 'category') {
+      const rawValue = token.slice(separator + 1);
+      let value = rawValue;
+      if (rawValue.startsWith('"')) {
+        try {
+          value = JSON.parse(rawValue) as string;
+        } catch {
+          return { kind: 'text', value: token.toLowerCase() };
+        }
+      }
+      return { kind, value: value.toLowerCase() };
+    }
+  }
+  return { kind: 'text', value: token.toLowerCase() };
+}
+
+export function appendExactFilter(query: string, kind: 'tag' | 'category', value: string): string {
+  const normalized = value.toLowerCase();
+  if (tokenize(query).map(parseTerm).some((term) => term.kind === kind && term.value === normalized))
+    return query;
+  const current = query.trim();
+  return `${current}${current ? ' ' : ''}${kind}:${JSON.stringify(value)}`;
+}
+
 export class SearchIndex {
   private readonly entries = new Map<
     string,
@@ -39,20 +102,21 @@ export class SearchIndex {
   }
 
   query(query = '', category?: string): Entry[] {
-    const terms = query.toLowerCase().trim().split(/\s+/).filter(Boolean);
+    const terms = tokenize(query).map(parseTerm);
     const candidates =
       category === undefined
         ? this.entries.values()
         : [...(this.categories.get(category.trim().toLowerCase()) ?? [])].map((key) =>
-            this.entries.get(key)!,
-          );
+          this.entries.get(key)!,
+        );
     return [...candidates]
       .filter((item) =>
-        terms.every((term) =>
-          term.startsWith('tag:')
-            ? term.length === 4 || item.tags.includes(term.slice(4))
-            : item.text.includes(term),
-        ),
+        terms.every((term) => {
+          if (!term.value) return true;
+          if (term.kind === 'tag') return item.tags.includes(term.value);
+          if (term.kind === 'category') return item.category === term.value;
+          return item.text.includes(term.value);
+        }),
       )
       .map((item) => item.entry)
       .sort(

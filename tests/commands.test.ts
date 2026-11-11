@@ -128,7 +128,11 @@ describe('release commands', () => {
       };
     };
     expect([...handlers.keys()].sort()).toEqual(
-      manifest.contributes.commands.map((item) => item.command).sort(),
+      [
+        ...manifest.contributes.commands.map((item) => item.command),
+        'prompteur.filterFromTooltip',
+        'prompteur.openPromptPath',
+      ].sort(),
     );
     expect(manifest.contributes).not.toHaveProperty('keybindings');
     const promptMenu = manifest.contributes.menus['view/item/context'].filter(
@@ -414,6 +418,39 @@ describe('release commands', () => {
     await run('clearSearch');
     expect(await entries()).toHaveLength(1);
   });
+  it('appends tooltip filters to the open search and opens validated prompt paths', async () => {
+    const userPrompt = await addPrompt('tooltip-user', 'needle');
+    const workspacePrompt = await addPrompt('tooltip-workspace', 'safe', 'workspace');
+    await run('search');
+    const box = inputBoxes.at(-1)!;
+    box.valueChanged.fire('needle');
+    await commands.executeCommand('prompteur.filterFromTooltip', 'tag', 'security review');
+    expect(tree().query).toBe('needle tag:"security review"');
+    expect(box.value).toBe(tree().query);
+    await commands.executeCommand('prompteur.filterFromTooltip', 'category', 'explain');
+    expect(tree().query).toBe('needle tag:"security review" category:"explain"');
+    await commands.executeCommand('prompteur.filterFromTooltip', 'category', 'explain');
+    expect(tree().query).toBe('needle tag:"security review" category:"explain"');
+
+    await commands.executeCommand('prompteur.openPromptPath', 'user', userPrompt.entry.path);
+    expect(window.activeTextEditor!.document.uri.fsPath).toBe(
+      join(userRoot(), userPrompt.entry.path),
+    );
+    workspace.isTrusted = false;
+    await commands.executeCommand(
+      'prompteur.openPromptPath',
+      'workspace',
+      workspacePrompt.entry.path,
+    );
+    expect(window.activeTextEditor!.document.uri.fsPath).toBe(
+      join(workspaceRoot(), workspacePrompt.entry.path),
+    );
+    await expect(
+      commands.executeCommand('prompteur.openPromptPath', 'user', '../outside.yaml'),
+    ).rejects.toThrow('changed or became invalid');
+    await commands.executeCommand('prompteur.clearSearch');
+    expect(box.value).toBe('');
+  });
   it('confirms deletion, blocks dirty editors and rejects stale nodes', async () => {
     const node = await addPrompt('delete', 'safe');
     responses.warning.push(null);
@@ -456,7 +493,7 @@ describe('release commands', () => {
     );
     expect((await entries()).some((item) => item.entry.data.name === 'User prompt')).toBe(true);
   });
-  it('requires one of the seven canonical categories when creating at scope level', async () => {
+  it('offers built-in categories and category approval when creating at scope level', async () => {
     const showQuickPick = vi.spyOn(window, 'showQuickPick');
     responses.quick.push('Debug');
     responses.input.push('Triage');
@@ -470,10 +507,56 @@ describe('release commands', () => {
         { label: 'Test', value: 'test' },
         { label: 'Debug', value: 'debug' },
         { label: 'Document', value: 'document' },
+        { label: '$(add) Add Category...', value: '__add_category__' },
       ],
       { title: 'Choose category' },
     );
     expect((await entries('user'))[0]?.entry.data.category).toBe('debug');
+  });
+  it('requires confirmation to add a profile category and shares it across libraries', async () => {
+    responses.quick.push('$(add) Add Category...');
+    responses.input.push('Research', 'User Research Prompt');
+    responses.warning.push('Add Category');
+    await run('newPrompt', scopeNode('user'));
+    expect(context.globalState.values.get('approvedPromptCategories')).toEqual(['research']);
+    expect((await entries('user'))[0]?.entry.data.category).toBe('research');
+
+    for (const disposable of context.subscriptions.splice(0)) disposable.dispose();
+    await activate(context as unknown as vscode.ExtensionContext);
+    responses.quick.push('Research');
+    responses.input.push('Workspace Research Prompt');
+    await run('newPrompt', scopeNode('workspace'));
+    expect((await entries('workspace'))[0]?.entry.data.category).toBe('research');
+  });
+  it('does not add or create a category when approval is cancelled', async () => {
+    responses.quick.push('$(add) Add Category...');
+    responses.input.push('Temporary');
+    responses.warning.push(null);
+    await run('newPrompt', scopeNode('user'));
+    expect(context.globalState.values.has('approvedPromptCategories')).toBe(false);
+    expect(await entries('user')).toEqual([]);
+  });
+  it('validates added category names for emptiness, length, reserved values, and duplicates', async () => {
+    responses.quick.push('$(add) Add Category...');
+    responses.input.push('Research', 'Research Prompt');
+    responses.warning.push('Add Category');
+    const showInputBox = vi.spyOn(window, 'showInputBox');
+    await run('newPrompt', scopeNode('user'));
+
+    const validate = showInputBox.mock.calls[0]?.[0]?.validateInput;
+    expect(validate?.('')).toBe('Category name is required');
+    expect(validate?.('x'.repeat(65))).toBe('Category name must be 64 characters or fewer');
+    expect(validate?.('__add_category__')).toBe('Category is already approved');
+    expect(validate?.('Another Category')).toBeUndefined();
+
+    responses.quick.push('$(add) Add Category...');
+    responses.input.push('research');
+    responses.warning.push(null);
+    await run('newPrompt', scopeNode('user'));
+    expect(showInputBox.mock.calls[2]?.[0]?.validateInput?.('research')).toBe(
+      'Category is already approved',
+    );
+    expect(context.globalState.values.get('approvedPromptCategories')).toEqual(['research']);
   });
   it('creates nothing when category selection is cancelled', async () => {
     const showInputBox = vi.spyOn(window, 'showInputBox');
@@ -482,9 +565,9 @@ describe('release commands', () => {
     expect(showInputBox).not.toHaveBeenCalled();
     expect(await entries('user')).toEqual([]);
   });
-  it('rejects creation from a stale noncanonical category node', async () => {
+  it('rejects creation from a stale unapproved category node', async () => {
     const category: TreeNode = { kind: 'category', scope: 'user', category: 'Legacy' };
-    await expect(run('newPrompt', category)).rejects.toThrow('one of the seven');
+    await expect(run('newPrompt', category)).rejects.toThrow('approved prompt category');
     expect(await entries('user')).toEqual([]);
   });
   it('exposes category migration on library scope rows', async () => {

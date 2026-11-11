@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { LibraryService } from '../src/application/library';
-import { SearchIndex } from '../src/application/search';
+import { appendExactFilter, SearchIndex } from '../src/application/search';
 import { encodeYaml, newPrompt, type Entry } from '../src/core/documents';
 import { generate, variableTokens } from '../src/core/render';
 import { memoryFiles } from './helpers';
@@ -224,6 +224,41 @@ describe('prompt search and rendering', () => {
     index.update([{ ...entries[0]!, data: newPrompt('Changed') }]);
     expect(index.query('security')).toEqual([]);
     expect(index.query('', 'review')).toEqual([]);
+  });
+
+  it('parses quoted tag/category filters and appends exact filters idempotently', () => {
+    const entry: Entry = {
+      key: 'space-tag',
+      scope: 'user',
+      path: 'prompts/space-tag.yaml',
+      source: '',
+      data: { ...newPrompt('Security'), category: 'review', tags: ['security review'] },
+    };
+    const index = new SearchIndex();
+    index.update([entry]);
+
+    expect(index.query('tag:"security review" category:"review"')).toEqual([entry]);
+    expect(index.query('category:REVIEW tag:"security review"')).toEqual([entry]);
+    expect(index.query('tag:"security"')).toEqual([]);
+    expect(index.query('  \t ')).toEqual([entry]);
+    expect(index.query('scope:user')).toEqual([]);
+    expect(index.query('tag:"unterminated')).toEqual([]);
+    expect(index.query('tag:"invalid\\q"')).toEqual([]);
+    const filtered = appendExactFilter('security', 'tag', 'security review');
+    expect(filtered).toBe('security tag:"security review"');
+    expect(appendExactFilter(filtered, 'tag', 'security review')).toBe(filtered);
+    expect(appendExactFilter(filtered, 'category', 'review')).toBe(
+      'security tag:"security review" category:"review"',
+    );
+
+    const quotedEntry = {
+      ...entry,
+      key: 'quoted-tag',
+      data: { ...entry.data, tags: ['say "hello"'] },
+    };
+    index.update([quotedEntry]);
+    const quotedFilter = appendExactFilter('', 'tag', 'say "hello"');
+    expect(index.query(quotedFilter)).toEqual([quotedEntry]);
   });
 
   it('queries 10,000 cached prompts within the existing 200ms budget', () => {

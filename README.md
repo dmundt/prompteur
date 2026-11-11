@@ -33,7 +33,7 @@ Selection comes from the current or most recently active non-library, non-previe
 
 Prompt item menus offer edit, duplicate, delete, **Copy Prompt**, and preview. **Copy Prompt** stores the prompt in this VS Code window; **Paste Prompt** on a User/Workspace scope or category creates a new file. Pasting on a category changes the copy's category. The existing **Copy** action still generates prompt text to the OS clipboard. Workspace source copies and Workspace destination writes require trust. All commands are available from the Command Palette under **Prompteur**. **Clear Filter** resets the search; **Reload Libraries** rescans both libraries.
 
-Categories are seven fixed virtual groups, not physical folders: Explain, Plan, Implement, Review, Test, Debug, and Document. Tags are cross-category labels shown beside names. Search is case-insensitive across names, descriptions, categories, tags, content, and paths. Multiple `tag:` filters must all match. Prompts sort alphabetically. Request approval before adding another category.
+Categories are seven built-in virtual groups, not physical folders: Explain, Plan, Implement, Review, Test, Debug, and Document. Add a profile-wide category from the category picker only after explicit confirmation. Tags are cross-category labels shown beside names. Hover a prompt to click an exact tag or category link to add a filter, or click its relative path to open the YAML file. Multiple filters must all match; quoted examples include `tag:"security review"` and `category:"review"`. Search also matches names, descriptions, tags, content, and paths; prompts sort alphabetically.
 
 ## Prompt Files
 
@@ -49,7 +49,7 @@ content: |
   {{selection}}
 ```
 
-These are the only six fields. `version: 1`, nonempty `name`, a category from the seven listed above, and string `content` are required. Description and tags default to empty values. Unknown categories, unknown fields, unsupported versions, malformed YAML, and aliases are rejected. File paths identify prompts; display names need not be unique. New filenames are readable, with numeric collision suffixes.
+These are the only six fields. `version: 1`, nonempty `name`, a built-in or explicitly approved profile category, and string `content` are required. Description and tags default to empty values. Unapproved categories, unknown fields, unsupported versions, malformed YAML, and aliases are rejected. File paths identify prompts; display names need not be unique. New filenames are readable, with numeric collision suffixes.
 
 Only `selection`, `clipboard`, `filename`, and `workspace` variables are supported. Expansion happens once, then repeated blank lines collapse to one empty line. Empty selections are allowed without a warning and expand to empty text; other empty variable values trigger a warning. Unknown or malformed placeholders block generation. Clipboard contents are read only when requested by a placeholder.
 
@@ -67,7 +67,7 @@ Workspace files live under `.vscode/prompts/prompts/` in the first local workspa
       incident.yaml
 ```
 
-Nested YAML files are discovered recursively but browsed by category. Both `.yaml` and `.yml` are recognized. Remote/virtual libraries are not supported. Workspace writes, generation, and preview require Workspace Trust; User prompts remain usable in an untrusted workspace.
+Nested YAML files are discovered recursively but browsed by category. Both `.yaml` and `.yml` are recognized. Remote/virtual libraries are not supported. Approved extra categories are stored in the current VS Code profile and shared by User and Workspace libraries. Workspace writes, generation, and preview require Workspace Trust; User prompts remain usable in an untrusted workspace.
 
 No library settings or usage state is read or written. Existing `settings.yaml`, old rules, Favorites/MRU data, and other user files are left untouched. Prompts using older categories appear as repairable items until **Migrate Prompt Categories** is run. The command previews proposed mappings, asks for a category for `misc` or missing values, and rewrites YAML only after confirmation. Cancel leaves files unchanged. If an earlier settings file selected a non-default directory, manually move the prompt files under `prompts/`.
 
