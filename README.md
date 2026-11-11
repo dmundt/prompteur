@@ -1,6 +1,12 @@
 # Prompteur
 
-A local YAML prompt manager for Visual Studio Code. Files stay readable without the extension. No accounts, network services, AI providers, or telemetry.
+For developers who reuse prompts across projects, Prompteur stores them as plain YAML in VS Code.
+
+- Organize prompts by category and tags; find them with full-text search.
+- Generate text with optional selection, clipboard, filename, and workspace variables. Copy it for pasting into Chat or another app.
+- Preview generated text without modifying source files.
+- Keep User prompts in profile-local storage and Workspace prompts in `.vscode/prompts`.
+- No account, cloud service, AI provider, or telemetry. Workspace writes, generation, and preview require Workspace Trust.
 
 ## Install and Run
 

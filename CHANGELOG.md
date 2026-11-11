@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Rewrite Marketplace README introduction to summarize prompt workflows, local storage, and trust requirements.
 - Rename Personal library label to User and use matching `person` icon; User library storage remains profile-local.
 
 ## 0.4.4
