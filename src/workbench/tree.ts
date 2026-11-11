@@ -5,12 +5,12 @@ import type { Entry, Scope } from '../core/documents';
 export type TreeNode =
   | { kind: 'scope'; scope: Scope }
   | {
-      kind: 'category';
-      scope: Scope;
-      category: string;
-      filteredCount?: number;
-      totalCount?: number;
-    }
+    kind: 'category';
+    scope: Scope;
+    category: string;
+    filteredCount?: number;
+    totalCount?: number;
+  }
   | { kind: 'entry'; scope: Scope; entry: Entry }
   | { kind: 'problem'; scope: Scope; path: string; message: string }
   | { kind: 'batch'; scope: Scope; label: string; children: TreeNode[] };
@@ -155,22 +155,22 @@ export class PromptTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dis
       const nodes: TreeNode[] =
         node.kind === 'scope'
           ? [
-              ...Array.from(
-                new Map(
-                  entries
-                    .map((entry) => entry.data.category.trim() || 'misc')
-                    .map((category) => [category.toLowerCase(), category] as const),
-                ).values(),
-              )
-                .sort((left, right) => left.localeCompare(right))
-                .map((category): TreeNode => ({
-                  kind: 'category',
-                  scope: node.scope,
-                  category,
-                  filteredCount: filteredCounts.get(category.toLowerCase()) ?? 0,
-                  totalCount: totalCounts.get(category.toLowerCase()) ?? 0,
-                })),
-            ]
+            ...Array.from(
+              new Map(
+                entries
+                  .map((entry) => entry.data.category.trim() || 'misc')
+                  .map((category) => [category.toLowerCase(), category] as const),
+              ).values(),
+            )
+              .sort((left, right) => left.localeCompare(right))
+              .map((category): TreeNode => ({
+                kind: 'category',
+                scope: node.scope,
+                category,
+                filteredCount: filteredCounts.get(category.toLowerCase()) ?? 0,
+                totalCount: totalCounts.get(category.toLowerCase()) ?? 0,
+              })),
+          ]
           : entries.map((entry): TreeNode => ({ kind: 'entry', scope: node.scope, entry }));
       if (node.kind === 'scope')
         nodes.push(
