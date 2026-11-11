@@ -5,15 +5,18 @@
     "version": { "type": "number", "const": 1 },
     "name": { "type": "string", "minLength": 1 },
     "description": { "default": "", "type": "string" },
-    "category": { "default": "misc", "type": "string", "minLength": 1 },
     "tags": {
       "default": [],
       "maxItems": 128,
       "type": "array",
       "items": { "type": "string", "minLength": 1 }
     },
-    "content": { "type": "string" }
+    "content": { "type": "string" },
+    "category": {
+      "type": "string",
+      "enum": ["explain", "plan", "implement", "review", "test", "debug", "document"]
+    }
   },
-  "required": ["version", "name", "content"],
+  "required": ["version", "name", "content", "category"],
   "additionalProperties": false
 }

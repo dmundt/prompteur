@@ -33,7 +33,7 @@ Selection comes from the current or most recently active non-library, non-previe
 
 Prompt item menus offer edit, duplicate, delete, **Copy Prompt**, and preview. **Copy Prompt** stores the prompt in this VS Code window; **Paste Prompt** on a User/Workspace scope or category creates a new file. Pasting on a category changes the copy's category. The existing **Copy** action still generates prompt text to the OS clipboard. Workspace source copies and Workspace destination writes require trust. All commands are available from the Command Palette under **Prompteur**. **Clear Filter** resets the search; **Reload Libraries** rescans both libraries.
 
-Categories are free-text virtual groups, not physical folders. Tags are cross-category labels shown beside names. Search is case-insensitive across names, descriptions, categories, tags, content, and paths. Multiple `tag:` filters must all match. Prompts sort alphabetically.
+Categories are seven fixed virtual groups, not physical folders: Explain, Plan, Implement, Review, Test, Debug, and Document. Tags are cross-category labels shown beside names. Search is case-insensitive across names, descriptions, categories, tags, content, and paths. Multiple `tag:` filters must all match. Prompts sort alphabetically. Request approval before adding another category.
 
 ## Prompt Files
 
@@ -49,7 +49,7 @@ content: |
   {{selection}}
 ```
 
-These are the only six fields. `version: 1`, nonempty `name`, and string `content` are required. Description and tags default to empty values; category defaults to `misc`. Unknown fields, unsupported versions, malformed YAML, and aliases are rejected. File paths identify prompts; display names need not be unique. New filenames are readable, with numeric collision suffixes.
+These are the only six fields. `version: 1`, nonempty `name`, a category from the seven listed above, and string `content` are required. Description and tags default to empty values. Unknown categories, unknown fields, unsupported versions, malformed YAML, and aliases are rejected. File paths identify prompts; display names need not be unique. New filenames are readable, with numeric collision suffixes.
 
 Only `selection`, `clipboard`, `filename`, and `workspace` variables are supported. Expansion happens once, then repeated blank lines collapse to one empty line. Empty selections are allowed without a warning and expand to empty text; other empty variable values trigger a warning. Unknown or malformed placeholders block generation. Clipboard contents are read only when requested by a placeholder.
 
@@ -69,24 +69,19 @@ Workspace files live under `.vscode/prompts/prompts/` in the first local workspa
 
 Nested YAML files are discovered recursively but browsed by category. Both `.yaml` and `.yml` are recognized. Remote/virtual libraries are not supported. Workspace writes, generation, and preview require Workspace Trust; User prompts remain usable in an untrusted workspace.
 
-No library settings or usage state is read or written. Existing `settings.yaml`, old rules, Favorites/MRU data, and other user files are left untouched. If an earlier settings file selected a non-default directory, manually move the prompt files under `prompts/`; no automatic migration runs.
+No library settings or usage state is read or written. Existing `settings.yaml`, old rules, Favorites/MRU data, and other user files are left untouched. Prompts using older categories appear as repairable items until **Migrate Prompt Categories** is run. The command previews proposed mappings, asks for a category for `misc` or missing values, and rewrites YAML only after confirmation. Cancel leaves files unchanged. If an earlier settings file selected a non-default directory, manually move the prompt files under `prompts/`.
 
 ## Starters
 
 **Add Starter Library** copies 16 ordinary prompts, grouped by their category:
 
-- **Understand:** Explain Selected Code.
-- **Plan:** Clarify Requirements; Plan Smallest Useful Implementation.
+- **Explain:** Explain Selected Code.
+- **Plan:** Clarify Requirements; Plan Smallest Useful Implementation; Plan Behavior-Preserving Refactor.
 - **Implement:** Implement Scoped Change.
-- **Review:** Code Review; Complexity Review.
-- **Architecture:** Architecture Review.
+- **Review:** Code Review; Complexity Review; Architecture Review; Security Review; Release Readiness Audit; Implementation Completeness Audit; Accessibility Audit.
 - **Test:** Generate Focused Unit Tests.
-- **Devops:** Production Incident.
-- **Debugging:** Root Cause Analysis.
-- **Refactor:** Plan Behavior-Preserving Refactor.
-- **Security:** Security Review.
+- **Debug:** Production Incident; Root Cause Analysis.
 - **Document:** Document Feature Usage.
-- **Audit:** Release Readiness Audit; Implementation Completeness Audit; Accessibility Audit.
 
 Installation is opt-in. Run the command again to add missing starters after an update. Existing destination files, including invalid files, are never replaced. Each file is written safely; installation is not an all-or-nothing transaction, and failures report how many files were added.
 

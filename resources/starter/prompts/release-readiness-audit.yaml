@@ -2,7 +2,7 @@ version: 1
 name: Release Readiness Audit
 description: >
   Assess release blockers across build, tests, packaging, activation, workflows, and documentation.
-category: audit
+category: review
 tags: [audit, release, packaging, verification]
 content: |
   Audit release readiness for {{workspace}} with this scope:

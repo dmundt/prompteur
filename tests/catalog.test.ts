@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { LibraryService } from '../src/application/library';
 import { SearchIndex } from '../src/application/search';
 import { LocalFiles } from '../src/platform/local-files';
-import { parseYaml } from '../src/core/documents';
+import { parseYaml, promptCategories } from '../src/core/documents';
 import { variableTokens } from '../src/core/render';
 
 describe('bundled prompt starters', () => {
@@ -20,6 +20,7 @@ describe('bundled prompt starters', () => {
       expect(Object.keys(raw).sort()).toEqual(
         ['version', 'name', 'description', 'category', 'tags', 'content'].sort(),
       );
+      expect(promptCategories).toContain(entry.data.category);
       expect(paths.has(entry.path)).toBe(false);
       paths.add(entry.path);
       expect(names.has(entry.data.name)).toBe(false);

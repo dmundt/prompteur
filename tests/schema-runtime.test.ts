@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFile } from 'node:fs/promises';
 import { LibraryService } from '../src/application/library';
-import { encodeYaml, newPrompt, promptSchema } from '../src/core/documents';
+import { encodeYaml, newPrompt, promptCategories, promptSchema } from '../src/core/documents';
 import { memoryFiles } from './helpers';
 
 describe('release boundary', () => {
@@ -12,8 +12,9 @@ describe('release boundary', () => {
       additionalProperties: boolean;
     };
     expect(Object.keys(schema.properties).sort()).toEqual(Object.keys(promptSchema.shape).sort());
-    expect(schema.required).toEqual(['version', 'name', 'content']);
+    expect(schema.required).toEqual(['version', 'name', 'content', 'category']);
     expect(schema.additionalProperties).toBe(false);
+    expect(schema.properties.category).toMatchObject({ enum: [...promptCategories] });
   });
   it('uses path identity for equal-name prompts without persistent usage or settings', async () => {
     const { port, files } = memoryFiles();

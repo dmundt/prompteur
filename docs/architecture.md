@@ -2,7 +2,7 @@
 
 Prompteur is a local desktop VS Code extension without a server, webview, cloud SDK, or provider framework.
 
-- `core/documents.ts`: six-field prompt validation, YAML parsing/serialization, path checks, and path-based identity.
+- `core/documents.ts`: six-field prompt validation with seven canonical categories, YAML parsing/serialization, path checks, and path-based identity.
 - `core/render.ts`: bounded one-pass substitution of four fixed variables.
 - `application/library.ts`: lazy per-scope cache, serialized writes/reloads, validation problems, and notifications.
 - `application/search.ts`: reused lowercase search text, exact tags, and alphabetical results.
@@ -16,6 +16,8 @@ Tree expansion deduplicates lazy loads. Initial reads use at most sixteen worker
 Generation captures the source editor before pickers, uses valid dirty prompt buffers when present, and expands once. **Copy** writes generated text to the OS clipboard without editing source documents. **Copy Prompt/Paste Prompt** use an in-memory buffer owned by the Workbench instance to create new prompt files across scopes/categories; they do not move sources or persist transfer state. Preview opens an untitled plaintext document with generated content. A weak set excludes previews as selection sources; there is no retained preview context, provider, or update timer.
 
 The workbench checks Workspace Trust before using workspace prompts; the filesystem adapter independently checks it before workspace writes/deletes. User prompts remain available. Native document saves are not reformatted by the extension.
+
+Category migration is explicit: legacy prompts remain repairable problems until the user previews and confirms source-aware rewrites. There is no automatic migration during loading.
 
 No file import/export commands, archive format, or generic transfer layer exists. Prompt-record copies use the small window-local buffer. Starters are copied directly, skipping occupied paths. Multi-file starter installation reports partial progress rather than emulating a transaction.
 

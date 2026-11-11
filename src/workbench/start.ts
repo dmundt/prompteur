@@ -3,9 +3,12 @@ import { basename } from 'node:path';
 import { LocalFiles } from '../platform/local-files';
 import { LibraryService, messageOf } from '../application/library';
 import {
+  decodeLegacyYaml,
   newPrompt,
   promptFolder,
+  promptCategories,
   type Entry,
+  type PromptCategory,
   type PromptData,
   type Scope,
 } from '../core/documents';
@@ -13,6 +16,15 @@ import { generate, variableTokens, type Context } from '../core/render';
 import { NativeEditor } from './editor';
 import { PromptTree, type TreeNode } from './tree';
 import { watchLibrary } from './watch';
+
+const legacyCategoryTargets: Record<string, PromptCategory> = {
+  audit: 'review',
+  architecture: 'review',
+  security: 'review',
+  devops: 'debug',
+  debugging: 'debug',
+  refactor: 'plan',
+};
 
 class Workbench implements vscode.Disposable {
   private readonly disposables: vscode.Disposable[] = [];
@@ -72,6 +84,7 @@ class Workbench implements vscode.Disposable {
     const actions: Record<string, (node?: TreeNode) => Promise<unknown>> = {
       newPrompt: (node) => this.create(node),
       addStarters: (node) => this.addStarters(node),
+      migrateCategories: (node) => this.migrateCategories(node),
       edit: (node) => this.edit(node),
       delete: (node) => this.remove(node),
       duplicate: (node) => this.duplicate(node),
@@ -137,6 +150,18 @@ class Workbench implements vscode.Disposable {
     )?.value;
   }
 
+  private async pickCategory(title = 'Choose category'): Promise<PromptCategory | undefined> {
+    return (
+      await vscode.window.showQuickPick(
+        promptCategories.map((category) => ({
+          label: category.charAt(0).toUpperCase() + category.slice(1),
+          value: category,
+        })),
+        { title },
+      )
+    )?.value;
+  }
+
   private assertTrusted(entry: Entry): void {
     if (entry.scope === 'workspace' && !vscode.workspace.isTrusted)
       throw new Error('Trust this workspace before using its prompts');
@@ -192,6 +217,16 @@ class Workbench implements vscode.Disposable {
   private async create(node?: TreeNode): Promise<void> {
     const scope = await this.scope(node);
     if (!scope) return;
+    if (scope === 'workspace' && !vscode.workspace.isTrusted)
+      throw new Error('Trust this workspace before modifying its library');
+    const category =
+      node?.kind === 'category'
+        ? promptCategories.find((allowed) => allowed === node.category.trim().toLowerCase())
+        : await this.pickCategory();
+    if (!category) {
+      if (node?.kind === 'category') throw new Error('Choose one of the seven prompt categories.');
+      return;
+    }
     const name = await vscode.window.showInputBox({
       title: 'New prompt',
       prompt: 'Name',
@@ -199,12 +234,113 @@ class Workbench implements vscode.Disposable {
     });
     if (!name?.trim()) return;
     const path = await this.availablePath(scope, name);
-    const data = {
-      ...newPrompt(name.trim()),
-      category: node?.kind === 'category' ? node.category : 'misc',
-    };
+    const data = newPrompt(name.trim(), category);
     await this.service.save(scope, path, data, undefined);
     await vscode.window.showTextDocument(this.uri({ scope, path }));
+  }
+
+  private async migrateCategories(node?: TreeNode): Promise<void> {
+    const scope = await this.scope(node);
+    if (!scope) return;
+    if (scope === 'workspace' && !vscode.workspace.isTrusted)
+      throw new Error('Trust this workspace before modifying its library');
+
+    const snapshot = await this.service.get(scope);
+    const migrations: {
+      path: string;
+      source: string;
+      data: ReturnType<typeof decodeLegacyYaml>;
+      previousCategory: string;
+      category: PromptCategory;
+    }[] = [];
+    const candidatePaths = [
+      ...new Set([
+        ...snapshot.entries.map((entry) => entry.path),
+        ...snapshot.problems.map((problem) => problem.path),
+      ]),
+    ].sort((left, right) => left.localeCompare(right));
+    for (const path of candidatePaths) {
+      const source = await this.service.readFile(scope, path);
+      if (source === undefined) continue;
+      let data: ReturnType<typeof decodeLegacyYaml>;
+      try {
+        data = decodeLegacyYaml(source);
+      } catch {
+        continue;
+      }
+      const previousCategory = data.category.trim();
+      const normalized = previousCategory.toLowerCase();
+      let category = promptCategories.find((value) => value === normalized);
+      category ??= legacyCategoryTargets[normalized];
+      if (!category) {
+        const promptName = data.name.replace(/\s+/g, ' ').slice(0, 60);
+        category = await this.pickCategory(
+          `Choose category for "${promptName}" (${previousCategory.slice(0, 40)})`,
+        );
+        if (!category) return;
+      }
+      if (category !== previousCategory)
+        migrations.push({ path, source, data, previousCategory, category });
+    }
+
+    if (!migrations.length) {
+      void vscode.window.showInformationMessage('No prompt categories need migration.');
+      return;
+    }
+
+    const counts = new Map<string, number>();
+    for (const migration of migrations) {
+      const previousCategory = migration.previousCategory.replace(/\s+/g, ' ').slice(0, 40);
+      const mapping = `${previousCategory} -> ${migration.category}`;
+      counts.set(mapping, (counts.get(mapping) ?? 0) + 1);
+    }
+    const summary = [...counts.entries()]
+      .slice(0, 6)
+      .map(([mapping, count]) => `${mapping} (${count})`)
+      .join('\n');
+    const extraMappings = counts.size > 6 ? `\n${counts.size - 6} more mappings.` : '';
+    const pathPreview = migrations
+      .slice(0, 5)
+      .map(
+        (migration) => `${migration.path}: ${migration.previousCategory} -> ${migration.category}`,
+      )
+      .join('\n');
+    const extraPaths = migrations.length > 5 ? `\nAnd ${migrations.length - 5} more prompts.` : '';
+    const hasDirtyPrompt = migrations.some((migration) =>
+      vscode.workspace.textDocuments.some(
+        (document) =>
+          document.isDirty &&
+          document.uri.toString() === this.uri({ scope, path: migration.path }).toString(),
+      ),
+    );
+    if (hasDirtyPrompt)
+      throw new Error('Save or discard open prompt edits before migrating categories');
+    const answer = await vscode.window.showWarningMessage(
+      `Migrate ${migrations.length} prompts in ${scope === 'user' ? 'User' : 'Workspace'}?\n${summary}${extraMappings}\n\n${pathPreview}${extraPaths}\nPrompt files will be rewritten after confirmation.`,
+      { modal: true },
+      'Migrate',
+    );
+    if (answer !== 'Migrate') return;
+
+    let migrated = 0;
+    for (const migration of migrations) {
+      try {
+        await this.service.save(
+          scope,
+          migration.path,
+          { ...migration.data, category: migration.category },
+          migration.source,
+          migration.source,
+        );
+        migrated++;
+      } catch (error) {
+        throw new Error(
+          `Category migration stopped after ${migrated} prompts: ${messageOf(error)}`,
+          { cause: error },
+        );
+      }
+    }
+    void vscode.window.showInformationMessage(`Updated categories in ${migrated} prompts.`);
   }
 
   private async addStarters(node?: TreeNode): Promise<void> {
@@ -285,10 +421,15 @@ class Workbench implements vscode.Disposable {
     if (!scope) return;
     if (scope === 'workspace' && !vscode.workspace.isTrusted)
       throw new Error('Trust this workspace before modifying its library');
+    const category =
+      node?.kind === 'category'
+        ? promptCategories.find((allowed) => allowed === node.category.trim().toLowerCase())
+        : this.copiedPrompt.data.category;
+    if (!category) throw new Error('Choose one of the seven prompt categories.');
     const data = {
       ...this.copiedPrompt.data,
       tags: [...this.copiedPrompt.data.tags],
-      category: node?.kind === 'category' ? node.category : this.copiedPrompt.data.category,
+      category,
     };
     const path = await this.availablePath(scope, data.name);
     await this.service.save(scope, path, data, undefined, this.copiedPrompt.source);

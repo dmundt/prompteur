@@ -6,11 +6,11 @@ YAML files are the only persisted product content. No database, settings, orderi
 
 The workspace root is `.vscode/prompts/` in the first local workspace folder. The User library root is `prompts/` inside the current VS Code profile's extension storage. Each root has a fixed `prompts/` subtree containing recursively discovered `.yaml`/`.yml` files.
 
-Prompt keys are exactly `version`, `name`, `description`, `category`, `tags`, and `content`. Version 1, nonempty name, and string content are required. Optional defaults are empty description/tags and category `misc`; sparse manually authored files are valid. Categories and tags are ordinary strings. Identity is scope plus relative path; equal display names are allowed.
+Prompt keys are exactly `version`, `name`, `description`, `category`, `tags`, and `content`. Version 1, nonempty name, a canonical category, and string content are required. Description and tags default to empty values. The seven categories are `explain`, `plan`, `implement`, `review`, `test`, `debug`, and `document`; category values are case-normalized when decoded. Tags remain ordinary strings. Identity is scope plus relative path; equal display names are allowed.
 
 `npm run schemas` produces the companion prompt JSON Schema from runtime Zod definitions. Alias rejection, path confinement, and resource limits remain runtime checks. Version is a format marker, not revision history.
 
-Existing settings, rule files, and usage state are ignored and left untouched. Custom directories configured in older releases are no longer loaded; users must move those prompts into the fixed subtree manually. No migration or destructive cleanup runs.
+Existing settings, rule files, and usage state are ignored and left untouched. Custom directories configured in older releases are no longer loaded; users must move those prompts into the fixed subtree manually. Prompts with noncanonical categories are shown as repairable problems. **Migrate Prompt Categories** previews the proposed mapping and prompts for each `misc` or missing category; YAML is rewritten only after explicit confirmation. Cancel leaves files untouched.
 
 ## Reads and Edits
 

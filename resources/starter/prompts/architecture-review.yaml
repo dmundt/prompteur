@@ -2,7 +2,7 @@ version: 1
 name: Architecture Review
 description: >
   Assess system boundaries and operational tradeoffs against concrete requirements, failure modes, and growth assumptions.
-category: architecture
+category: review
 tags: [architecture, review, scalability, tradeoffs, reliability, resilience]
 content: |
   Evaluate this architecture for {{workspace}}:

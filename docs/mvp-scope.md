@@ -2,12 +2,13 @@
 
 ## Included
 
-- Ordinary YAML prompts with six fields: version, name, description, category, tags, content.
+- Ordinary YAML prompts with six fields: version, name, description, category, tags, content; categories limited to Explain, Plan, Implement, Review, Test, Debug, and Document.
 - User and first-local-workspace libraries at fixed paths.
 - One native tree grouped by category; recursive file discovery, not a second folder browser.
 - Case-insensitive full-text and exact-tag search, alphabetical ordering.
 - Create, edit, duplicate, confirmed delete, and clipboard generation without editing source code.
 - Copy prompt records within a VS Code window across categories and User/Workspace libraries.
+- Review and confirm migration of existing prompts to the seven canonical categories.
 - Four fixed variables: selection, clipboard, filename, workspace.
 - On-demand plaintext snapshot preview.
 - Sixteen optional starter files covering understanding, planning, implementation, reviews, tests, debugging, refactoring, documentation, and audits.

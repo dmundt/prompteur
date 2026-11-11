@@ -24,16 +24,37 @@ export const relativePath = z
     'Use a safe relative path without traversal',
   );
 const labels = z.array(z.string().trim().min(1)).max(128);
+export const promptCategories = [
+  'explain',
+  'plan',
+  'implement',
+  'review',
+  'test',
+  'debug',
+  'document',
+] as const;
+export type PromptCategory = (typeof promptCategories)[number];
+
 const base = {
   version: z.literal(1),
   name: z.string().trim().min(1),
   description: z.string().default(''),
-  category: z.string().trim().min(1).default('misc'),
   tags: labels.default([]),
   content: z.string(),
 };
-export const promptSchema = z.object(base).strict();
+export const promptSchema = z
+  .object({
+    ...base,
+    category: z.enum(promptCategories, {
+      error: `Choose one of: ${promptCategories.join(', ')}. Request approval before adding a category.`,
+    }),
+  })
+  .strict();
+export const legacyPromptSchema = z
+  .object({ ...base, category: z.string().trim().min(1).default('misc') })
+  .strict();
 export type PromptData = z.infer<typeof promptSchema>;
+export type LegacyPromptData = z.infer<typeof legacyPromptSchema>;
 export type Scope = 'user' | 'workspace';
 export const promptFolder = 'prompts';
 export interface Entry {
@@ -76,7 +97,25 @@ export function parseYaml(source: string): Document {
 }
 
 export function decodeYaml(source: string): PromptData {
-  const result = promptSchema.safeParse(parseYaml(source).toJS({ maxAliasCount: 0 }));
+  const value = parseYaml(source).toJS({ maxAliasCount: 0 });
+  if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+    const data = value as Record<string, unknown>;
+    if (typeof data.category === 'string') data.category = data.category.trim().toLowerCase();
+  }
+  const result = promptSchema.safeParse(value);
+  if (!result.success)
+    throw new Error(
+      result.error.issues
+        .slice(0, 8)
+        .map((issue) => `${issue.path.join('.')}: ${issue.message}`)
+        .join('; ')
+        .slice(0, 2048),
+    );
+  return result.data;
+}
+
+export function decodeLegacyYaml(source: string): LegacyPromptData {
+  const result = legacyPromptSchema.safeParse(parseYaml(source).toJS({ maxAliasCount: 0 }));
   if (!result.success)
     throw new Error(
       result.error.issues
@@ -97,7 +136,6 @@ export function encodeYaml(data: PromptData, previous?: string): string {
       previous !== undefined &&
       !Object.hasOwn(existing, key) &&
       ((key === 'description' && value === '') ||
-        (key === 'category' && value === 'misc') ||
         (key === 'tags' && Array.isArray(value) && value.length === 0))
     )
       continue;
@@ -131,12 +169,12 @@ export function encodeYaml(data: PromptData, previous?: string): string {
   return result;
 }
 
-export function newPrompt(name: string): PromptData {
+export function newPrompt(name: string, category: PromptCategory = 'explain'): PromptData {
   return {
     version: 1,
     name,
     description: '',
-    category: 'misc',
+    category,
     tags: [],
     content: '',
   };

@@ -196,7 +196,7 @@ describe('prompt search and rendering', () => {
         source: '',
         data: {
           ...newPrompt('Beta'),
-          category: 'Review',
+          category: 'review',
           content: 'security review',
           tags: ['Quality', 'security'],
         },
@@ -206,7 +206,7 @@ describe('prompt search and rendering', () => {
         scope: 'user',
         path: 'prompts/a.yaml',
         source: '',
-        data: { ...newPrompt('Alpha'), category: 'Other', tags: ['quality'] },
+        data: { ...newPrompt('Alpha'), category: 'explain', tags: ['quality'] },
       },
     ];
     const index = new SearchIndex();
@@ -220,7 +220,7 @@ describe('prompt search and rendering', () => {
     expect(index.query('tag:')).toHaveLength(2);
     index.update([entries[0]!]);
     expect(index.query()).toHaveLength(1);
-    expect(index.query('', 'other')).toEqual([]);
+    expect(index.query('', 'explain')).toEqual([]);
     index.update([{ ...entries[0]!, data: newPrompt('Changed') }]);
     expect(index.query('security')).toEqual([]);
     expect(index.query('', 'review')).toEqual([]);
