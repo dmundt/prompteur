@@ -8,7 +8,7 @@ Only the requested user-visible capabilities, data-model concepts, and workflows
 
 ## Independently Authored Artifacts
 
-The source organization, YAML schemas, cache and mutation model, transfer representation, command names/text, native view adapters, tests, documentation, CI pipeline, and Activity Bar SVG were authored for this project. The earlier JSON-based scaffold was discarded when YAML Phase 1 became the controlling specification. No reference-project implementation was used as a migration source.
+The source organization, Markdown/frontmatter schema, cache and mutation model, transfer representation, command names/text, native view adapters, tests, documentation, CI pipeline, and Activity Bar SVG were authored for this project. The earlier JSON-based scaffold was discarded when the local-file prompt format became the controlling specification. No reference-project implementation was used as a migration source.
 
 Public VS Code API documentation and standard package type declarations were consulted for platform compatibility. The implementation uses independently maintained general-purpose packages: `yaml`, Zod, TypeScript, Vitest, esbuild, ESLint, Prettier, and VS Code tooling. Their upstream licenses apply to their own code; using them is not a claim that those dependencies were authored here.
 

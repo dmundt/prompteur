@@ -19,9 +19,10 @@ Router for the documentation in this folder. Start here, then open the document 
 
 ## Architecture Decision Records
 
-- [ADR 001: Individual YAML Files Are Authoritative](./adr/001-yaml-source-of-truth.md)
+- [ADR 001: Individual YAML Files Are Authoritative](./adr/001-yaml-source-of-truth.md) (superseded)
 - [ADR 002: Use Native Editors and Views](./adr/002-native-workbench.md)
 - [ADR 003: Explicit Local Safety Boundaries](./adr/003-local-safety-boundaries.md)
+- [ADR 004: Markdown Frontmatter Prompts Are Authoritative](./adr/004-markdown-frontmatter-prompts.md)
 
 ## Update rules
 

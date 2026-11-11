@@ -3,7 +3,7 @@ import { posix } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 export class Disposable {
-  constructor(private readonly action: () => void = () => undefined) { }
+  constructor(private readonly action: () => void = () => undefined) {}
   dispose() {
     this.action();
   }
@@ -26,10 +26,10 @@ export class TreeItem {
   constructor(
     public label: string,
     public collapsibleState = 0,
-  ) { }
+  ) {}
 }
 export class ThemeIcon {
-  constructor(public id: string) { }
+  constructor(public id: string) {}
 }
 export class MarkdownString {
   value = '';
@@ -45,19 +45,19 @@ export class MarkdownString {
 }
 export const TreeItemCollapsibleState = { None: 0, Collapsed: 1, Expanded: 2 };
 export class DataTransferItem {
-  constructor(public value: unknown) { }
+  constructor(public value: unknown) {}
 }
 export class RelativePattern {
   constructor(
     public base: unknown,
     public pattern: string,
-  ) { }
+  ) {}
 }
 export class Uri {
   constructor(
     public path: string,
     public scheme = 'file',
-  ) { }
+  ) {}
   get fsPath() {
     return this.scheme === 'file' ? fileURLToPath(this.toString()) : this.path;
   }
@@ -94,7 +94,7 @@ export class Position {
   constructor(
     public line: number,
     public character: number,
-  ) { }
+  ) {}
 }
 export class Range {
   start: Position;
@@ -110,14 +110,14 @@ export class Range {
   }
 }
 export class ThemeColor {
-  constructor(public id: string) { }
+  constructor(public id: string) {}
 }
 export class Diagnostic {
   constructor(
     public range: Range,
     public message: string,
     public severity: number,
-  ) { }
+  ) {}
 }
 export const DiagnosticSeverity = { Error: 0, Warning: 1 };
 export const TextEdit = { replace: (range: Range, newText: string) => ({ range, newText }) };
@@ -133,11 +133,11 @@ const activeChanged = new EventEmitter<FakeEditor | undefined>();
 export class FakeDocument {
   isDirty = false;
   isClosed = false;
-  languageId = 'yaml';
+  languageId = 'markdown';
   constructor(
     public uri: Uri,
     public source: string,
-  ) { }
+  ) {}
   get fileName() {
     return this.uri.fsPath;
   }
@@ -170,7 +170,7 @@ export class FakeEditor {
   viewColumn = 1;
   acceptEdits = true;
   decorations: Range[] = [];
-  constructor(public document: FakeDocument) { }
+  constructor(public document: FakeDocument) {}
   setDecorations(_: unknown, ranges: Range[]) {
     this.decorations = ranges;
   }
@@ -231,7 +231,7 @@ export class FakeInputBox {
   onDidChangeValue = this.valueChanged.event;
   onDidAccept = this.accepted.event;
   onDidHide = this.hidden.event;
-  show() { }
+  show() {}
   hide() {
     this.hidden.fire();
   }

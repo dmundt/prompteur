@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { LibraryService } from '../src/application/library';
 import { LocalFiles } from '../src/platform/local-files';
-import { decodeYaml, encodeYaml, newPrompt, parseYaml } from '../src/core/documents';
+import { decodeMarkdown, encodeMarkdown, newPrompt } from '../src/core/documents';
 import { documentByteLimit } from '../src/core/limits';
 import { generate, variableTokens } from '../src/core/render';
 import { memoryFiles } from './helpers';
@@ -27,12 +27,16 @@ afterEach(async () => {
 });
 
 describe('preserved safety and resource boundaries', () => {
-  it('rejects oversized/deep YAML and bounds diagnostics', () => {
-    expect(() => parseYaml('x'.repeat(documentByteLimit + 1))).toThrow('byte limit');
-    expect(() => parseYaml(`nested: ${'['.repeat(80)}0${']'.repeat(80)}`)).toThrow('depth limit');
+  it('rejects oversized/deep frontmatter YAML and bounds diagnostics', () => {
+    expect(() => decodeMarkdown(`---\nname: ${'x'.repeat(documentByteLimit)}\n---\n`)).toThrow(
+      'byte limit',
+    );
+    expect(() => decodeMarkdown(`---\nnested: ${'['.repeat(80)}0${']'.repeat(80)}\n---\n`)).toThrow(
+      'depth limit',
+    );
     try {
-      decodeYaml(
-        `version: 1\nname: A\ncontent: safe\ntags: [${Array.from({ length: 1000 }, () => 'null').join(',')}]`,
+      decodeMarkdown(
+        `---\nversion: 1\nname: A\ntags: [${Array.from({ length: 1000 }, () => 'null').join(',')}]\n---\nsafe`,
       );
       throw new Error('Expected invalid tags');
     } catch (error) {
@@ -78,28 +82,30 @@ describe('preserved safety and resource boundaries', () => {
     const { port, files } = memoryFiles();
     const service = new LibraryService(port);
     for (let i = 0; i < 5; i++)
-      files.set(`user:prompts/${i}.yaml`, encodeYaml(newPrompt(String(i))));
+      files.set(`user:prompts/${i}.prompt.md`, encodeMarkdown(newPrompt(String(i))));
     await expect(service.get('user')).rejects.toThrow('entry limit');
     files.clear();
-    const large = encodeYaml({ ...newPrompt('Large'), content: 'x'.repeat(1100) });
-    files.set('user:prompts/a.yaml', large);
+    const large = encodeMarkdown({ ...newPrompt('Large'), content: 'x'.repeat(1100) });
+    files.set('user:prompts/a.prompt.md', large);
     await expect(service.get('user')).rejects.toThrow('byte limit');
     files.clear();
     await service.get('user');
-    await expect(service.writeSource('user', 'prompts/a.yaml', large, undefined)).rejects.toThrow(
-      'resource limit',
-    );
-    files.set('user:prompts/a.yaml', large);
-    await expect(service.refresh('user', 'prompts/a.yaml')).rejects.toThrow('resource limit');
+    await expect(
+      service.writeSource('user', 'prompts/a.prompt.md', large, undefined),
+    ).rejects.toThrow('resource limit');
+    files.set('user:prompts/a.prompt.md', large);
+    await expect(service.refresh('user', 'prompts/a.prompt.md')).rejects.toThrow('resource limit');
     files.clear();
     for (let i = 0; i < 4; i++)
-      files.set(`user:prompts/${i}.yaml`, encodeYaml(newPrompt(String(i))));
+      files.set(`user:prompts/${i}.prompt.md`, encodeMarkdown(newPrompt(String(i))));
     await service.refresh('user');
     await expect(
-      service.save('user', 'prompts/new.yaml', newPrompt('New'), undefined),
+      service.save('user', 'prompts/new.prompt.md', newPrompt('New'), undefined),
     ).rejects.toThrow('resource limit');
-    files.set('user:prompts/new.yaml', encodeYaml(newPrompt('New')));
-    await expect(service.refresh('user', 'prompts/new.yaml')).rejects.toThrow('resource limit');
+    files.set('user:prompts/new.prompt.md', encodeMarkdown(newPrompt('New')));
+    await expect(service.refresh('user', 'prompts/new.prompt.md')).rejects.toThrow(
+      'resource limit',
+    );
   });
   it('caps filesystem enumeration rather than traversing unbounded trees', async () => {
     const root = await fixture();

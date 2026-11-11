@@ -1,12 +1,12 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { z } from 'zod';
 import { format } from 'prettier';
-import { promptSchema } from '../src/core/documents';
+import { promptFrontmatterSchema } from '../src/core/documents';
 
 async function generate(): Promise<void> {
   await mkdir('schemas', { recursive: true });
   const schemas: Record<string, z.ZodType> = {
-    prompt: promptSchema,
+    prompt: promptFrontmatterSchema,
   };
   for (const [name, schema] of Object.entries(schemas)) {
     const json = z.toJSONSchema(schema, { target: 'draft-7', io: 'input' });

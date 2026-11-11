@@ -25,7 +25,7 @@ export async function run(): Promise<void> {
     document.positionAt(0),
     document.positionAt(document.getText().length),
   );
-  const prompt = { kind: 'entry', scope: 'workspace', entry: { path: 'prompts/review.yaml' } };
+  const prompt = { kind: 'entry', scope: 'workspace', entry: { path: 'prompts/review.prompt.md' } };
   assert.ok(!(await vscode.commands.getCommands()).includes('prompteur.insert'));
   assert.equal(vscode.workspace.isTrusted, false, 'Fixture workspace must start untrusted');
   await assert.rejects(
@@ -38,11 +38,15 @@ export async function run(): Promise<void> {
     'resources',
     'starter',
     'prompts',
-    'code-review.yaml',
+    'code-review.prompt.md',
   );
   const original = await vscode.workspace.fs.readFile(bundled);
   await vscode.commands.executeCommand('prompteur.addStarters', { kind: 'scope', scope: 'user' });
-  const starter = { kind: 'entry', scope: 'user', entry: { path: 'prompts/code-review.yaml' } };
+  const starter = {
+    kind: 'entry',
+    scope: 'user',
+    entry: { path: 'prompts/code-review.prompt.md' },
+  };
   if (!skipClipboard) {
     const clipboard = await vscode.env.clipboard.readText();
     try {

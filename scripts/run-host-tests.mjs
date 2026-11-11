@@ -9,8 +9,8 @@ const root = await mkdtemp(join(tmpdir(), 'prompteur-host-'));
 const workspace = join(root, 'sample-project');
 await mkdir(join(workspace, '.vscode', 'prompts', 'prompts'), { recursive: true });
 await writeFile(
-  join(workspace, '.vscode', 'prompts', 'prompts', 'review.yaml'),
-  'version: 1\nname: Review\ncategory: review\ncontent: Review {{selection}} in {{filename}}\n',
+  join(workspace, '.vscode', 'prompts', 'prompts', 'review.prompt.md'),
+  '---\nversion: 1\nname: Review\ncategory: review\n---\nReview {{selection}} in {{filename}}\n',
 );
 let executable = process.env.VSCODE_EXECUTABLE_PATH;
 if (

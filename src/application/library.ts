@@ -1,8 +1,8 @@
 import {
-  decodeYaml,
-  encodeYaml,
+  decodeMarkdown,
+  encodeMarkdown,
   entryKey,
-  isYaml,
+  isPromptMarkdown,
   promptFolder,
   promptCategories,
   relativePath,
@@ -42,7 +42,7 @@ export class LibraryService {
     private readonly files: FilePort,
     private readonly report: (error: unknown) => void = console.error,
     private readonly allowedCategories: () => readonly string[] = () => promptCategories,
-  ) { }
+  ) {}
 
   readFile(scope: Scope, path: string): Promise<string | undefined> {
     return this.files.read(scope, path);
@@ -73,7 +73,7 @@ export class LibraryService {
   }
 
   private applicable(path: string): boolean {
-    return path.startsWith(`${promptFolder}/`) && isYaml(path);
+    return path.startsWith(`${promptFolder}/`) && isPromptMarkdown(path);
   }
 
   private failedRecord(path: string, error: unknown): RecordFile {
@@ -88,7 +88,7 @@ export class LibraryService {
     let cursor = 0;
     await Promise.all(
       Array.from({ length: Math.min(16, paths.length) }, async () => {
-        for (; ;) {
+        for (;;) {
           const path = paths[cursor++];
           if (path === undefined) break;
           let source: string | undefined;
@@ -117,7 +117,7 @@ export class LibraryService {
           key: entryKey(scope, path),
           scope,
           path,
-          data: decodeYaml(source, this.allowedCategories()),
+          data: decodeMarkdown(source, this.allowedCategories()),
           source,
         },
       };
@@ -181,7 +181,7 @@ export class LibraryService {
     if (
       records.size > libraryEntryLimit ||
       [...records.values()].reduce((bytes, record) => bytes + Buffer.byteLength(record.source), 0) >
-      libraryByteLimit
+        libraryByteLimit
     )
       throw new Error('Library resource limit exceeded');
     this.publish(scope, records);
@@ -196,7 +196,7 @@ export class LibraryService {
   ): Promise<void> {
     relativePath.parse(path);
     if (!this.applicable(path)) throw new Error('File is outside the prompt folder');
-    const text = encodeYaml(data, template ?? expected, this.allowedCategories());
+    const text = encodeMarkdown(data, template ?? expected, this.allowedCategories());
     return this.writeSource(scope, path, text, expected);
   }
 
@@ -208,7 +208,7 @@ export class LibraryService {
   ): Promise<void> {
     relativePath.parse(path);
     if (!this.applicable(path)) throw new Error('File is outside the prompt folder');
-    decodeYaml(source, this.allowedCategories());
+    decodeMarkdown(source, this.allowedCategories());
     return this.enqueue(async () => {
       await this.get(scope);
       const records = this.cache.get(scope)!.records;

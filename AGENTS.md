@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Prompteur is a VS Code extension for local, Git-friendly YAML prompts. Read [docs/index.md](./docs/index.md) first to find the document for your task.
+Prompteur is a VS Code extension for local, Git-friendly Markdown prompts with YAML frontmatter. Read [docs/index.md](./docs/index.md) first to find the document for your task.
 
 ## Project layout
 
@@ -23,6 +23,7 @@ Run the smallest command that covers your change, then escalate as needed.
 ## Change rules
 
 - Make surgical changes. Do not fix unrelated pre-existing issues.
+- Treat all versions before 1.0.0 as unpublished development releases, not production baselines. Format or metadata-field changes before 1.0.0 require no legacy conversion or compatibility support; remove obsolete formats and fields directly unless explicitly requested.
 - Keep the extension deliberately boring, simple, and functional. Every feature, label, popup, text, icon, and action must serve an explicit requirement or clear usability need; otherwise, omit it. Prefer native VS Code patterns and the smallest sufficient solution.
 - Keep the Marketplace README introduction to 5–15 factual, scannable lines explaining who the extension is for, what it does, and its concrete differentiators. Avoid hype, buzzwords, filler, and claims that cannot be verified.
 - After each change, check README and CHANGELOG against the resulting product. Keep README accurate to current user-facing behavior; record only user-facing changes in CHANGELOG. Do not log internal-only refactors, tests, or tooling changes.

@@ -1,7 +1,9 @@
 import * as vscode from 'vscode';
 import {
-  decodeYaml,
+  decodeMarkdown,
+  isPromptMarkdown,
   promptCategories,
+  PromptDocumentError,
   type Entry,
   type Scope,
   promptFolder,
@@ -49,7 +51,7 @@ export class NativeEditor implements vscode.Disposable {
     for (const [scope, root] of this.roots) {
       if (uri.scheme !== root.scheme || !uri.path.startsWith(`${root.path}/`)) continue;
       const path = uri.path.slice(root.path.length + 1);
-      if (!/\.ya?ml$/i.test(path)) return undefined;
+      if (!isPromptMarkdown(path)) return undefined;
       if (path.startsWith(`${promptFolder}/`)) return { scope, path };
     }
     return undefined;
@@ -69,32 +71,41 @@ export class NativeEditor implements vscode.Disposable {
     );
     if (!document) return entry;
     const source = document.getText();
-    return { ...entry, source, data: decodeYaml(source, this.allowedCategories()) };
+    return { ...entry, source, data: decodeMarkdown(source, this.allowedCategories()) };
   }
 
   private async validate(document: vscode.TextDocument): Promise<void> {
+    let diagnosticOffset = 0;
     try {
       const location = await this.locate(document.uri);
       if (!location) return;
       const source = document.getText();
-      const data = decodeYaml(source, this.allowedCategories());
-      variableTokens(data.content);
+      const data = decodeMarkdown(source, this.allowedCategories());
+      const bodyOffset = source.length - data.content.length;
+      diagnosticOffset = bodyOffset;
+      try {
+        variableTokens(data.content);
+      } catch (error) {
+        throw new PromptDocumentError(messageOf(error), bodyOffset);
+      }
       this.diagnostics.set(document.uri, []);
       const ranges = [
-        ...source.matchAll(/{{\s*(selection|clipboard|filename|workspace)\s*}}/g),
+        ...data.content.matchAll(/{{\s*(selection|clipboard|filename|workspace)\s*}}/g),
       ].map(
         (match) =>
           new vscode.Range(
-            document.positionAt(match.index),
-            document.positionAt(match.index + match[0].length),
+            document.positionAt(bodyOffset + match.index),
+            document.positionAt(bodyOffset + match.index + match[0].length),
           ),
       );
       for (const editor of vscode.window.visibleTextEditors)
         if (editor.document === document) editor.setDecorations(this.decoration, ranges);
     } catch (error) {
+      const offset = error instanceof PromptDocumentError ? error.offset : diagnosticOffset;
+      const position = document.positionAt(offset);
       this.diagnostics.set(document.uri, [
         new vscode.Diagnostic(
-          new vscode.Range(0, 0, 0, 1),
+          new vscode.Range(position, position),
           messageOf(error),
           vscode.DiagnosticSeverity.Error,
         ),

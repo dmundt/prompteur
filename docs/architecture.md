@@ -2,7 +2,7 @@
 
 Prompteur is a local desktop VS Code extension without a server, webview, cloud SDK, or provider framework.
 
-- `core/documents.ts`: six-field prompt structure, runtime-approved categories, YAML parsing/serialization, path checks, and path-based identity.
+- `core/documents.ts`: Markdown prompt parsing with metadata-only YAML frontmatter, runtime-approved categories, bounded body text, path checks, and path-based identity.
 - `core/render.ts`: bounded one-pass substitution of four fixed variables.
 - `application/library.ts`: lazy per-scope cache, serialized writes/reloads, validation problems, and notifications.
 - `application/search.ts`: reused lowercase search text, exact tags, and alphabetical results.
@@ -17,7 +17,7 @@ Generation captures the source editor before pickers, uses valid dirty prompt bu
 
 The workbench checks Workspace Trust before using workspace prompts; the filesystem adapter independently checks it before workspace writes/deletes. User prompts remain available. Native document saves are not reformatted by the extension.
 
-Seven built-in categories are supplemented by a profile-wide approved list in VS Code extension state. Legacy prompts remain repairable problems until the user previews and confirms source-aware rewrites; there is no automatic migration during loading.
+Seven built-in categories are supplemented by a profile-wide approved list in VS Code extension state. Only `.prompt.md` files are discovered. Existing YAML prompt files remain untouched and are ignored; there is no compatibility reader or format migration.
 
 No file import/export commands, archive format, or generic transfer layer exists. Prompt-record copies use the small window-local buffer. Starters are copied directly, skipping occupied paths. Multi-file starter installation reports partial progress rather than emulating a transaction.
 

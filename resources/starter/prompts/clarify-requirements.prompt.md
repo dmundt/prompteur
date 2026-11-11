@@ -1,0 +1,21 @@
+---
+version: 1
+name: Clarify Requirements
+description: >
+  Turn an incomplete request into a small, testable requirement set with explicit scope and open decisions.
+category: plan
+tags: [ requirements, scope, acceptance ]
+---
+Clarify this request:
+
+{{selection}}
+
+Restate the user outcome. Separate explicit requirements, assumptions,
+constraints, and non-goals. Identify ambiguous behavior and edge cases
+that materially affect implementation.
+Ask only the highest-impact unanswered questions; suggest a simple default
+for each without treating it as approved. Produce observable acceptance
+criteria and the smallest useful scope. Do not add speculative features
+or implement anything.
+Prioritize questions that block a useful implementation rather than an
+exhaustive questionnaire. If selection is empty, ask for the request.

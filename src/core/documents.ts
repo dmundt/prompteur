@@ -43,22 +43,27 @@ const categorySchema = z
     `Built-in categories: ${promptCategories.join(', ')}. User-approved profile categories are also valid.`,
   );
 
-const base = {
+const metadata = {
   version: z.literal(1),
   name: z.string().trim().min(1),
   description: z.string().default(''),
   category: categorySchema,
   tags: labels.default([]),
-  content: z.string(),
 };
-export const promptSchema = z.object(base).strict();
-export const legacyPromptSchema = z
-  .object({ ...base, category: z.string().trim().min(1).default('misc') })
-  .strict();
+export const promptFrontmatterSchema = z.object(metadata).strict();
+export const promptSchema = promptFrontmatterSchema.extend({ content: z.string() }).strict();
+export type PromptMetadata = z.infer<typeof promptFrontmatterSchema>;
 export type PromptData = z.infer<typeof promptSchema>;
-export type LegacyPromptData = z.infer<typeof legacyPromptSchema>;
 export type Scope = 'user' | 'workspace';
 export const promptFolder = 'prompts';
+export class PromptDocumentError extends Error {
+  constructor(
+    message: string,
+    readonly offset: number,
+  ) {
+    super(message);
+  }
+}
 export interface Entry {
   key: string;
   scope: Scope;
@@ -75,26 +80,27 @@ export interface Snapshot {
   problems: Problem[];
 }
 
-const keyOrder = ['version', 'name', 'description', 'category', 'tags', 'content'];
-
-export function parseYaml(source: string): Document {
+function parseFrontmatter(source: string, offset: number): Document {
   assertTextBudget(source);
   const document = parseDocument(source, { uniqueKeys: true, prettyErrors: true });
   if (document.errors.length)
-    throw new Error(
+    throw new PromptDocumentError(
       document.errors
         .slice(0, 8)
         .map((error) => error.message.slice(0, 256))
         .join('\n')
         .slice(0, 2048),
+      Math.min(offset + (document.errors[0]?.pos[0] ?? 0), offset + Math.max(0, source.length - 2)),
     );
   let nodes = 0;
   visit(document, (_, node, path) => {
     if (++nodes > 50_000 || path.length > yamlDepthLimit)
-      throw new Error('YAML structure exceeds node/depth limit');
-    if (isAlias(node)) throw new Error('YAML aliases are not supported; use literal values');
+      throw new PromptDocumentError('YAML structure exceeds node/depth limit', offset);
+    if (isAlias(node))
+      throw new PromptDocumentError('YAML aliases are not supported; use literal values', offset);
   });
-  if (!isMap(document.contents)) throw new Error('YAML document must be a mapping');
+  if (!isMap(document.contents))
+    throw new PromptDocumentError('YAML document must be a mapping', offset);
   return document;
 }
 
@@ -111,48 +117,105 @@ export function normalizeCategory(
   return normalized;
 }
 
-export function decodeYaml(
+interface MarkdownParts {
+  frontmatter: string;
+  body: string;
+  lineEnding: '\n' | '\r\n';
+  bom: string;
+  frontmatterOffset: number;
+}
+
+function splitMarkdown(source: string): MarkdownParts {
+  assertTextBudget(source);
+  const bom = source.startsWith('\uFEFF') ? '\uFEFF' : '';
+  const text = bom ? source.slice(1) : source;
+  const openingEnd = text.indexOf('\n');
+  if (openingEnd < 0 || text.slice(0, openingEnd).replace(/\r$/, '') !== '---')
+    throw new PromptDocumentError(
+      'Prompt must begin with a YAML frontmatter delimiter (---)',
+      bom.length,
+    );
+  const lineEnding = text[openingEnd - 1] === '\r' ? '\r\n' : '\n';
+  const frontmatterStart = openingEnd + 1;
+  let lineStart = frontmatterStart;
+  while (lineStart <= text.length) {
+    const newline = text.indexOf('\n', lineStart);
+    const lineEnd = newline < 0 ? text.length : newline;
+    const line = text.slice(lineStart, lineEnd).replace(/\r$/, '');
+    if (line === '---')
+      return {
+        frontmatter: text.slice(frontmatterStart, lineStart),
+        body: newline < 0 ? '' : text.slice(newline + 1),
+        lineEnding,
+        bom,
+        frontmatterOffset: bom.length + frontmatterStart,
+      };
+    if (newline < 0) break;
+    lineStart = newline + 1;
+  }
+  throw new PromptDocumentError(
+    'Prompt frontmatter is missing a closing --- delimiter',
+    source.length,
+  );
+}
+
+export function decodeMarkdown(
   source: string,
   allowedCategories: readonly string[] = promptCategories,
 ): PromptData {
-  const value = parseYaml(source).toJS({ maxAliasCount: 0 });
-  const result = promptSchema.safeParse(value);
+  const parts = splitMarkdown(source);
+  const value = parseFrontmatter(parts.frontmatter, parts.frontmatterOffset).toJS({
+    maxAliasCount: 0,
+  });
+  const result = promptFrontmatterSchema.safeParse(value);
   if (!result.success)
-    throw new Error(
+    throw new PromptDocumentError(
       result.error.issues
         .slice(0, 8)
         .map((issue) => `${issue.path.join('.')}: ${issue.message}`)
         .join('; ')
         .slice(0, 2048),
+      parts.frontmatterOffset,
     );
-  return { ...result.data, category: normalizeCategory(result.data.category, allowedCategories) };
+  let category: string;
+  try {
+    category = normalizeCategory(result.data.category, allowedCategories);
+  } catch (error) {
+    throw new PromptDocumentError(
+      error instanceof Error ? error.message : String(error),
+      parts.frontmatterOffset,
+    );
+  }
+  return {
+    ...result.data,
+    category,
+    content: parts.body,
+  };
 }
 
-export function decodeLegacyYaml(source: string): LegacyPromptData {
-  const result = legacyPromptSchema.safeParse(parseYaml(source).toJS({ maxAliasCount: 0 }));
-  if (!result.success)
-    throw new Error(
-      result.error.issues
-        .slice(0, 8)
-        .map((issue) => `${issue.path.join('.')}: ${issue.message}`)
-        .join('; ')
-        .slice(0, 2048),
-    );
-  return result.data;
-}
-
-export function encodeYaml(
+export function encodeMarkdown(
   data: PromptData,
   previous?: string,
   allowedCategories: readonly string[] = promptCategories,
 ): string {
   const checked = promptSchema.parse(data);
   checked.category = normalizeCategory(checked.category, allowedCategories);
-  const document = previous === undefined ? parseDocument('{}') : parseYaml(previous);
+  const parts = previous === undefined ? undefined : splitMarkdown(previous);
+  const document = parts
+    ? parseFrontmatter(parts.frontmatter, parts.frontmatterOffset)
+    : parseDocument('{}');
   const existing = document.toJS({ maxAliasCount: 0 }) as Record<string, unknown>;
-  for (const [key, value] of Object.entries(checked)) {
+  const frontmatterData: PromptMetadata = {
+    version: checked.version,
+    name: checked.name,
+    description: checked.description,
+    category: checked.category,
+    tags: checked.tags,
+  };
+  const frontmatterOrder = ['version', 'name', 'description', 'category', 'tags'];
+  for (const [key, value] of Object.entries(frontmatterData)) {
     if (
-      previous !== undefined &&
+      parts &&
       !Object.hasOwn(existing, key) &&
       ((key === 'description' && value === '') ||
         (key === 'tags' && Array.isArray(value) && value.length === 0))
@@ -171,21 +234,24 @@ export function encodeYaml(
         node.items.sort((left, right) => {
           const leftKey = String(left.key);
           const rightKey = String(right.key);
-          const rank = (key: string) =>
-            node === document.contents && keyOrder.indexOf(key) >= 0
-              ? keyOrder.indexOf(key)
-              : keyOrder.length;
+          const rank = (key: string) => {
+            const index = frontmatterOrder.indexOf(key);
+            return node === document.contents && index >= 0 ? index : frontmatterOrder.length;
+          };
           return rank(leftKey) - rank(rightKey) || leftKey.localeCompare(rightKey, 'en');
         });
       },
     });
-    const content = document.get('content', true);
-    if (isScalar(content) && typeof content.value === 'string' && content.value.includes('\n'))
-      content.type = 'BLOCK_LITERAL';
   }
-  const result = document.toString({ lineWidth: 0 });
-  assertTextBudget(result);
-  return result;
+  const lineEnding = parts?.lineEnding ?? '\n';
+  const encodedFrontmatter = document.toString({ lineWidth: 0 }).replace(/\n/g, lineEnding);
+  const output = `${parts?.bom ?? ''}---${lineEnding}${encodedFrontmatter}---${lineEnding}${checked.content}`;
+  assertTextBudget(output);
+  return output;
+}
+
+export function isPromptMarkdown(path: string): boolean {
+  return /\.prompt\.md$/i.test(path);
 }
 
 export function newPrompt(name: string, category: string = 'explain'): PromptData {
@@ -201,7 +267,4 @@ export function newPrompt(name: string, category: string = 'explain'): PromptDat
 
 export function entryKey(scope: Scope, path: string): string {
   return `${scope}:${path}`;
-}
-export function isYaml(path: string): boolean {
-  return /\.ya?ml$/i.test(path);
 }

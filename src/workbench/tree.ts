@@ -65,7 +65,11 @@ export class PromptTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dis
       item.contextValue = 'problem';
       item.tooltip = node.message;
       item.iconPath = new vscode.ThemeIcon('warning');
-      item.command = { command: 'prompteur.edit', title: 'Repair YAML', arguments: [node] };
+      item.command = {
+        command: 'prompteur.edit',
+        title: 'Repair Markdown Prompt',
+        arguments: [node],
+      };
       return item;
     }
     const { entry } = node;
@@ -129,16 +133,16 @@ export class PromptTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dis
       const nodes: TreeNode[] =
         node.kind === 'scope'
           ? [
-            ...Array.from(
-              new Map(
-                entries
-                  .map((entry) => entry.data.category.trim() || 'misc')
-                  .map((category) => [category.toLowerCase(), category] as const),
-              ).values(),
-            )
-              .sort((left, right) => left.localeCompare(right))
-              .map((category): TreeNode => ({ kind: 'category', scope: node.scope, category })),
-          ]
+              ...Array.from(
+                new Map(
+                  entries
+                    .map((entry) => entry.data.category.trim() || 'misc')
+                    .map((category) => [category.toLowerCase(), category] as const),
+                ).values(),
+              )
+                .sort((left, right) => left.localeCompare(right))
+                .map((category): TreeNode => ({ kind: 'category', scope: node.scope, category })),
+            ]
           : entries.map((entry): TreeNode => ({ kind: 'entry', scope: node.scope, entry }));
       if (node.kind === 'scope')
         nodes.push(

@@ -1,6 +1,6 @@
 # ADR 001: Individual YAML Files Are Authoritative
 
-Status: Accepted.
+Status: Superseded by ADR 004.
 
 The first release must remain usable without an extension or proprietary store. Store each prompt in its own YAML document, with path-based identity and six supported fields. Discover nested directories but browse by category. No library settings, ordering sidecar, or usage store is needed. Retain source comments when duplicating; do not reformat ordinary user saves.
 

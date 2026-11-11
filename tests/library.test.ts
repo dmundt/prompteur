@@ -1,19 +1,20 @@
 import { describe, expect, it, vi } from 'vitest';
 import { LibraryService } from '../src/application/library';
 import { appendExactFilter, SearchIndex } from '../src/application/search';
-import { encodeYaml, newPrompt, type Entry } from '../src/core/documents';
+import { encodeMarkdown, newPrompt, type Entry } from '../src/core/documents';
 import { generate, variableTokens } from '../src/core/render';
 import { memoryFiles } from './helpers';
 
-const source = (name: string) => encodeYaml(newPrompt(name));
+const source = (name: string) => encodeMarkdown(newPrompt(name));
 describe('prompt library', () => {
   it('loads lazily, deduplicates loads, isolates bad files and leaves old settings/rules untouched', async () => {
     const { port, files } = memoryFiles();
-    files.set('user:prompts/a.yaml', source('A'));
-    files.set('user:prompts/bad.yaml', 'version: [');
+    files.set('user:prompts/a.prompt.md', source('A'));
+    files.set('user:prompts/old.yaml', 'version: 1\nname: Old\ncategory: review\ncontent: ignored');
+    files.set('user:prompts/bad.prompt.md', '---\nversion: [\n---\n');
     files.set('user:rules/rule.yaml', 'invalid');
     files.set('user:settings.yaml', 'invalid old settings');
-    files.set('user:elsewhere/a.yaml', source('Elsewhere'));
+    files.set('user:elsewhere/a.prompt.md', source('Elsewhere'));
     const before = new Map(files);
     const service = new LibraryService(port);
     expect(port.list).not.toHaveBeenCalled();
@@ -21,14 +22,17 @@ describe('prompt library', () => {
     expect(first).toBe(second);
     expect(port.list).toHaveBeenCalledTimes(1);
     expect(first.entries).toHaveLength(1);
-    expect(first.problems).toEqual([{ path: 'prompts/bad.yaml', message: expect.any(String) }]);
+    expect(first.problems).toEqual([
+      { path: 'prompts/bad.prompt.md', message: expect.any(String) },
+    ]);
+    expect(files.has('user:prompts/old.yaml')).toBe(true);
     expect(await service.get('user')).toBe(first);
     expect(files).toEqual(before);
-    files.set('user:prompts/bad.yaml', source('Repaired'));
-    await service.refresh('user', 'prompts/bad.yaml');
+    files.set('user:prompts/bad.prompt.md', source('Repaired'));
+    await service.refresh('user', 'prompts/bad.prompt.md');
     expect((await service.get('user')).problems).toEqual([]);
-    files.delete('user:prompts/a.yaml');
-    await service.refresh('user', 'prompts/a.yaml');
+    files.delete('user:prompts/a.prompt.md');
+    await service.refresh('user', 'prompts/a.prompt.md');
     expect((await service.get('user')).entries.map((entry) => entry.data.name)).toEqual([
       'Repaired',
     ]);
@@ -38,8 +42,8 @@ describe('prompt library', () => {
     const { port } = memoryFiles();
     const service = new LibraryService(port);
     const results = await Promise.allSettled([
-      service.writeSource('user', 'prompts/same.yaml', source('First'), undefined),
-      service.writeSource('user', 'prompts/same.yaml', source('Second'), undefined),
+      service.writeSource('user', 'prompts/same.prompt.md', source('First'), undefined),
+      service.writeSource('user', 'prompts/same.prompt.md', source('Second'), undefined),
     ]);
     expect(results.map((result) => result.status)).toEqual(['fulfilled', 'rejected']);
     expect((await service.get('user')).entries[0]?.data.name).toBe('First');
@@ -49,17 +53,18 @@ describe('prompt library', () => {
   it('keeps comments, rejects stale saves/deletes and recovers after a failed write', async () => {
     const { port, files } = memoryFiles();
     const service = new LibraryService(port);
-    await service.writeSource('user', 'prompts/a.yaml', `# original\n${source('A')}`, undefined);
+    const original = source('A').replace('---\n', '---\n# original\n');
+    await service.writeSource('user', 'prompts/a.prompt.md', original, undefined);
     const entry = (await service.get('user')).entries[0]!;
     await service.save('user', entry.path, { ...entry.data, name: 'Updated' }, entry.source);
-    expect(files.get('user:prompts/a.yaml')).toContain('# original');
+    expect(files.get('user:prompts/a.prompt.md')).toContain('# original');
     await expect(service.delete(entry)).rejects.toThrow('Conflict');
     await expect(service.save('user', entry.path, entry.data, entry.source)).rejects.toThrow(
       'Conflict',
     );
     vi.mocked(port.write).mockRejectedValueOnce(new Error('Disk full'));
     await expect(
-      service.save('user', 'prompts/new.yaml', newPrompt('New'), undefined),
+      service.save('user', 'prompts/new.prompt.md', newPrompt('New'), undefined),
     ).rejects.toThrow('Disk full');
     const current = (await service.get('user')).entries[0]!;
     await service.delete(current);
@@ -69,11 +74,11 @@ describe('prompt library', () => {
   it('rejects invalid imports, non-prompt locations and traversal without writing', async () => {
     const { port } = memoryFiles();
     const service = new LibraryService(port);
-    expect(() => service.writeSource('user', 'prompts/a.yaml', 'bad', undefined)).toThrow();
-    expect(() => service.writeSource('user', 'elsewhere/a.yaml', source('A'), undefined)).toThrow(
-      'outside',
-    );
-    expect(() => service.save('user', '../escape.yaml', newPrompt('A'), undefined)).toThrow();
+    expect(() => service.writeSource('user', 'prompts/a.prompt.md', 'bad', undefined)).toThrow();
+    expect(() =>
+      service.writeSource('user', 'elsewhere/a.prompt.md', source('A'), undefined),
+    ).toThrow('outside');
+    expect(() => service.save('user', '../escape.prompt.md', newPrompt('A'), undefined)).toThrow();
     expect(() => service.save('user', 'prompts/a.txt', newPrompt('A'), undefined)).toThrow(
       'outside',
     );
@@ -81,7 +86,7 @@ describe('prompt library', () => {
       service.delete({
         key: '',
         scope: 'user',
-        path: 'other.yaml',
+        path: 'other.prompt.md',
         data: newPrompt('A'),
         source: '',
       }),
@@ -97,7 +102,7 @@ describe('prompt library', () => {
       throw new Error('View disposed');
     });
     await expect(
-      service.save('user', 'prompts/a.yaml', newPrompt('A'), undefined),
+      service.save('user', 'prompts/a.prompt.md', newPrompt('A'), undefined),
     ).resolves.toBeUndefined();
     expect(report).toHaveBeenCalledWith(expect.objectContaining({ message: 'View disposed' }));
     unsubscribe();
@@ -107,23 +112,27 @@ describe('prompt library', () => {
 
   it('reloads only changed files and publishes each watcher burst once', async () => {
     const { port, files } = memoryFiles();
-    files.set('user:prompts/a.yaml', source('A'));
-    files.set('user:prompts/b.yaml', source('B'));
+    files.set('user:prompts/a.prompt.md', source('A'));
+    files.set('user:prompts/b.prompt.md', source('B'));
     const service = new LibraryService(port);
     await service.get('user');
     const changed = vi.fn();
     service.subscribe(changed);
     vi.mocked(port.read).mockClear();
-    files.set('user:prompts/a.yaml', source('Updated'));
-    files.set('user:prompts/nested/c.yml', source('C'));
-    await service.refreshMany('user', ['prompts/a.yaml', 'prompts/a.yaml', 'prompts/nested/c.yml']);
+    files.set('user:prompts/a.prompt.md', source('Updated'));
+    files.set('user:prompts/nested/c.prompt.md', source('C'));
+    await service.refreshMany('user', [
+      'prompts/a.prompt.md',
+      'prompts/a.prompt.md',
+      'prompts/nested/c.prompt.md',
+    ]);
     expect(port.read).toHaveBeenCalledTimes(2);
     expect(changed).toHaveBeenCalledTimes(1);
     expect(await service.search('user', 'Updated')).toHaveLength(1);
     await service.refreshMany('user', ['settings.yaml', 'rules/a.yaml']);
     expect(changed).toHaveBeenCalledTimes(1);
-    files.delete('user:prompts/b.yaml');
-    await service.refreshMany('user', ['prompts/b.yaml']);
+    files.delete('user:prompts/b.prompt.md');
+    await service.refreshMany('user', ['prompts/b.prompt.md']);
     expect((await service.get('user')).entries).toHaveLength(2);
     expect(changed).toHaveBeenCalledTimes(2);
     await service.refresh('user');
@@ -135,25 +144,27 @@ describe('prompt library', () => {
     const service = new LibraryService(port);
     vi.mocked(port.list).mockRejectedValueOnce(new Error('Unavailable'));
     await expect(service.get('user')).rejects.toThrow('Unavailable');
-    vi.mocked(port.list).mockResolvedValueOnce(['prompts/gone.yaml']);
+    vi.mocked(port.list).mockResolvedValueOnce(['prompts/gone.prompt.md']);
     expect((await service.get('user')).entries).toEqual([]);
   });
 
   it('isolates read failures during initial load and incremental refresh', async () => {
     const { port, files } = memoryFiles();
-    files.set('user:prompts/a.yaml', source('A'));
-    files.set('user:prompts/b.yaml', source('B'));
+    files.set('user:prompts/a.prompt.md', source('A'));
+    files.set('user:prompts/b.prompt.md', source('B'));
     vi.mocked(port.read).mockImplementation(async (scope, path) => {
-      if (path === 'prompts/b.yaml') throw new Error('Permission denied');
+      if (path === 'prompts/b.prompt.md') throw new Error('Permission denied');
       return files.get(`${scope}:${path}`);
     });
     const service = new LibraryService(port);
     const initial = await service.get('user');
     expect(initial.entries.map((entry) => entry.data.name)).toEqual(['A']);
-    expect(initial.problems).toEqual([{ path: 'prompts/b.yaml', message: 'Permission denied' }]);
+    expect(initial.problems).toEqual([
+      { path: 'prompts/b.prompt.md', message: 'Permission denied' },
+    ]);
 
-    files.set('user:prompts/a.yaml', source('Updated'));
-    await service.refreshMany('user', ['prompts/a.yaml', 'prompts/b.yaml']);
+    files.set('user:prompts/a.prompt.md', source('Updated'));
+    await service.refreshMany('user', ['prompts/a.prompt.md', 'prompts/b.prompt.md']);
     const refreshed = await service.get('user');
     expect(refreshed.entries.map((entry) => entry.data.name)).toEqual(['Updated']);
     expect(refreshed.problems).toEqual(initial.problems);
@@ -192,7 +203,7 @@ describe('prompt search and rendering', () => {
       {
         key: 'b',
         scope: 'user',
-        path: 'prompts/b.yaml',
+        path: 'prompts/b.prompt.md',
         source: '',
         data: {
           ...newPrompt('Beta'),
@@ -204,7 +215,7 @@ describe('prompt search and rendering', () => {
       {
         key: 'a',
         scope: 'user',
-        path: 'prompts/a.yaml',
+        path: 'prompts/a.prompt.md',
         source: '',
         data: { ...newPrompt('Alpha'), category: 'explain', tags: ['quality'] },
       },
@@ -216,7 +227,7 @@ describe('prompt search and rendering', () => {
     expect(index.query('tag:security tag:quality').map((entry) => entry.key)).toEqual(['b']);
     expect(index.query('', 'REVIEW').map((entry) => entry.key)).toEqual(['b']);
     expect(index.query('tag:secur')).toEqual([]);
-    expect(index.query('b.yaml')).toEqual([entries[0]]);
+    expect(index.query('b.prompt.md')).toEqual([entries[0]]);
     expect(index.query('tag:')).toHaveLength(2);
     index.update([entries[0]!]);
     expect(index.query()).toHaveLength(1);
@@ -230,7 +241,7 @@ describe('prompt search and rendering', () => {
     const entry: Entry = {
       key: 'space-tag',
       scope: 'user',
-      path: 'prompts/space-tag.yaml',
+      path: 'prompts/space-tag.prompt.md',
       source: '',
       data: { ...newPrompt('Security'), category: 'review', tags: ['security review'] },
     };
@@ -265,7 +276,7 @@ describe('prompt search and rendering', () => {
     const entries: Entry[] = Array.from({ length: 10_000 }, (_, i) => ({
       key: String(i),
       scope: 'user',
-      path: `prompts/${i}.yaml`,
+      path: `prompts/${i}.prompt.md`,
       source: '',
       data: { ...newPrompt(`Prompt ${i}`), tags: i === 123 ? ['target'] : [] },
     }));
