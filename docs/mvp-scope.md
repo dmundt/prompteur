@@ -4,11 +4,11 @@
 
 - `.prompt.md`: YAML frontmatter (`version`, `name`, `description`, `category`, `tags`) + raw Markdown body. Seven built-ins; approved profile-wide additions.
 - Fixed User and first-local-Workspace libraries.
-- One category-grouped native tree; recursive discovery, no folder browser.
+- Native tree groups by category by default; `prompteur.groupByCategory` can show a flat prompt list. Recursive discovery; no folder browser.
 - Case-insensitive full-text/exact-tag search; alphabetical results.
 - Create, edit, duplicate, confirm-delete, copy generated text; never edit source code.
 - Window-local prompt copy/paste across categories and libraries.
-- View settings: Default Scope (`ask`), Preferred Category (empty), Show Tags (`true`).
+- View settings: Default Scope (`ask`), Preferred Category (empty), Show Tags (`true`), Group by Category (`true`).
 - Variables: selection, clipboard, filename, workspace.
 - On-demand plaintext preview snapshot.
 - 16 optional starters across seven built-in categories.

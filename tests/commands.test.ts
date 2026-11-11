@@ -696,6 +696,12 @@ describe('release commands', () => {
       affectsConfiguration: (section) => section === 'prompteur.categoryCountMode',
     });
     expect(refresh).toHaveBeenCalledTimes(previousRefreshCount + 1);
+
+    workspace.configuration.set('prompteur.groupByCategory', false);
+    configurationChanged.fire({
+      affectsConfiguration: (section) => section === 'prompteur.groupByCategory',
+    });
+    expect(refresh).toHaveBeenCalledTimes(previousRefreshCount + 2);
   });
   it('requires confirmation to add a profile category and shares it across libraries', async () => {
     responses.quick.push('$(add) Add Category...');
