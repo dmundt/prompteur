@@ -15,7 +15,7 @@ Tree expansion deduplicates lazy loads. Initial reads use at most sixteen worker
 
 Generation captures the source editor before pickers, uses valid dirty prompt buffers when present, and expands once. Copy writes generated text to the clipboard without editing source documents. Preview opens an untitled plaintext document with generated content. A weak set excludes previews as selection sources; there is no retained preview context, provider, or update timer.
 
-The workbench checks Workspace Trust before using workspace prompts; the filesystem adapter independently checks it before workspace writes/deletes. Personal prompts remain available. Native document saves are not reformatted by the extension.
+The workbench checks Workspace Trust before using workspace prompts; the filesystem adapter independently checks it before workspace writes/deletes. User prompts remain available. Native document saves are not reformatted by the extension.
 
 No import/export commands or transfer layer remain. Starters are copied directly, skipping occupied paths. Multi-file starter installation reports partial progress rather than emulating a transaction.
 

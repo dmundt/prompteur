@@ -27,8 +27,8 @@ describe('native tree interactions', () => {
     tree.onDidChangeTreeData(changed);
     const roots = await tree.getChildren();
     expect(roots).toHaveLength(2);
-    expect(tree.getTreeItem(roots[0]!).label).toBe('Personal');
-    expect(tree.getTreeItem(roots[0]!).iconPath).toMatchObject({ id: 'account' });
+    expect(tree.getTreeItem(roots[0]!).label).toBe('User');
+    expect(tree.getTreeItem(roots[0]!).iconPath).toMatchObject({ id: 'person' });
     expect(tree.getTreeItem(roots[1]!).iconPath).toMatchObject({ id: 'root-folder' });
     const children = await tree.getChildren(roots[0]);
     expect(children.map((node) => node.kind)).toEqual(['category', 'problem']);

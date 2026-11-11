@@ -3,7 +3,7 @@
 ## Included
 
 - Ordinary YAML prompts with six fields: version, name, description, category, tags, content.
-- Personal and first-local-workspace libraries at fixed paths.
+- User and first-local-workspace libraries at fixed paths.
 - One native tree grouped by category; recursive file discovery, not a second folder browser.
 - Case-insensitive full-text and exact-tag search, alphabetical ordering.
 - Create, edit, duplicate, confirmed delete, and clipboard generation without editing source code.

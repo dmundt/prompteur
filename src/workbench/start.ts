@@ -120,7 +120,7 @@ class Workbench implements vscode.Disposable {
     return (
       await vscode.window.showQuickPick(
         [
-          { label: 'Personal', value: 'user' as const },
+          { label: 'User', value: 'user' as const },
           { label: 'Workspace', value: 'workspace' as const },
         ],
         { title: 'Choose library' },
