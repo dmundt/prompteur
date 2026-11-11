@@ -85,7 +85,7 @@ Inspect {{filename}} in {{workspace}}.
 ```text
 .vscode/prompts/
   prompts/
-    code-review.prompt.md
+    review-code.prompt.md
     engineering/
       incident.prompt.md
 ```
@@ -106,9 +106,9 @@ Inspect {{filename}} in {{workspace}}.
 - **Explain:** Explain Selected Code.
 - **Plan:** Clarify Requirements; Plan Smallest Useful Implementation; Plan Behavior-Preserving Refactor.
 - **Implement:** Implement Scoped Change.
-- **Review:** Code Review; Complexity Review; Architecture Review; Security Review; Release Readiness Audit; Implementation Completeness Audit; Accessibility Audit.
+- **Review:** Review Code; Review Complexity; Review Architecture; Review Security; Audit Release Readiness; Audit Implementation Completeness; Audit Accessibility.
 - **Test:** Generate Focused Unit Tests.
-- **Debug:** Production Incident; Root Cause Analysis.
+- **Debug:** Triage Production Incident; Analyze Root Cause.
 - **Document:** Document Feature Usage.
 
 - Installation is opt-in. Rerun after updates to add missing starters.
