@@ -679,6 +679,63 @@ describe('release commands', () => {
     expect(quickPicks.at(-1)?.activeItems.map((item) => item.value)).toEqual(['research']);
     expect((await entries('user'))[0]?.entry.data.category).toBe('research');
   });
+  it('removes an unused approved category from the picker without creating a prompt', async () => {
+    for (const disposable of context.subscriptions.splice(0)) disposable.dispose();
+    context.globalState.values.set('approvedPromptCategories', ['research']);
+    await activate(context as unknown as vscode.ExtensionContext);
+    responses.quick.push('$(remove) Remove Category...', 'Research');
+    responses.warning.push('Remove Category');
+
+    await run('newPrompt', scopeNode('user'));
+
+    expect(quickPicks[0]?.items.map((item) => item.value)).toContain('__remove_category__');
+    expect(context.globalState.values.get('approvedPromptCategories')).toEqual([]);
+    expect(await entries('user')).toEqual([]);
+  });
+  it('reports an empty state when no custom categories are approved', async () => {
+    const showQuickPick = vi.spyOn(window, 'showQuickPick');
+    await run('removeCategory');
+    expect(messages.info.at(-1)).toContain('No approved custom categories');
+    expect(context.globalState.values.has('approvedPromptCategories')).toBe(false);
+    expect(showQuickPick).not.toHaveBeenCalled();
+  });
+  it('cancels approved-category removal without changing profile state', async () => {
+    for (const disposable of context.subscriptions.splice(0)) disposable.dispose();
+    context.globalState.values.set('approvedPromptCategories', ['research']);
+    await activate(context as unknown as vscode.ExtensionContext);
+    responses.quick.push('Research');
+    responses.warning.push(null);
+
+    await run('removeCategory');
+
+    expect(context.globalState.values.get('approvedPromptCategories')).toEqual(['research']);
+  });
+  it('blocks approved-category removal while valid prompts use it', async () => {
+    for (const disposable of context.subscriptions.splice(0)) disposable.dispose();
+    context.globalState.values.set('approvedPromptCategories', ['research']);
+    await activate(context as unknown as vscode.ExtensionContext);
+    await fs.mkdir(join(userRoot(), 'prompts'), { recursive: true });
+    await fs.writeFile(
+      join(userRoot(), 'prompts', 'research.prompt.md'),
+      '---\nversion: 1\nname: Research\ncategory: research\n---\nBody',
+    );
+    await run('refresh');
+    responses.quick.push('Research');
+
+    await expect(run('removeCategory')).rejects.toThrow('1 prompt uses it. Reassign them first.');
+
+    await fs.writeFile(
+      join(userRoot(), 'prompts', 'research-notes.prompt.md'),
+      '---\nversion: 1\nname: Research Notes\ncategory: research\n---\nNotes',
+    );
+    await run('refresh');
+    responses.quick.push('Research');
+    await expect(run('removeCategory')).rejects.toThrow('2 prompts use it. Reassign them first.');
+    expect(context.globalState.values.get('approvedPromptCategories')).toEqual(['research']);
+    expect((await entries('user')).every((node) => node.entry.data.category === 'research')).toBe(
+      true,
+    );
+  });
   it('does not add or create a category when approval is cancelled', async () => {
     responses.quick.push('$(add) Add Category...');
     responses.input.push('Temporary');

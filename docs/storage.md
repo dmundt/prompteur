@@ -23,6 +23,7 @@
 - Preserve existing settings, rules, and usage state.
 - Do not load old custom directories or YAML prompts; leave YAML files untouched. Move Markdown prompts into fixed `prompts/` manually.
 - Show unapproved categories as repairable problems. Add profile categories only after confirmation.
+- Remove profile categories only when no valid prompt uses them; reassign prompts first.
 
 ## Reads and Edits
 

@@ -39,12 +39,12 @@ code --install-extension prompteur-0.4.4.vsix
 - Commands: Command Palette > **Prompteur**. **Clear Filter** resets search; **Reload Libraries** rescans.
 
 - View gear opens settings:
-  - **Default Scope**: User, Workspace, or Ask for untargeted New Prompt/Add Starter Library/Paste Prompt. Explicit tree target wins.
+  - **Default Scope**: User, Workspace, or Ask for untargeted New Prompt/Add Starter Library/Paste Prompt. Ask shows the picker when both libraries exist; otherwise it selects User. Explicit tree targets win.
   - **Preferred Category**: preselect approved category; user confirmation remains required.
   - **Show Tags**: show/hide row labels; default On. Search and tooltips remain unchanged.
 
 - Built-in virtual categories: Explain, Plan, Implement, Review, Test, Debug, Document.
-- Add profile-wide categories only after confirmation.
+- Add profile-wide categories only after confirmation. Remove unused categories with **Remove Prompt Category**; reassign prompts first.
 - Tags cross categories; **Show Tags** controls row labels. Tooltip links filter exact tags/categories or open the Markdown file.
 - Filters use AND semantics; quote values with spaces (for example, `tag:"security review"`).
 - Search covers names, descriptions, tags, content, and paths. Results sort alphabetically.
