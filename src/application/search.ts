@@ -57,7 +57,11 @@ function parseTerm(token: string): SearchTerm {
 
 export function appendExactFilter(query: string, kind: 'tag' | 'category', value: string): string {
   const normalized = value.toLowerCase();
-  if (tokenize(query).map(parseTerm).some((term) => term.kind === kind && term.value === normalized))
+  if (
+    tokenize(query)
+      .map(parseTerm)
+      .some((term) => term.kind === kind && term.value === normalized)
+  )
     return query;
   const current = query.trim();
   return `${current}${current ? ' ' : ''}${kind}:${JSON.stringify(value)}`;
@@ -107,8 +111,8 @@ export class SearchIndex {
       category === undefined
         ? this.entries.values()
         : [...(this.categories.get(category.trim().toLowerCase()) ?? [])].map((key) =>
-          this.entries.get(key)!,
-        );
+            this.entries.get(key)!,
+          );
     return [...candidates]
       .filter((item) =>
         terms.every((term) => {

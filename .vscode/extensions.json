@@ -1,5 +1,3 @@
 {
-    "recommendations": [
-        "dmundt.prompteur"
-    ]
+  "recommendations": ["dmundt.prompteur"]
 }

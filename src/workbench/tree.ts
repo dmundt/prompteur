@@ -20,7 +20,7 @@ const escapeLinkLabel = (value: string): string =>
   value
     .replace(/[\r\n]+/g, ' ')
     .replace(/\\/g, '\\\\')
-    .replace(/([`*_{}\[\]<>|])/g, '\\$1');
+    .replace(/([`*_{}[\]<>|])/g, '\\$1');
 const commandUri = (command: string, args: unknown[]): string =>
   `command:${command}?${encodeURIComponent(JSON.stringify(args))}`;
 
