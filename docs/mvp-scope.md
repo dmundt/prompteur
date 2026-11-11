@@ -2,23 +2,24 @@
 
 ## Included
 
-- Markdown prompt files with YAML frontmatter fields: version, name, description, category, and tags; body is raw prompt content. Seven built-in categories with explicitly approved profile-wide additions.
-- User and first-local-workspace libraries at fixed paths.
-- One native tree grouped by category; recursive file discovery, not a second folder browser.
-- Case-insensitive full-text and exact-tag search, alphabetical ordering.
-- Create, edit, duplicate, confirmed delete, and clipboard generation without editing source code.
-- Copy prompt records within a VS Code window across categories and User/Workspace libraries.
-- Four fixed variables: selection, clipboard, filename, workspace.
-- On-demand plaintext snapshot preview.
-- Sixteen optional starter files covering understanding, planning, implementation, reviews, tests, debugging, refactoring, documentation, and audits.
-- Basic diagnostics, variable highlighting, debounced file watching, bounded input, and safe/conflict-aware writes.
-- Workspace Trust checks, explicit errors, unit/integration tests, and a real VS Code host smoke test.
+- `.prompt.md`: YAML frontmatter (`version`, `name`, `description`, `category`, `tags`) + raw Markdown body. Seven built-ins; approved profile-wide additions.
+- Fixed User and first-local-Workspace libraries.
+- One category-grouped native tree; recursive discovery, no folder browser.
+- Case-insensitive full-text/exact-tag search; alphabetical results.
+- Create, edit, duplicate, confirm-delete, copy generated text; never edit source code.
+- Window-local prompt copy/paste across categories and libraries.
+- View settings: Default Scope (`ask`), Preferred Category (empty), Show Tags (`true`).
+- Variables: selection, clipboard, filename, workspace.
+- On-demand plaintext preview snapshot.
+- 16 optional starters across seven built-in categories.
+- Diagnostics, token highlighting, debounced watchers, bounded input, safe/conflict-aware writes.
+- Workspace Trust, explicit errors, unit/integration tests, VS Code host smoke test.
 
 ## Excluded
 
-Custom ordering, sorting controls, Favorites, MRU, usage counters/persistence, configurable library settings, all import/export commands, collection bundles, live previews, automatic formatting, and folder-management commands.
+- Excluded: custom ordering/sort, Favorites/MRU/usage, configurable library paths, import/export/bundles, live preview, autoformat, folder management.
 
-No UUID prompt identities, rules, inheritance, databases, synchronization, cloud storage, accounts, roles, plugin systems, AI providers, analytics, custom editors, graph views, or speculative metadata.
+- No UUIDs, rules, inheritance, databases, sync/cloud/accounts/roles, plugins, AI providers, analytics, custom editors, graph views, or speculative metadata.
 
 ## Acceptance Workflows
 
@@ -30,4 +31,5 @@ No UUID prompt identities, rules, inheritance, databases, synchronization, cloud
 6. Discover nested Markdown prompt files, recover malformed frontmatter, and observe external edits.
 7. Enforce Workspace Trust and filesystem/resource boundaries.
 
-Existing settings, rule files, and saved usage state are not deleted or migrated. Custom-directory users must move prompts manually under the fixed `prompts/` directory. Future scope requires user evidence rather than prebuilt extension points.
+- Preserve existing settings, rules, and usage state. Move prompts from custom directories to fixed `prompts/` manually.
+- Add future scope only with user evidence; avoid speculative extension points.

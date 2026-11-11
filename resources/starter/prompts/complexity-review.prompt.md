@@ -1,25 +1,21 @@
 ---
 version: 1
 name: Complexity Review
-description: >
-  Find avoidable control-flow and design complexity, then propose small, behavior-preserving changes with explicit tradeoffs.
+description: Find accidental complexity and propose small, behavior-preserving reductions.
 category: review
-tags: [ review, complexity, refactoring, static-analysis, technical-debt, clean-code ]
+tags: [review, complexity, refactoring, static-analysis, technical-debt, clean-code]
 ---
+
 Review the complexity of this code from {{filename}}:
 
 {{selection}}
 
-Locate deeply nested decisions, hidden state transitions, duplicated policy,
-and abstractions that obscure rather than explain the work.
-Distinguish essential domain complexity from accidental complexity.
-Challenge features, configuration, metadata, persistence, and extensibility
-against current requirements. Recommend keep, simplify, remove, or defer,
-with evidence, confidence, user impact, and maintenance-cost reduction.
-Give each challenged concept its own disposition and smallest next action;
-do not group concepts whose justification or safety requirements differ.
-Suggest the smallest refactor that improves understanding without changing
-public behavior. Describe regression tests and any new tradeoffs.
-Do not introduce a framework merely to reduce a line count.
-If selection is empty, inspect accessible workspace context and state the
-scope reviewed; request context if unavailable. Review only; do not edit.
+- Find nested decisions, hidden state transitions, duplicated policy, and obscuring abstractions.
+- Separate domain complexity from accidental complexity.
+- Test features/configuration/metadata/persistence/extensibility against current requirements.
+- For each concept: keep, simplify, remove, or defer; cite evidence, confidence, impact, and maintenance cost.
+- Give each concept its own disposition and smallest next action.
+- Recommend the smallest behavior-preserving refactor; list regression tests and tradeoffs.
+- Do not add frameworks to reduce line count.
+- If selection is empty, inspect available context and state scope; request missing context.
+- Review only; do not edit.

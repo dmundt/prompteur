@@ -1,28 +1,20 @@
 ---
 version: 1
 name: Release Readiness Audit
-description: >
-  Assess release blockers across build, tests, packaging, activation, workflows, and documentation.
+description: Find release blockers across build, tests, package, activation, workflows, and docs.
 category: review
-tags: [ audit, release, packaging, verification ]
+tags: [audit, release, packaging, verification]
 ---
+
 Audit release readiness for {{workspace}} with this scope:
 
 {{selection}}
 
-Identify the exact artifact or source revision/version being assessed.
-If selection is empty, inspect accessible release/workspace context and
-state scope; request context if unavailable.
-Inspect available release configuration and implementation. Check build,
-type checks, tests, package contents, activation, contributed commands,
-critical user workflows, and documentation consistency where applicable.
-Use existing validation commands when feasible; avoid publishing, installing
-into a user profile, or modifying source as part of this audit.
-For each finding, provide severity, evidence with verified file/line
-references, confidence, user impact, smallest fix, and verification steps.
-Separate release blockers from optional improvements. List commands run,
-results, and untested areas. Conclude ready, conditional, or blocked;
-do not infer readiness from passing tests alone or treat missing evidence
-as proof that a feature works.
-Failed mandatory checks block release. Untested mandatory checks prevent
-an unconditional ready verdict; list the evidence needed to resolve them.
+- Identify artifact, source revision, and version.
+- If selection is empty, inspect available context and state scope; request missing context.
+- Check build, types, tests, package contents, activation, commands, critical workflows, and docs.
+- Use existing checks. Do not publish, install to user profile, or modify source.
+- For each finding: severity, verified file/line, confidence, impact, smallest fix, verification.
+- Separate blockers from optional work. List commands/results/untested areas.
+- Conclude ready/conditional/blocked. Tests alone do not prove readiness; missing evidence is not proof.
+- Failed mandatory checks block release. Untested mandatory checks prevent unconditional readiness.

@@ -1,26 +1,19 @@
 ---
 version: 1
 name: Generate Focused Unit Tests
-description: >
-  Add focused tests for observable behavior, boundaries, and failures using the existing test framework.
+description: Add focused tests for observable behavior, boundaries, and failures.
 category: test
-tags: [ testing, unit-tests, regression, boundaries ]
+tags: [testing, unit-tests, regression, boundaries]
 ---
+
 Add focused unit tests for this code from {{filename}}:
 
 {{selection}}
 
-Inspect available nearby tests and use the repository's existing framework,
-helpers, naming, and mocking patterns. If these are unavailable, request
-the relevant examples rather than inventing APIs or installing tooling.
-Cover normal behavior, meaningful boundaries, and explicit failure paths.
-Assert observable results rather than private implementation details.
-Keep tests deterministic and independent. Do not change production behavior
-to make tests pass. For a known bug, demonstrate that the regression test
-fails before the fix and passes afterward when feasible; state when this
-could not be verified. Do not weaken assertions or disable existing checks
-to obtain a passing result. Run the smallest relevant test command when possible;
-report what ran, results, and any unverified cases without claiming success
-for tests that were not executed.
-If selection is empty, inspect the identified file when accessible;
-otherwise request the code and expected behavior to test.
+- Follow nearby framework, helper, naming, and mock patterns. Ask for examples if absent; do not invent APIs/install tools.
+- Cover normal behavior, meaningful boundaries, and explicit failures.
+- Assert observable results. Keep tests deterministic and independent.
+- Do not change production behavior, weaken assertions, or disable checks to pass tests.
+- For known bugs, show regression failure before/fix pass when feasible; state if unverified.
+- Run the smallest relevant test; report command, result, and unverified cases.
+- If selection is empty, inspect the named file or ask for code and expected behavior.

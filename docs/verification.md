@@ -9,18 +9,29 @@ npm run test:host
 npm run package
 ```
 
-Coverage gates remain 91% for lines, statements, functions, and branches across `src/`, including native VS Code adapters. Tests are updated with removed features, not retained as compatibility scaffolding.
+- Coverage gate: 91% for lines, statements, functions, branches across `src/`, including VS Code adapters.
+- Remove tests for removed features; do not retain compatibility scaffolding.
 
-Unit/integration suites cover metadata-only frontmatter schemas, approved categories, comments, unknown-field rejection, malformed delimiters/YAML/aliases/depth, exact Markdown-body preservation, ignored YAML prompts, path identity, concurrent conflict-safe writes, recovery, bounded resources, symlink/junction confinement, exact tag/category and full-text search, quoted filter values, linked tooltip filtering/path opening, 10,000-entry cached search, category grouping, batches, watchers, variable substitution, CRUD, snapshot previews, window-local prompt copy/paste, profile-wide category approval/reuse, cancellation, and Workspace Trust.
+- Unit/integration coverage: metadata-only frontmatter; category approval; settings defaults/overrides and gear command; comments/unknown fields; malformed delimiters/YAML/aliases/depth; exact body preservation; ignored YAML; path identity; conflicts/recovery; resource/path safety; search/filters/tooltips; 10k search; groups/batches/watchers; variables; CRUD/previews/copy/paste; cancellation; Trust.
 
-Filesystem regressions check conflicts, stale writes/deletes, path confinement, and oversized input. Release-boundary tests check the sole view/command manifest, absence of import/export commands, and preservation of old settings/state. Native save tests verify that user formatting is preserved.
+- Filesystem tests: conflicts, stale writes/deletes, path confinement, oversized input.
+- Release-boundary tests: sole view/command manifest, no import/export, old state preserved.
+- Native-save tests: preserve user formatting.
 
-The real VS Code host smoke uses an isolated temporary workspace/profile with Workspace Trust enabled and startup prompts disabled. It checks that workspace prompt generation is blocked in Restricted Mode while User prompts remain usable, plus clipboard generation with source preservation, absence of the removed Insert command, starter integrity, and plaintext snapshot preview. The runner restores clipboard contents and removes its temporary workspace data.
+- Host smoke: isolated workspace/profile; Trust enabled; startup prompts disabled.
+- Checks Restricted Mode blocking, User prompt use, clipboard/source preservation, removed Insert command, starters, plaintext preview.
+- Runner restores clipboard and removes temp workspace data.
 
-Set `VSCODE_TEST_VERSION` to select a VS Code release; it defaults to `stable`. The CI matrix exercises Windows, Linux, and macOS on VS Code 1.96.0 and stable. The 200 ms activation budget is enforced on stable Linux only; compatibility jobs still run all functional assertions. Set `VSCODE_EXECUTABLE_PATH` to use an installed executable instead of a downloaded host. `PROMPTEUR_TEST_SKIP_CLIPBOARD=1` explicitly skips native clipboard checks on hosts where the direct clipboard write/read precondition fails. Skipping does not certify native clipboard behavior. Unit tests still cover copy logic.
+- `VSCODE_TEST_VERSION`: select host version; default `stable`.
+- CI: Windows/Linux/macOS; VS Code 1.96.0 and stable. Enforce 200 ms activation on stable Linux only.
+- `VSCODE_EXECUTABLE_PATH`: use installed host.
+- `PROMPTEUR_TEST_SKIP_CLIPBOARD=1`: skip failed native clipboard precondition. This does not certify clipboard behavior; unit tests cover copy logic.
 
-Run commands for current results; prior audit/remediation documents describe historical versions. Automated tests do not certify every screen reader/theme, OS filesystem, remote disk, or adversarial concurrent filesystem change. Linux/macOS interactive checks remain useful release gates.
+- Run commands for current results. Audit/remediation files are historical.
+- Tests do not certify every screen reader/theme, filesystem, remote disk, or adversarial race. Linux/macOS interactive checks remain useful.
 
-Before removal of import/export, release-boundary validation on Windows passed all 60 tests, the unchanged 91% coverage gates, build, lint, formatting, and real-host smoke with native clipboard checks enabled. Host activation measured 136.5 ms. An initial host run exposed a non-file profile-storage URI, fixed by retaining the local-path fallback and adding a regression test. Run the commands above for current test counts and coverage.
+- Historical pre-import/export run: 60 tests; 91% coverage; build/lint/format/host passed; clipboard enabled; activation 136.5 ms.
+- Earlier host exposed non-file profile storage; local-path fallback and regression test fixed it.
 
-The Activity Bar SVG has an XML/manifest wiring test. Marketplace branding remains a PNG. CI produces a local-installable VSIX; it does not publish.
+- Activity Bar SVG: XML/manifest test. Marketplace icon: PNG.
+- CI builds local-installable VSIX; it does not publish.

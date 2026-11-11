@@ -1,6 +1,6 @@
 # ADR Index
 
-Router for the Architecture Decision Records in this folder. Find the decision that matches your task, then open its file. Agent rules for this folder are in [AGENTS.md](./AGENTS.md).
+ADR index. Agent rules: [AGENTS.md](./AGENTS.md).
 
 ## Find the right decision
 
@@ -20,10 +20,10 @@ Router for the Architecture Decision Records in this folder. Find the decision t
 | 003    | Explicit Local Safety Boundaries               | Accepted   | [003-local-safety-boundaries.md](./003-local-safety-boundaries.md)           |
 | 004    | Markdown Frontmatter Prompts Are Authoritative | Accepted   | [004-markdown-frontmatter-prompts.md](./004-markdown-frontmatter-prompts.md) |
 
-## Update rules
+## Index Rules
 
-- Add a row to the "All ADRs" table in the same change that creates a new ADR. Add a row to "Find the right decision" when the ADR answers a distinct question.
-- When an ADR is superseded, change its status in this table to match the file's `Status:` line, and link the superseding ADR.
-- Keep titles identical to each ADR's first `#` heading, minus the `ADR NNN:` prefix.
-- Relink entries in the same change that renames, moves, or deletes an ADR file.
-- Do not copy decision text into this index.
+- Add new ADRs to the table and relevant topic row in the same change.
+- On supersession, sync status and link the replacement.
+- Match titles to ADR headings, excluding `ADR NNN:`.
+- Update links after rename, move, or deletion.
+- Do not duplicate decision text.

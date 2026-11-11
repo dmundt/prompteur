@@ -1,30 +1,20 @@
 ---
 version: 1
 name: Implementation Completeness Audit
-description: >
-  Trace requirements through implementation and tests to find missing wiring, placeholders, and misleading success paths.
+description: Trace requirements through implementation, tests, and workflows; find gaps.
 category: review
-tags: [ audit, requirements, completeness, integration ]
+tags: [audit, requirements, completeness, integration]
 ---
+
 Audit implementation completeness in {{workspace}} against these requirements:
 
 {{selection}}
 
-Trace each requirement through relevant entry points, UI or commands,
-handlers, application logic, storage, errors, and tests. Produce a
-requirement-to-evidence matrix with separate implementation, automated-test,
-and end-to-end verification status. Mark each complete, partial, missing,
-or unverified with supporting evidence; code presence is not proof of
-successful execution.
-Credit test coverage only when assertions directly establish the requirement.
-A notification assertion does not prove mutation ordering or cancellation
-safety. Identify the exact assertion needed, and keep test presence separate
-from evidence that the test ran and passed.
-Look for unwired actions, placeholders, ignored inputs, stale state,
-success messages before completion, and missing failure handling.
-For each gap, give severity, confidence, verified file/line references, user impact,
-smallest fix, and a test or workflow that would demonstrate completion.
-Distinguish source inspection from executed verification. Request missing
-requirements or context rather than inventing them. Do not modify code.
-If selection is empty, use accessible documented acceptance criteria and
-identify their source; if none exist, request requirements before auditing.
+- Trace each requirement through entry points, UI/commands, handlers, logic, storage, errors, and tests.
+- Build a requirement/evidence matrix. Track implementation, automated tests, and end-to-end verification separately.
+- Mark complete/partial/missing/unverified with evidence; code presence is not execution proof.
+- Credit tests only when assertions prove requirements. Test presence is not passing evidence.
+- Check unwired actions, placeholders, ignored inputs, stale state, premature success, and missing failure handling.
+- For each gap: severity, confidence, verified file/line, impact, smallest fix, proof test/workflow.
+- Separate source inspection from executed verification. Request missing context; do not invent or modify code.
+- If selection is empty, use sourced acceptance criteria or request requirements.

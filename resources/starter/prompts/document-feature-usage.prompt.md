@@ -1,22 +1,17 @@
 ---
 version: 1
 name: Document Feature Usage
-description: >
-  Write concise user-facing documentation grounded in implemented behavior, with examples and limitations.
+description: Document implemented user workflows, examples, defaults, and limits.
 category: document
-tags: [ documentation, usage, examples ]
+tags: [documentation, usage, examples]
 ---
+
 Document this feature using the available implementation context:
 
 {{selection}}
 
-Explain the user outcome, prerequisites, and shortest successful workflow.
-Include a realistic example, important defaults, failure recovery, and
-relevant limitations. Match existing documentation terminology and style.
-Verify command names, configuration, and paths against available source;
-mark anything unverified instead of inventing functionality.
-Prefer updating the relevant existing section over creating duplicate
-documentation. Avoid marketing claims and internal implementation detail
-unless users need it to operate the feature safely.
-If selection is empty, request the feature to document; do not choose an
-arbitrary feature or invent user-visible behavior.
+- State outcome, prerequisites, and shortest workflow.
+- Include realistic example, defaults, recovery, and limits.
+- Match existing terms. Verify commands/configuration/paths; mark unverified details.
+- Update the relevant section; avoid duplication, marketing, and unnecessary internals.
+- If selection is empty, ask which feature. Do not invent behavior.
