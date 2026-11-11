@@ -4,7 +4,7 @@ import type { Entry, Scope } from '../core/documents';
 
 export type TreeNode =
   | { kind: 'scope'; scope: Scope }
-  | { kind: 'category'; scope: Scope; category: string }
+  | { kind: 'category'; scope: Scope; category: string; count?: number }
   | { kind: 'entry'; scope: Scope; entry: Entry }
   | { kind: 'problem'; scope: Scope; path: string; message: string }
   | { kind: 'batch'; scope: Scope; label: string; children: TreeNode[] };
@@ -29,6 +29,7 @@ export class PromptTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dis
     private readonly workspaceAvailable: () => boolean,
     private readonly report: (error: unknown) => void,
     private readonly showTags: () => boolean = () => true,
+    private readonly categoryCountMode: () => 'filtered' | 'total' | 'hidden' = () => 'filtered',
   ) {
     this.unsubscribe = service.subscribe(() => this.refresh());
   }
@@ -55,7 +56,8 @@ export class PromptTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dis
     if (node.kind === 'batch')
       return new vscode.TreeItem(node.label, vscode.TreeItemCollapsibleState.Collapsed);
     if (node.kind === 'category') {
-      const label = node.category.charAt(0).toUpperCase() + node.category.slice(1);
+      const name = node.category.charAt(0).toUpperCase() + node.category.slice(1);
+      const label = node.count === undefined ? name : `${name} (${node.count})`;
       const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.Collapsed);
       item.id = `${node.scope}:category:${node.category.toLowerCase()}`;
       item.contextValue = 'category';
@@ -131,19 +133,34 @@ export class PromptTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dis
         this.query,
         node.kind === 'category' ? node.category : undefined,
       );
+      const countMode = this.categoryCountMode();
+      const countSource = countMode === 'total' ? snapshot.entries : entries;
+      const categoryCounts = new Map<string, number>();
+      for (const entry of countSource) {
+        const category = entry.data.category.trim() || 'misc';
+        const key = category.toLowerCase();
+        categoryCounts.set(key, (categoryCounts.get(key) ?? 0) + 1);
+      }
       const nodes: TreeNode[] =
         node.kind === 'scope'
           ? [
-              ...Array.from(
-                new Map(
-                  entries
-                    .map((entry) => entry.data.category.trim() || 'misc')
-                    .map((category) => [category.toLowerCase(), category] as const),
-                ).values(),
-              )
-                .sort((left, right) => left.localeCompare(right))
-                .map((category): TreeNode => ({ kind: 'category', scope: node.scope, category })),
-            ]
+            ...Array.from(
+              new Map(
+                entries
+                  .map((entry) => entry.data.category.trim() || 'misc')
+                  .map((category) => [category.toLowerCase(), category] as const),
+              ).values(),
+            )
+              .sort((left, right) => left.localeCompare(right))
+              .map((category): TreeNode => ({
+                kind: 'category',
+                scope: node.scope,
+                category,
+                ...(countMode === 'hidden'
+                  ? {}
+                  : { count: categoryCounts.get(category.toLowerCase()) ?? 0 }),
+              })),
+          ]
           : entries.map((entry): TreeNode => ({ kind: 'entry', scope: node.scope, entry }));
       if (node.kind === 'scope')
         nodes.push(

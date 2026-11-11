@@ -66,6 +66,17 @@
           "default": true,
           "scope": "window",
           "description": "Show tags beside prompt names in the Prompteur view."
+        },
+        "prompteur.categoryCountMode": {
+          "type": "string",
+          "enum": [
+            "filtered",
+            "total",
+            "hidden"
+          ],
+          "default": "filtered",
+          "scope": "window",
+          "description": "Choose whether category counts show filtered matches, all valid prompts, or stay hidden."
         }
       }
     },

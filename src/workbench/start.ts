@@ -69,6 +69,10 @@ class Workbench implements vscode.Disposable {
       () => this.roots.has('workspace'),
       (error) => this.report(error),
       () => vscode.workspace.getConfiguration('prompteur').get<boolean>('showTags', true),
+      () =>
+        vscode.workspace
+          .getConfiguration('prompteur')
+          .get<'filtered' | 'total' | 'hidden'>('categoryCountMode', 'filtered'),
     );
     this.disposables.push(
       this.editor,
@@ -80,7 +84,11 @@ class Workbench implements vscode.Disposable {
     );
     this.disposables.push(
       vscode.workspace.onDidChangeConfiguration((event) => {
-        if (event.affectsConfiguration('prompteur.showTags')) this.tree.refresh();
+        if (
+          event.affectsConfiguration('prompteur.showTags') ||
+          event.affectsConfiguration('prompteur.categoryCountMode')
+        )
+          this.tree.refresh();
       }),
     );
     this.target = vscode.window.activeTextEditor;

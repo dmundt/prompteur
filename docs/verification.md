@@ -12,7 +12,7 @@ npm run package
 - Coverage gate: 91% for lines, statements, functions, branches across `src/`, including VS Code adapters.
 - Remove tests for removed features; do not retain compatibility scaffolding.
 
-- Unit/integration coverage: metadata-only frontmatter; category approval/removal guards; settings defaults/overrides and gear command; comments/unknown fields; malformed delimiters/YAML/aliases/depth; exact body preservation; ignored YAML; path identity; conflicts/recovery; resource/path safety; search/filters/tooltips; 10k search; groups/batches/watchers; variables; CRUD/previews/copy/paste; cancellation; Trust.
+- Unit/integration coverage: metadata-only frontmatter; category approval/removal guards/count modes; settings defaults/overrides and gear command; comments/unknown fields; malformed delimiters/YAML/aliases/depth; exact body preservation; ignored YAML; path identity; conflicts/recovery; resource/path safety; search/filters/tooltips; 10k search; groups/batches/watchers; variables; CRUD/previews/copy/paste; cancellation; Trust.
 
 - Filesystem tests: conflicts, stale writes/deletes, path confinement, oversized input.
 - Release-boundary tests: sole view/command manifest, no import/export, old state preserved.
