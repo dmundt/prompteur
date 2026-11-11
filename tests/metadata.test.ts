@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  decodeYaml,
-  encodeYaml,
+  decodeMarkdown,
+  encodeMarkdown,
   newPrompt,
   promptCategories,
   promptSchema,
@@ -30,17 +30,12 @@ describe('minimal document metadata', () => {
     expect(promptSchema.parse({ ...prompt, category: 'review' }).category).toBe('review');
     expect(promptSchema.parse({ ...prompt, category: 'engineering' }).category).toBe('engineering');
     expect(() => promptSchema.parse({ ...prompt, category: 'a'.repeat(65) })).toThrow();
-    expect(decodeYaml('version: 1\nname: Review\ncategory: REVIEW\ncontent: safe').category).toBe(
-      'review',
-    );
-    expect(() =>
-      decodeYaml('version: 1\nname: Review\ncategory: engineering\ncontent: safe'),
-    ).toThrow('approved profile categories');
+    const markdown = (category: string, extra = '') =>
+      `---\nversion: 1\nname: Review\ncategory: ${category}\n${extra}---\nsafe`;
+    expect(decodeMarkdown(markdown('REVIEW')).category).toBe('review');
+    expect(() => decodeMarkdown(markdown('engineering'))).toThrow('approved profile categories');
     expect(
-      decodeYaml('version: 1\nname: Review\ncategory: engineering\ncontent: safe', [
-        ...promptCategories,
-        'engineering',
-      ]).category,
+      decodeMarkdown(markdown('engineering'), [...promptCategories, 'engineering']).category,
     ).toBe('engineering');
     for (const field of [
       'id',
@@ -62,10 +57,10 @@ describe('minimal document metadata', () => {
       expect(promptSchema.safeParse({ ...prompt, [field]: 'removed' }).success).toBe(false);
   });
   it('preserves comments without generating internal metadata', () => {
-    const source = `# Metadata note\n${encodeYaml(prompt)}`;
-    const encoded = encodeYaml({ ...decodeYaml(source), name: 'Updated' }, source);
+    const source = encodeMarkdown(prompt).replace('---\n', '---\n# Metadata note\n');
+    const encoded = encodeMarkdown({ ...decodeMarkdown(source), name: 'Updated' }, source);
     expect(encoded).toContain('# Metadata note');
-    expect(Object.keys(decodeYaml(encoded)).sort()).toEqual([
+    expect(Object.keys(decodeMarkdown(encoded)).sort()).toEqual([
       'category',
       'content',
       'description',
@@ -73,13 +68,13 @@ describe('minimal document metadata', () => {
       'tags',
       'version',
     ]);
-    expect(encodeYaml(decodeYaml(encoded), encoded)).toBe(encoded);
+    expect(encodeMarkdown(decodeMarkdown(encoded), encoded)).toBe(encoded);
   });
   it('indexes ordinary discovery fields plus filename', () => {
     const promptEntry: Entry = {
       key: 'p',
       scope: 'user',
-      path: 'prompts/code-review.prompt.yaml',
+      path: 'prompts/code-review.prompt.md',
       source: '',
       data: prompt,
     };

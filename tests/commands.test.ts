@@ -4,7 +4,7 @@ import * as fs from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { activate } from '../src/extension';
-import { decodeYaml, encodeYaml, newPrompt } from '../src/core/documents';
+import { decodeMarkdown, encodeMarkdown, newPrompt } from '../src/core/documents';
 import type { PromptTree, TreeNode } from '../src/workbench/tree';
 import {
   collections,
@@ -57,11 +57,11 @@ async function addPrompt(
   const base = scope === 'user' ? userRoot() : workspaceRoot();
   await fs.mkdir(join(base, 'prompts'), { recursive: true });
   await fs.writeFile(
-    join(base, 'prompts', `${name}.yaml`),
-    `# Authored note\n${encodeYaml({ ...newPrompt(name), content })}`,
+    join(base, 'prompts', `${name}.prompt.md`),
+    encodeMarkdown({ ...newPrompt(name), content }).replace('---\n', '---\n# Authored note\n'),
   );
   await run('refresh');
-  return (await entries(scope)).find((node) => node.entry.path === `prompts/${name}.yaml`)!;
+  return (await entries(scope)).find((node) => node.entry.path === `prompts/${name}.prompt.md`)!;
 }
 async function destination(source = 'code') {
   const document = new FakeDocument(Uri.file(join(root, 'project', 'main.ts')), source);
@@ -119,6 +119,7 @@ describe('release commands', () => {
       'import',
       'export',
       'insert',
+      'migrateCategories',
     ])
       expect(handlers.has(`prompteur.${command}`)).toBe(false);
     const manifest = JSON.parse(await fs.readFile('package.json', 'utf8')) as {
@@ -159,11 +160,8 @@ describe('release commands', () => {
         when: expect.stringContaining('viewItem =~ /^(scope|category)$/'),
       }),
     );
-    expect(manifest.contributes.menus['view/item/context']).toContainEqual(
-      expect.objectContaining({
-        command: 'prompteur.migrateCategories',
-        when: 'view == prompteur.prompts && viewItem == scope',
-      }),
+    expect(manifest.contributes.commands.map((item) => item.command)).not.toContain(
+      'prompteur.migrateCategories',
     );
     expect(
       manifest.contributes.commands
@@ -191,8 +189,8 @@ describe('release commands', () => {
     await run('newPrompt', category);
     await run('newPrompt', category);
     expect((await entries()).map((node) => node.entry.path).sort()).toEqual([
-      'prompts/code-review-2.prompt.yaml',
-      'prompts/code-review.prompt.yaml',
+      'prompts/code-review-2.prompt.md',
+      'prompts/code-review.prompt.md',
     ]);
     const node = (await entries())[0]!;
     expect(node.entry.data.category).toBe('review');
@@ -216,18 +214,21 @@ describe('release commands', () => {
     expect((await entries('user'))[0]?.entry.data.category).toBe('review');
   });
   it('ignores old settings and preserves existing starter files, even invalid ones', async () => {
-    const bundled = resolve('resources/starter/prompts/code-review.yaml');
+    const bundled = resolve('resources/starter/prompts/code-review.prompt.md');
     const original = await fs.readFile(bundled, 'utf8');
     await fs.mkdir(join(userRoot(), 'prompts'), { recursive: true });
     await fs.writeFile(
       join(userRoot(), 'settings.yaml'),
       'version: 1\ndefaultPromptFolder: templates\n',
     );
-    await fs.writeFile(join(userRoot(), 'prompts', 'code-review.yaml'), 'invalid user file');
+    await fs.writeFile(
+      join(userRoot(), 'prompts', 'code-review.yaml'),
+      'legacy YAML stays untouched',
+    );
     await run('addStarters', scopeNode());
-    expect(await entries()).toHaveLength(15);
+    expect(await entries()).toHaveLength(16);
     expect(await fs.readFile(join(userRoot(), 'prompts', 'code-review.yaml'), 'utf8')).toBe(
-      'invalid user file',
+      'legacy YAML stays untouched',
     );
     await run('addStarters', scopeNode());
     expect(messages.info.at(-1)).toContain('Added 0');
@@ -237,9 +238,11 @@ describe('release commands', () => {
   it('installs sixteen starters as ordinary files without changing bundled source', async () => {
     await run('addStarters', scopeNode());
     expect(await entries()).toHaveLength(16);
-    const node = (await entries()).find((item) => item.entry.path.endsWith('code-review.yaml'))!;
+    const node = (await entries()).find((item) =>
+      item.entry.path.endsWith('code-review.prompt.md'),
+    )!;
     expect(await fs.readFile(join(userRoot(), node.entry.path), 'utf8')).toBe(
-      await fs.readFile(resolve('resources/starter/prompts/code-review.yaml'), 'utf8'),
+      await fs.readFile(resolve('resources/starter/prompts/code-review.prompt.md'), 'utf8'),
     );
     await destination();
     await run('copy', node);
@@ -266,13 +269,13 @@ describe('release commands', () => {
       tags: ['security', 'quality'],
       content: 'Review this source',
     };
-    const source = `# Preserve this note\n${encodeYaml(data)}`;
-    const sourcePath = join(userRoot(), 'prompts', 'source.yaml');
+    const source = encodeMarkdown(data).replace('---\n', '---\n# Preserve this note\n');
+    const sourcePath = join(userRoot(), 'prompts', 'source.prompt.md');
     await fs.mkdir(join(userRoot(), 'prompts'), { recursive: true });
     await fs.writeFile(sourcePath, source);
-    const occupiedPath = join(workspaceRoot(), 'prompts', 'shared-prompt.prompt.yaml');
+    const occupiedPath = join(workspaceRoot(), 'prompts', 'shared-prompt.prompt.md');
     await fs.mkdir(join(workspaceRoot(), 'prompts'), { recursive: true });
-    await fs.writeFile(occupiedPath, encodeYaml(newPrompt('Occupied')));
+    await fs.writeFile(occupiedPath, encodeMarkdown(newPrompt('Occupied')));
     await run('refresh');
 
     const sourceNode = (await entries('user')).find((node) => node.entry.data.name === data.name)!;
@@ -284,13 +287,13 @@ describe('release commands', () => {
     workspace.isTrusted = false;
     await expect(run('pastePrompt', target)).rejects.toThrow('Trust');
     await expect(
-      fs.access(join(workspaceRoot(), 'prompts', 'shared-prompt-2.prompt.yaml')),
+      fs.access(join(workspaceRoot(), 'prompts', 'shared-prompt-2.prompt.md')),
     ).rejects.toThrow();
 
     workspace.isTrusted = true;
     await run('pastePrompt', target);
-    const workspaceCopyPath = join(workspaceRoot(), 'prompts', 'shared-prompt-2.prompt.yaml');
-    expect(decodeYaml(await fs.readFile(workspaceCopyPath, 'utf8'))).toEqual({
+    const workspaceCopyPath = join(workspaceRoot(), 'prompts', 'shared-prompt-2.prompt.md');
+    expect(decodeMarkdown(await fs.readFile(workspaceCopyPath, 'utf8'))).toEqual({
       ...data,
       category: 'plan',
     });
@@ -300,7 +303,8 @@ describe('release commands', () => {
 
     await run('pastePrompt', scopeNode('user'));
     const userCopy = (await entries('user')).find(
-      (node) => node.entry.data.name === data.name && node.entry.path !== 'prompts/source.yaml',
+      (node) =>
+        node.entry.data.name === data.name && node.entry.path !== 'prompts/source.prompt.md',
     );
     expect(userCopy?.entry.data.category).toBe('review');
   });
@@ -313,9 +317,9 @@ describe('release commands', () => {
       category: 'debug' as const,
       content: 'Source',
     };
-    const path = join(workspaceRoot(), 'prompts', 'workspace-source.yaml');
+    const path = join(workspaceRoot(), 'prompts', 'workspace-source.prompt.md');
     await fs.mkdir(join(workspaceRoot(), 'prompts'), { recursive: true });
-    await fs.writeFile(path, encodeYaml(data));
+    await fs.writeFile(path, encodeMarkdown(data));
     await run('refresh');
     const source = (await entries('workspace')).find((node) => node.entry.data.name === data.name)!;
     workspace.isTrusted = false;
@@ -323,7 +327,7 @@ describe('release commands', () => {
 
     workspace.isTrusted = true;
     await run('copyPrompt', source);
-    await fs.writeFile(path, encodeYaml({ ...newPrompt('Changed'), category: 'review' }));
+    await fs.writeFile(path, encodeMarkdown({ ...newPrompt('Changed'), category: 'review' }));
     await run('refresh');
     workspace.isTrusted = false;
     await run('pastePrompt', scopeNode('user'));
@@ -397,14 +401,17 @@ describe('release commands', () => {
     await run('edit', node);
     const document = window.activeTextEditor!.document;
     const source =
-      '# preserve ordering\ncontent: "safe"\nname: native\nversion: 1\ncategory: review\n';
+      '---\n# preserve ordering\nname: native\nversion: 1\ncategory: review\n---\nsafe';
     document.change(source);
     await saveDocument(document);
     expect(await fs.readFile(document.uri.fsPath, 'utf8')).toBe(source);
-    document.change('version: 1\nname: Native\ncontent: "{{selection}}"\ncategory: review\n');
+    document.change(
+      '---\nversion: 1\nname: Native\ndescription: "{{unsupported}}"\ncategory: review\n---\n{{selection}}',
+    );
     await run('copy', node);
     expect(window.activeTextEditor!.decorations).toHaveLength(1);
-    document.change('version: [');
+    expect(window.activeTextEditor!.decorations[0]!.start.line).toBe(6);
+    document.change('---\nversion: [\n---\n');
     await expect(run('copy', node)).rejects.toThrow();
     expect(collections[0]!.get(document.uri.toString())?.length).toBe(1);
   });
@@ -466,10 +473,10 @@ describe('release commands', () => {
     expect(await entries()).toHaveLength(0);
     await expect(run('copy', node)).rejects.toThrow('changed');
   });
-  it('opens malformed YAML for repair and isolates unrelated broken files', async () => {
+  it('opens malformed Markdown frontmatter for repair and isolates unrelated broken files', async () => {
     const node = await addPrompt('valid', 'SAFE');
-    const path = join(userRoot(), 'prompts', 'bad.yaml');
-    await fs.writeFile(path, 'version: [');
+    const path = join(userRoot(), 'prompts', 'bad.prompt.md');
+    await fs.writeFile(path, '---\nversion: [\n---\n');
     await run('refresh');
     await run('copy', node);
     expect(env.clipboard.value).toBe('SAFE');
@@ -528,6 +535,25 @@ describe('release commands', () => {
     await run('newPrompt', scopeNode('workspace'));
     expect((await entries('workspace'))[0]?.entry.data.category).toBe('research');
   });
+  it('loads only valid non-built-in categories from profile state', async () => {
+    for (const disposable of context.subscriptions.splice(0)) disposable.dispose();
+    context.globalState.values.set('approvedPromptCategories', [
+      ' Review ',
+      'Research',
+      null,
+      42,
+      '',
+    ]);
+    await activate(context as unknown as vscode.ExtensionContext);
+    const showQuickPick = vi.spyOn(window, 'showQuickPick');
+    responses.quick.push('Research');
+    responses.input.push('Research prompt');
+    await run('newPrompt', scopeNode('user'));
+    const choices = showQuickPick.mock.calls[0]?.[0] as { label: string }[];
+    expect(choices.map((choice) => choice.label)).toContain('Research');
+    expect(choices.filter((choice) => choice.label === 'Review')).toHaveLength(1);
+    expect((await entries('user'))[0]?.entry.data.category).toBe('research');
+  });
   it('does not add or create a category when approval is cancelled', async () => {
     responses.quick.push('$(add) Add Category...');
     responses.input.push('Temporary');
@@ -569,168 +595,6 @@ describe('release commands', () => {
     const category: TreeNode = { kind: 'category', scope: 'user', category: 'Legacy' };
     await expect(run('newPrompt', category)).rejects.toThrow('approved prompt category');
     expect(await entries('user')).toEqual([]);
-  });
-  it('exposes category migration on library scope rows', async () => {
-    const manifest = JSON.parse(await fs.readFile('package.json', 'utf8')) as {
-      contributes: {
-        commands: { command: string }[];
-        menus: { 'view/item/context': { command: string; when: string; group: string }[] };
-      };
-    };
-    expect(manifest.contributes.commands.map((command) => command.command)).toContain(
-      'prompteur.migrateCategories',
-    );
-    expect(manifest.contributes.menus['view/item/context']).toContainEqual({
-      command: 'prompteur.migrateCategories',
-      when: 'view == prompteur.prompts && viewItem == scope',
-      group: '4_manage',
-    });
-  });
-  it('reviews legacy category mappings and asks for choices before migrating', async () => {
-    const sourceByName = new Map([
-      ['audit', 'version: 1\nname: Audit Prompt\ncategory: audit\ncontent: Audit\n'],
-      ['case-variant', 'version: 1\nname: Case Variant\ncategory: REVIEW\ncontent: Review\n'],
-      [
-        'engineering',
-        '# Keep this note\nversion: 1\nname: Engineering Prompt\ncategory: engineering\ncontent: Build\n',
-      ],
-      ['missing', 'version: 1\nname: Missing Category\ncontent: Explain\n'],
-      ['misc', 'version: 1\nname: Misc Prompt\ncategory: misc\ncontent: General\n'],
-    ]);
-    await fs.mkdir(join(userRoot(), 'prompts'), { recursive: true });
-    for (const [name, source] of sourceByName)
-      await fs.writeFile(join(userRoot(), 'prompts', `${name}.yaml`), source);
-    await run('refresh');
-
-    responses.quick.push('User', 'Implement', 'Test', 'Explain');
-    responses.warning.push('Migrate');
-    await run('migrateCategories');
-
-    const migrated = await entries('user');
-    const categoryByName = new Map(
-      migrated.map((node) => [node.entry.data.name, node.entry.data.category]),
-    );
-    expect(categoryByName).toEqual(
-      new Map([
-        ['Audit Prompt', 'review'],
-        ['Case Variant', 'review'],
-        ['Engineering Prompt', 'implement'],
-        ['Missing Category', 'explain'],
-        ['Misc Prompt', 'test'],
-      ]),
-    );
-    expect(
-      (await tree().getChildren(scopeNode('user'))).filter((node) => node.kind === 'problem'),
-    ).toEqual([]);
-    expect(await fs.readFile(join(userRoot(), 'prompts', 'engineering.yaml'), 'utf8')).toContain(
-      '# Keep this note',
-    );
-    expect(messages.warnings.at(-1)).toContain('audit -> review');
-    expect(messages.info.at(-1)).toContain('Updated categories in 5 prompts');
-  });
-  it('does not rewrite categories when migration is cancelled and enforces Workspace Trust', async () => {
-    const userSource = 'version: 1\nname: Audit\ncategory: audit\ncontent: Review\n';
-    const userPath = join(userRoot(), 'prompts', 'audit.yaml');
-    await fs.mkdir(join(userRoot(), 'prompts'), { recursive: true });
-    await fs.writeFile(userPath, userSource);
-    await run('refresh');
-    responses.quick.push('User');
-    responses.warning.push(null);
-    await run('migrateCategories');
-    expect(await fs.readFile(userPath, 'utf8')).toBe(userSource);
-
-    const workspaceSource = 'version: 1\nname: Workspace Audit\ncategory: audit\ncontent: Review\n';
-    const workspacePath = join(workspaceRoot(), 'prompts', 'audit.yaml');
-    await fs.mkdir(join(workspaceRoot(), 'prompts'), { recursive: true });
-    await fs.writeFile(workspacePath, workspaceSource);
-    await run('refresh');
-    workspace.isTrusted = false;
-    responses.quick.push('Workspace');
-    await expect(run('migrateCategories')).rejects.toThrow('Trust');
-    expect(await fs.readFile(workspacePath, 'utf8')).toBe(workspaceSource);
-  });
-  it('leaves canonical and malformed prompts unchanged when nothing can be migrated', async () => {
-    const canonical = encodeYaml(newPrompt('Canonical', 'plan'));
-    const canonicalPath = join(userRoot(), 'prompts', 'canonical.yaml');
-    const malformedPath = join(userRoot(), 'prompts', 'malformed.yaml');
-    await fs.mkdir(join(userRoot(), 'prompts'), { recursive: true });
-    await fs.writeFile(canonicalPath, canonical);
-    await fs.writeFile(malformedPath, 'version: [');
-    await run('refresh');
-
-    await run('migrateCategories', scopeNode('user'));
-
-    expect(await fs.readFile(canonicalPath, 'utf8')).toBe(canonical);
-    expect(await fs.readFile(malformedPath, 'utf8')).toBe('version: [');
-    expect(messages.info.at(-1)).toContain('No prompt categories need migration');
-  });
-  it('cancels migration when user rejects per-prompt category choice', async () => {
-    const source = 'version: 1\nname: Specialized\ncategory: engineering\ncontent: Build\n';
-    const path = join(userRoot(), 'prompts', 'specialized.yaml');
-    await fs.mkdir(join(userRoot(), 'prompts'), { recursive: true });
-    await fs.writeFile(path, source);
-    await run('refresh');
-    responses.quick.push(null);
-
-    await run('migrateCategories', scopeNode('user'));
-
-    expect(await fs.readFile(path, 'utf8')).toBe(source);
-    expect(messages.warnings).toEqual([]);
-  });
-  it('truncates long migration mapping and path previews', async () => {
-    const legacy = [
-      ['audit', 'Audit', 'audit'],
-      ['architecture', 'Architecture', 'architecture'],
-      ['debugging', 'Debugging', 'debugging'],
-      ['devops', 'DevOps', 'devops'],
-      ['engineering', 'Engineering', 'engineering'],
-      ['refactor', 'Refactor', 'refactor'],
-      ['security', 'Security', 'security'],
-    ] as const;
-    await fs.mkdir(join(userRoot(), 'prompts'), { recursive: true });
-    for (const [file, name, category] of legacy)
-      await fs.writeFile(
-        join(userRoot(), 'prompts', `${file}.yaml`),
-        `version: 1\nname: ${name}\ncategory: ${category}\ncontent: Review\n`,
-      );
-    await run('refresh');
-    responses.quick.push('Implement');
-    responses.warning.push(null);
-    await run('migrateCategories', scopeNode('user'));
-
-    expect(messages.warnings.at(-1)).toContain('1 more mappings');
-    expect(messages.warnings.at(-1)).toContain('And 2 more prompts');
-    expect(await entries('user')).toHaveLength(0);
-  });
-  it('blocks migration when affected prompt has unsaved editor changes', async () => {
-    const source = 'version: 1\nname: Audit\ncategory: audit\ncontent: Review\n';
-    const path = join(userRoot(), 'prompts', 'audit.yaml');
-    await fs.mkdir(join(userRoot(), 'prompts'), { recursive: true });
-    await fs.writeFile(path, source);
-    await run('refresh');
-    const problem = (await tree().getChildren(scopeNode())).find(
-      (node) => node.kind === 'problem',
-    )!;
-    await run('edit', problem);
-    window.activeTextEditor!.document.change(`${source}# unsaved\n`);
-
-    await expect(run('migrateCategories')).rejects.toThrow('Save or discard');
-    expect(await fs.readFile(path, 'utf8')).toBe(source);
-  });
-  it('rejects source changes made during migration confirmation', async () => {
-    const source = 'version: 1\nname: Audit\ncategory: audit\ncontent: Review\n';
-    const external = 'version: 1\nname: External\ncategory: review\ncontent: New\n';
-    const path = join(userRoot(), 'prompts', 'audit.yaml');
-    await fs.mkdir(join(userRoot(), 'prompts'), { recursive: true });
-    await fs.writeFile(path, source);
-    await run('refresh');
-    vi.spyOn(window, 'showWarningMessage').mockImplementation(async () => {
-      await fs.writeFile(path, external);
-      return 'Migrate';
-    });
-
-    await expect(run('migrateCategories')).rejects.toThrow('stopped after 0 prompts');
-    expect(await fs.readFile(path, 'utf8')).toBe(external);
   });
   it('handles palette selection and cancellations without mutations', async () => {
     responses.quick.push(null);

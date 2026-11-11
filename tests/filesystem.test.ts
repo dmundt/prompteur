@@ -17,7 +17,7 @@ afterEach(async () => {
 });
 
 describe('local filesystem adapter', () => {
-  it('creates, lists, reads, replaces and removes real YAML files', async () => {
+  it('creates, lists, reads, replaces and removes real files', async () => {
     const { files } = await setup();
     expect(await files.list('user')).toEqual([]);
     expect(await files.read('user', 'prompts/a.yaml')).toBeUndefined();
@@ -51,12 +51,12 @@ describe('local filesystem adapter', () => {
   it('reloads manual filesystem edits through incremental service events', async () => {
     const { files, root } = await setup();
     const service = new LibraryService(files);
-    await service.save('workspace', 'prompts/a.yaml', newPrompt('A'), undefined);
+    await service.save('workspace', 'prompts/a.prompt.md', newPrompt('A'), undefined);
     await fs.writeFile(
-      join(root, 'workspace', 'prompts', 'a.yaml'),
-      'version: 1\nname: Changed outside editor\ncategory: explain\ncontent: manual\n',
+      join(root, 'workspace', 'prompts', 'a.prompt.md'),
+      '---\nversion: 1\nname: Changed outside editor\ncategory: explain\n---\nmanual\n',
     );
-    await service.refresh('workspace', 'prompts/a.yaml');
+    await service.refresh('workspace', 'prompts/a.prompt.md');
     expect((await service.get('workspace')).entries[0]?.data.name).toBe('Changed outside editor');
   });
   it('does not follow symbolic directory links when scanning or reading', async () => {

@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { LibraryService } from '../src/application/library';
 import { SearchIndex } from '../src/application/search';
 import { LocalFiles } from '../src/platform/local-files';
-import { parseYaml, promptCategories } from '../src/core/documents';
+import { promptCategories, promptFrontmatterSchema } from '../src/core/documents';
 import { variableTokens } from '../src/core/render';
 
 describe('bundled prompt starters', () => {
@@ -16,10 +16,13 @@ describe('bundled prompt starters', () => {
     const paths = new Set<string>();
     const names = new Set<string>();
     for (const entry of snapshot.entries) {
-      const raw = parseYaml(entry.source).toJS() as Record<string, unknown>;
-      expect(Object.keys(raw).sort()).toEqual(
-        ['version', 'name', 'description', 'category', 'tags', 'content'].sort(),
-      );
+      const { content, ...metadata } = entry.data;
+      expect(promptFrontmatterSchema.parse(metadata)).toEqual(metadata);
+      expect(entry.source.startsWith('---\n')).toBe(true);
+      const closingDelimiter = entry.source.indexOf('\n---\n', 4);
+      expect(closingDelimiter).toBeGreaterThan(0);
+      expect(entry.source.slice(0, closingDelimiter)).not.toContain('content:');
+      expect(entry.source.slice(closingDelimiter + 5)).toBe(content);
       expect(promptCategories).toContain(entry.data.category);
       expect(paths.has(entry.path)).toBe(false);
       paths.add(entry.path);
@@ -39,7 +42,7 @@ describe('bundled prompt starters', () => {
         entry.path
           .split('/')
           .at(-1)
-          ?.replace(/\.yaml$/, ''),
+          ?.replace(/\.prompt\.md$/, ''),
       );
     expect(ids('security')).toEqual(expect.arrayContaining(['security-review']));
     expect(ids('review')).toEqual(
@@ -64,6 +67,8 @@ describe('bundled prompt starters', () => {
       'document-feature-usage',
       'implement-scoped-change',
     ])
-      expect(snapshot.entries.some((entry) => entry.path === `prompts/${name}.yaml`)).toBe(true);
+      expect(snapshot.entries.some((entry) => entry.path === `prompts/${name}.prompt.md`)).toBe(
+        true,
+      );
   });
 });

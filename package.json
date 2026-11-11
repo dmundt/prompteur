@@ -1,7 +1,7 @@
 {
   "name": "prompteur",
   "displayName": "Prompteur",
-  "description": "Git-friendly local YAML prompts with categories, tags, and clipboard generation.",
+  "description": "Git-friendly local Markdown prompts with categories, tags, and clipboard generation.",
   "version": "0.4.4",
   "publisher": "dmundt",
   "icon": "resources/icon.png",
@@ -47,11 +47,6 @@
         "title": "Add Starter Library",
         "category": "Prompteur",
         "icon": "$(library)"
-      },
-      {
-        "command": "prompteur.migrateCategories",
-        "title": "Migrate Prompt Categories",
-        "category": "Prompteur"
       },
       {
         "command": "prompteur.newPrompt",
@@ -139,11 +134,6 @@
         }
       ],
       "view/item/context": [
-        {
-          "command": "prompteur.migrateCategories",
-          "when": "view == prompteur.prompts && viewItem == scope",
-          "group": "4_manage"
-        },
         {
           "command": "prompteur.copy",
           "when": "view =~ /^prompteur\\./ && viewItem == prompt",

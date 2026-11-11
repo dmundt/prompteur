@@ -4,7 +4,7 @@ import { LibraryService } from '../src/application/library';
 import { PromptTree, type TreeNode } from '../src/workbench/tree';
 import { watchLibrary } from '../src/workbench/watch';
 import { MarkdownString, Uri, watchers } from './vscode-mock';
-import { encodeYaml, newPrompt } from '../src/core/documents';
+import { encodeMarkdown, newPrompt } from '../src/core/documents';
 import { memoryFiles } from './helpers';
 
 afterEach(() => {
@@ -12,14 +12,14 @@ afterEach(() => {
   watchers.splice(0);
 });
 describe('native tree interactions', () => {
-  it('groups prompts by category, ignores old rule files, filters and repairs YAML', async () => {
+  it('groups prompts by category, ignores old rule files, filters and repairs Markdown prompts', async () => {
     const { port, files } = memoryFiles();
     files.set(
-      'user:prompts/review/a.yaml',
-      encodeYaml({ ...newPrompt('Review'), category: 'review', tags: ['security'] }),
+      'user:prompts/review/a.prompt.md',
+      encodeMarkdown({ ...newPrompt('Review'), category: 'review', tags: ['security'] }),
     );
     files.set('user:rules/r.yaml', 'version: 1\nname: Rule\nenabled: false\ncontent: Hi\n');
-    files.set('user:prompts/bad.yaml', 'version: [');
+    files.set('user:prompts/bad.prompt.md', '---\nversion: [\n---\n');
     const service = new LibraryService(port);
     const report = vi.fn();
     const tree = new PromptTree(service, () => true, report);
@@ -46,7 +46,7 @@ describe('native tree interactions', () => {
     expect(tooltip.value).toContain('[review](command:prompteur.filterFromTooltip?');
     expect(tooltip.value).toContain('[#security](command:prompteur.filterFromTooltip?');
     expect(tooltip.value).toContain(
-      '[prompts/review/a.yaml](command:prompteur.openPromptPath?',
+      '[prompts/review/a.prompt.md](command:prompteur.openPromptPath?',
     );
     expect(tooltip.isTrusted).toEqual({
       enabledCommands: ['prompteur.filterFromTooltip', 'prompteur.openPromptPath'],
@@ -63,7 +63,7 @@ describe('native tree interactions', () => {
   it('lazily batches large category groups', async () => {
     const { port, files } = memoryFiles();
     for (let index = 0; index < 201; index++)
-      files.set(`user:prompts/${index}.yaml`, encodeYaml(newPrompt(String(index))));
+      files.set(`user:prompts/${index}.prompt.md`, encodeMarkdown(newPrompt(String(index))));
     const report = vi.fn();
     const tree = new PromptTree(new LibraryService(port), () => false, report);
     const root: TreeNode = { kind: 'scope', scope: 'user' };
@@ -82,8 +82,8 @@ describe('native tree interactions', () => {
     const { port, files } = memoryFiles();
     const unsafeTag = 'security](command:evil.run)';
     files.set(
-      'user:prompts/a.yaml',
-      encodeYaml({ ...newPrompt('Safe label'), tags: [unsafeTag] }),
+      'user:prompts/a.prompt.md',
+      encodeMarkdown({ ...newPrompt('Safe label'), tags: [unsafeTag] }),
     );
     const tree = new PromptTree(new LibraryService(port), () => false, vi.fn());
     const scope: TreeNode = { kind: 'scope', scope: 'user' };
@@ -115,11 +115,11 @@ describe('VS Code file watcher integration', () => {
       report,
     );
     const emitter = watchers[0]!;
-    emitter.change.fire(new Uri('/library/prompts/a.yaml'));
-    emitter.change.fire(new Uri('/library/prompts/a.yaml'));
+    emitter.change.fire(new Uri('/library/prompts/a.prompt.md'));
+    emitter.change.fire(new Uri('/library/prompts/a.prompt.md'));
     await vi.runAllTimersAsync();
     expect(refresh).toHaveBeenCalledTimes(1);
-    expect(refresh).toHaveBeenCalledWith('user', ['prompts/a.yaml']);
+    expect(refresh).toHaveBeenCalledWith('user', ['prompts/a.prompt.md']);
     emitter.create.fire(new Uri('/library/prompts/new'));
     emitter.delete.fire(new Uri('/library/prompts/old'));
     await vi.runAllTimersAsync();
@@ -129,10 +129,10 @@ describe('VS Code file watcher integration', () => {
     await vi.runAllTimersAsync();
     expect(refresh).toHaveBeenCalledTimes(2);
     refresh.mockRejectedValueOnce(new Error('Failure'));
-    emitter.change.fire(new Uri('/library/prompts/b.yaml'));
+    emitter.change.fire(new Uri('/library/prompts/b.prompt.md'));
     await vi.runAllTimersAsync();
     expect(report).toHaveBeenCalled();
-    emitter.change.fire(new Uri('/library/prompts/c.yaml'));
+    emitter.change.fire(new Uri('/library/prompts/c.prompt.md'));
     watcher.dispose();
     await vi.runAllTimersAsync();
     expect(refresh).toHaveBeenCalledTimes(3);

@@ -16,9 +16,8 @@
       "maxItems": 128,
       "type": "array",
       "items": { "type": "string", "minLength": 1 }
-    },
-    "content": { "type": "string" }
+    }
   },
-  "required": ["version", "name", "category", "content"],
+  "required": ["version", "name", "category"],
   "additionalProperties": false
 }
