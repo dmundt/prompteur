@@ -41,6 +41,34 @@
         }
       ]
     },
+    "configuration": {
+      "title": "Prompteur",
+      "properties": {
+        "prompteur.defaultScope": {
+          "type": "string",
+          "enum": [
+            "ask",
+            "user",
+            "workspace"
+          ],
+          "default": "ask",
+          "scope": "window",
+          "description": "Default destination for prompts and starters when no library is targeted."
+        },
+        "prompteur.preferredCategory": {
+          "type": "string",
+          "default": "",
+          "scope": "window",
+          "description": "Preselect this approved category when choosing a category for a new prompt."
+        },
+        "prompteur.showTags": {
+          "type": "boolean",
+          "default": true,
+          "scope": "window",
+          "description": "Show tags beside prompt names in the Prompteur view."
+        }
+      }
+    },
     "commands": [
       {
         "command": "prompteur.addStarters",
@@ -113,6 +141,12 @@
         "title": "Reload Libraries",
         "category": "Prompteur",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "prompteur.openSettings",
+        "title": "Prompteur Settings",
+        "category": "Prompteur",
+        "icon": "$(gear)"
       }
     ],
     "menus": {
@@ -131,6 +165,11 @@
           "command": "prompteur.search",
           "when": "view =~ /^prompteur\\./",
           "group": "navigation@3"
+        },
+        {
+          "command": "prompteur.openSettings",
+          "when": "view == prompteur.prompts",
+          "group": "navigation@4"
         }
       ],
       "view/item/context": [
