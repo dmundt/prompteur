@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.0
 
 - Refine the Activity Bar tent icon with thinner, square-ended 45-degree geometry.
 - Link tooltip tags/categories to exact filters and Markdown files.

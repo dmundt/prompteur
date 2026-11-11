@@ -25,7 +25,7 @@ Run the smallest relevant check, then escalate if needed.
 
 - Keep changes surgical; leave unrelated defects untouched.
 - Markdown: dense English only. No filler, fluff, or narrative prose. Use concise facts, lists, tables, and direct instructions. Keep prompt text functional and brief. Preserve third-party/legal notices verbatim.
-- Before 1.0.0, treat releases as unpublished development builds. Format/metadata changes need no legacy conversion or compatibility unless requested; remove obsolete formats/fields directly.
+- Before 1.0.0, treat releases as public betas. Document breaking format/metadata changes and assess migration and compatibility for existing users.
 - Keep UI boring, simple, functional, and native. Every visible element must serve a requirement or usability need.
 - Marketplace README introduction: 5–15 factual, scannable lines. No hype, unverifiable claims, or filler.
 - Keep README current; log only user-facing changes in CHANGELOG. Do not log internal refactors, tests, or tooling.

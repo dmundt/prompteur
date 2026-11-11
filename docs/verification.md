@@ -34,4 +34,6 @@ npm run package
 - Earlier host exposed non-file profile storage; local-path fallback and regression test fixed it.
 
 - Activity Bar SVG: XML/manifest test. Marketplace icon: PNG.
-- CI builds local-installable VSIX; it does not publish.
+- CI builds local-installable VSIX on pushes and pull requests.
+- Publishing a GitHub release runs the full CI matrix, then publishes its VSIX to VS Code Marketplace using Trusted Publishing. Release tags must match the package version, with an optional `v` prefix. GitHub prereleases publish as Marketplace prereleases.
+- Marketplace Trusted Publishing policy must target `.github/workflows/publish.yml` without a GitHub environment. The publish job requires `id-token: write`.
