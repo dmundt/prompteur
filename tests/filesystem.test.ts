@@ -8,7 +8,7 @@ import { newPrompt } from '../src/core/documents';
 
 const roots: string[] = [];
 async function setup() {
-  const root = await fs.mkdtemp(join(tmpdir(), 'prompteur-'));
+  const root = await fs.realpath(await fs.mkdtemp(join(tmpdir(), 'prompteur-')));
   roots.push(root);
   return { root, files: new LocalFiles((scope) => join(root, scope)) };
 }
