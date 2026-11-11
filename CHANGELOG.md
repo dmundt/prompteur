@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Refine the Activity Bar tent icon with thinner, square-ended 45-degree geometry.
 - Link tooltip tags/categories to exact filters and Markdown files.
 - Adopt `.prompt.md` with YAML frontmatter; ignore YAML prompts; remove category migration.
 - Add built-in and profile-approved categories.
