@@ -1,7 +1,7 @@
 # Storage Contract
 
 - Prompts: Markdown with YAML frontmatter. Persist approved categories in profile state.
-- Store `defaultScope`, `preferredCategory`, and `showTags` in native VS Code configuration; no library-settings file.
+- Store `defaultScope`, `preferredCategory`, `showTags`, `groupByCategory`, and `syncUserPrompts` in native VS Code configuration; no library-settings file.
 - No database, ordering sidecar, usage store, or generated disk index.
 
 ## Layout and Model
@@ -9,6 +9,8 @@
 - Workspace root: `.vscode/prompts/` in first local workspace.
 - User root: `prompts/` in current profile's extension storage.
 - Discover nested `.prompt.md` files under each root's `prompts/` subtree.
+- With `syncUserPrompts` enabled, sync the User library snapshot and approved categories through `globalState.setKeysForSync`; VS Code Settings Sync moves them between instances. Local Markdown files remain canonical; no `User/prompts` mirroring or direct network calls. Workspace prompts never sync through this feature.
+- Reconcile incoming snapshots on activation and **Reload Libraries**. Unique offline additions merge; local content wins same-path conflicts. Tombstones propagate deletions.
 
 - Frontmatter keys: `version`, `name`, `description`, `category`, `tags`. Markdown body is `PromptData.content`.
 - Required: version 1, nonempty name, approved category. Description/tags default empty.

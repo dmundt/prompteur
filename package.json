@@ -77,6 +77,18 @@
           "default": "filtered",
           "scope": "window",
           "description": "Choose whether category counts show filtered matches, all valid prompts, or stay hidden."
+        },
+        "prompteur.groupByCategory": {
+          "type": "boolean",
+          "default": true,
+          "scope": "window",
+          "description": "Group prompts by category; turn off for a flat list."
+        },
+        "prompteur.syncUserPrompts": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "description": "Sync User prompts across VS Code instances using Settings Sync."
         }
       }
     },
@@ -244,7 +256,7 @@
     "test": "vitest run",
     "test:host": "npm run build && esbuild tests/host/smoke.ts --bundle --platform=node --external:vscode --outfile=dist/host-smoke.cjs && node scripts/run-host-tests.mjs",
     "coverage": "vitest run --coverage",
-    "lint": "eslint .",
+    "lint": "eslint . --max-warnings=0",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "package": "vsce package --allow-missing-repository --no-rewrite-relative-links --no-dependencies",

@@ -15,6 +15,8 @@
 - `prompteur.preferredCategory`: preselects an approved category; user confirmation remains required.
 - `prompteur.showTags`: toggles row tag labels; defaults `true`. Search and tooltip links remain unchanged.
 - `prompteur.categoryCountMode`: `filtered` (default), `total`, or `hidden`. Search still determines which categories appear; counts use filtered matches or all valid prompts in each visible category.
+- `prompteur.groupByCategory`: `true` (default) groups rows; `false` shows a flat prompt list.
+- `prompteur.syncUserPrompts`: `true` (default) opts the User library snapshot into VS Code Settings Sync. Incoming changes reconcile on activation or **Reload Libraries**; Workspace prompts are excluded.
 
 - `SearchIndex` reuses normalized unchanged text; filters full text/tags/categories; sorts alphabetically.
 - Filters use AND. Quote values with spaces: `tag:"security review"`, `category:"review"`.

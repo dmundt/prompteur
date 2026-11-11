@@ -4,7 +4,7 @@
 - Category/tag organization and full-text search.
 - Copy or preview generated text with selection, clipboard, filename, and workspace variables.
 - User library in profile storage; Workspace library in `.vscode/prompts`.
-- No account, cloud, AI provider, or telemetry. Workspace writes, generation, and preview require Trust.
+- No Prompteur account, direct network service, AI provider, or telemetry. User prompts sync through VS Code Settings Sync by default. Workspace writes, generation, and preview require Trust.
 
 ## Install and Run
 
@@ -43,6 +43,8 @@ code --install-extension prompteur-0.4.4.vsix
   - **Preferred Category**: preselect approved category; user confirmation remains required.
   - **Show Tags**: show/hide row labels; default On. Search and tooltips remain unchanged.
   - **Category Count Mode**: Filtered (default), Total, or Hidden. Search still controls which categories appear.
+  - **Group by Category**: On by default; turn off for a flat prompt list.
+  - **Sync User Prompts**: On by default; uses VS Code Settings Sync between instances. Incoming changes apply on activation or **Reload Libraries**. Workspace prompts do not sync.
 
 - Built-in virtual categories: Explain, Plan, Implement, Review, Test, Debug, Document.
 - Add profile-wide categories only after confirmation. Remove unused categories with **Remove Prompt Category**; reassign prompts first.

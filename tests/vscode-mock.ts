@@ -201,8 +201,12 @@ export class FakeEditor {
 }
 export class FakeMemento {
   values = new Map<string, unknown>();
+  syncedKeys: readonly string[] = [];
   get<T>(key: string, fallback?: T): T {
     return (this.values.get(key) ?? fallback) as T;
+  }
+  setKeysForSync(keys: readonly string[]) {
+    this.syncedKeys = keys;
   }
   async update(key: string, value: unknown) {
     this.values.set(key, value);
