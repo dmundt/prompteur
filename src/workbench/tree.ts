@@ -64,13 +64,9 @@ export class PromptTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dis
     if (node.kind === 'category') {
       const name = node.category.charAt(0).toUpperCase() + node.category.slice(1);
       const countMode = this.categoryCountMode();
-      const count =
-        countMode === 'filtered'
-          ? node.filteredCount
-          : countMode === 'total'
-            ? node.totalCount
-            : undefined;
-      const label = count === undefined ? name : `${name} (${count})`;
+      const count = countMode === 'total' ? node.totalCount : node.filteredCount;
+      const visibleCount = countMode === 'hidden' ? undefined : count;
+      const label = visibleCount === undefined ? name : `${name} (${visibleCount})`;
       const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.Collapsed);
       item.id = `${node.scope}:category:${node.category.toLowerCase()}`;
       item.contextValue = 'category';

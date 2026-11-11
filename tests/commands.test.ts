@@ -80,7 +80,7 @@ async function destination(source = 'code') {
 
 beforeEach(async () => {
   reset();
-  root = await fs.mkdtemp(join(tmpdir(), 'prompteur-commands-'));
+  root = await fs.realpath(await fs.mkdtemp(join(tmpdir(), 'prompteur-commands-')));
   await fs.mkdir(join(root, 'project'), { recursive: true });
   workspace.workspaceFolders = [{ uri: Uri.file(join(root, 'project')), name: 'project' }];
   context = {

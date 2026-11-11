@@ -1,11 +1,11 @@
 import { spawn } from 'node:child_process';
 import process from 'node:process';
-import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { downloadAndUnzipVSCode } from '@vscode/test-electron';
 
-const root = await mkdtemp(join(tmpdir(), 'prompteur-host-'));
+const root = await realpath(await mkdtemp(join(tmpdir(), 'prompteur-host-')));
 const workspace = join(root, 'sample-project');
 await mkdir(join(workspace, '.vscode', 'prompts', 'prompts'), { recursive: true });
 await writeFile(

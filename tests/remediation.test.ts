@@ -17,7 +17,7 @@ vi.mock('../src/core/limits', async (original) => ({
 
 const roots: string[] = [];
 async function fixture() {
-  const root = await fs.mkdtemp(join(tmpdir(), 'prompteur-safety-'));
+  const root = await fs.realpath(await fs.mkdtemp(join(tmpdir(), 'prompteur-safety-')));
   roots.push(root);
   return root;
 }
