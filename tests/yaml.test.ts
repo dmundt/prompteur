@@ -85,7 +85,7 @@ describe('canonical YAML documents', () => {
       }),
     );
   });
-  it('requires version one and a canonical category without an ID', () => {
+  it('requires version one and an approved category without an ID', () => {
     expect(decodeYaml('version: 1\nname: Audit\ncategory: REVIEW\ncontent: safe')).toMatchObject({
       version: 1,
       name: 'Audit',
@@ -93,7 +93,7 @@ describe('canonical YAML documents', () => {
     });
     expect(() =>
       decodeYaml('version: 1\nname: Audit\ncategory: engineering\ncontent: safe'),
-    ).toThrow('Request approval');
+    ).toThrow('approved profile categories');
     expect(() => decodeYaml('name: Audit\ncontent: safe')).toThrow('version');
     expect(() => decodeYaml('version: 2\nname: Audit\ncontent: safe')).toThrow('version');
   });

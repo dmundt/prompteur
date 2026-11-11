@@ -10,6 +10,13 @@ export type TreeNode =
   | { kind: 'batch'; scope: Scope; label: string; children: TreeNode[] };
 
 const basename = (path: string): string => path.slice(path.lastIndexOf('/') + 1);
+const escapeLinkLabel = (value: string): string =>
+  value
+    .replace(/[\r\n]+/g, ' ')
+    .replace(/\\/g, '\\\\')
+    .replace(/([`*_{}\[\]<>|])/g, '\\$1');
+const commandUri = (command: string, args: unknown[]): string =>
+  `command:${command}?${encodeURIComponent(JSON.stringify(args))}`;
 
 export class PromptTree implements vscode.TreeDataProvider<TreeNode>, vscode.Disposable {
   private readonly changes = new vscode.EventEmitter<TreeNode | undefined>();
@@ -67,14 +74,39 @@ export class PromptTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dis
     item.contextValue = 'prompt';
     const tags = entry.data.tags.map((tag) => `#${tag}`).join(' ');
     item.description = tags;
-    item.tooltip = [
-      entry.data.description,
-      `Category: ${entry.data.category}`,
-      tags ? `Tags: ${tags}` : '',
-      entry.path,
-    ]
-      .filter(Boolean)
-      .join('\n');
+    const tooltip = new vscode.MarkdownString();
+    if (entry.data.description) {
+      tooltip.appendText(entry.data.description);
+      tooltip.appendMarkdown('\n\n');
+    }
+    tooltip.appendText('Category: ');
+    tooltip.appendMarkdown(
+      `[${escapeLinkLabel(entry.data.category)}](${commandUri('prompteur.filterFromTooltip', [
+        'category',
+        entry.data.category,
+      ])})`,
+    );
+    if (entry.data.tags.length) {
+      tooltip.appendMarkdown('\n\nTags: ');
+      tooltip.appendMarkdown(
+        entry.data.tags
+          .map(
+            (tag) =>
+              `[${escapeLinkLabel(`#${tag}`)}](${commandUri('prompteur.filterFromTooltip', [
+                'tag',
+                tag,
+              ])})`,
+          )
+          .join(' '),
+      );
+    }
+    tooltip.appendMarkdown(
+      `\n\n[${escapeLinkLabel(entry.path)}](${commandUri('prompteur.openPromptPath', [entry.scope, entry.path])})`,
+    );
+    tooltip.isTrusted = {
+      enabledCommands: ['prompteur.filterFromTooltip', 'prompteur.openPromptPath'],
+    };
+    item.tooltip = tooltip;
     item.command = { command: 'prompteur.edit', title: 'Edit', arguments: [node] };
     return item;
   }
@@ -97,16 +129,16 @@ export class PromptTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dis
       const nodes: TreeNode[] =
         node.kind === 'scope'
           ? [
-              ...Array.from(
-                new Map(
-                  entries
-                    .map((entry) => entry.data.category.trim() || 'misc')
-                    .map((category) => [category.toLowerCase(), category] as const),
-                ).values(),
-              )
-                .sort((left, right) => left.localeCompare(right))
-                .map((category): TreeNode => ({ kind: 'category', scope: node.scope, category })),
-            ]
+            ...Array.from(
+              new Map(
+                entries
+                  .map((entry) => entry.data.category.trim() || 'misc')
+                  .map((category) => [category.toLowerCase(), category] as const),
+              ).values(),
+            )
+              .sort((left, right) => left.localeCompare(right))
+              .map((category): TreeNode => ({ kind: 'category', scope: node.scope, category })),
+          ]
           : entries.map((entry): TreeNode => ({ kind: 'entry', scope: node.scope, entry }));
       if (node.kind === 'scope')
         nodes.push(

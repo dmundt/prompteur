@@ -5,18 +5,20 @@
     "version": { "type": "number", "const": 1 },
     "name": { "type": "string", "minLength": 1 },
     "description": { "default": "", "type": "string" },
+    "category": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "description": "Built-in categories: explain, plan, implement, review, test, debug, document. User-approved profile categories are also valid."
+    },
     "tags": {
       "default": [],
       "maxItems": 128,
       "type": "array",
       "items": { "type": "string", "minLength": 1 }
     },
-    "content": { "type": "string" },
-    "category": {
-      "type": "string",
-      "enum": ["explain", "plan", "implement", "review", "test", "debug", "document"]
-    }
+    "content": { "type": "string" }
   },
-  "required": ["version", "name", "content", "category"],
+  "required": ["version", "name", "category", "content"],
   "additionalProperties": false
 }

@@ -3,7 +3,7 @@ import type * as vscode from 'vscode';
 import { LibraryService } from '../src/application/library';
 import { PromptTree, type TreeNode } from '../src/workbench/tree';
 import { watchLibrary } from '../src/workbench/watch';
-import { Uri, watchers } from './vscode-mock';
+import { MarkdownString, Uri, watchers } from './vscode-mock';
 import { encodeYaml, newPrompt } from '../src/core/documents';
 import { memoryFiles } from './helpers';
 
@@ -42,6 +42,15 @@ describe('native tree interactions', () => {
     expect(tree.getTreeItem(prompts[0]!).iconPath).toBeUndefined();
     expect(prompts[0]!.kind === 'entry' && prompts[0]!.entry.data.category).toBe('review');
     expect(tree.getTreeItem(prompts[0]!).description).toBe('#security');
+    const tooltip = tree.getTreeItem(prompts[0]!).tooltip as MarkdownString;
+    expect(tooltip.value).toContain('[review](command:prompteur.filterFromTooltip?');
+    expect(tooltip.value).toContain('[#security](command:prompteur.filterFromTooltip?');
+    expect(tooltip.value).toContain(
+      '[prompts/review/a.yaml](command:prompteur.openPromptPath?',
+    );
+    expect(tooltip.isTrusted).toEqual({
+      enabledCommands: ['prompteur.filterFromTooltip', 'prompteur.openPromptPath'],
+    });
     expect(await tree.getChildren(prompts[0])).toEqual([]);
     tree.query = 'Review';
     expect(await tree.getChildren(roots[0])).toHaveLength(2);
@@ -67,6 +76,26 @@ describe('native tree interactions', () => {
     expect(children).toHaveLength(200);
     vi.mocked(port.list).mockRejectedValueOnce(new Error('Disk unavailable'));
     expect(await tree.getChildren({ kind: 'scope', scope: 'workspace' })).toEqual([]);
+    tree.dispose();
+  });
+  it('escapes tag labels in trusted prompt tooltip links', async () => {
+    const { port, files } = memoryFiles();
+    const unsafeTag = 'security](command:evil.run)';
+    files.set(
+      'user:prompts/a.yaml',
+      encodeYaml({ ...newPrompt('Safe label'), tags: [unsafeTag] }),
+    );
+    const tree = new PromptTree(new LibraryService(port), () => false, vi.fn());
+    const scope: TreeNode = { kind: 'scope', scope: 'user' };
+    const category = (await tree.getChildren(scope))[0]!;
+    const prompt = (await tree.getChildren(category))[0]!;
+    const tooltip = tree.getTreeItem(prompt).tooltip as MarkdownString;
+
+    expect(tooltip.value).toContain('\\]');
+    expect(tooltip.isTrusted).toEqual({
+      enabledCommands: ['prompteur.filterFromTooltip', 'prompteur.openPromptPath'],
+    });
+    expect(tooltip.value).not.toContain('command:evil.run?');
     tree.dispose();
   });
 });

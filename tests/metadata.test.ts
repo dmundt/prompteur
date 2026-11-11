@@ -17,7 +17,7 @@ const prompt = {
 };
 
 describe('minimal document metadata', () => {
-  it('accepts only canonical categories and rejects removed metadata fields', () => {
+  it('enforces built-in categories unless a profile category has been approved', () => {
     expect(promptCategories).toEqual([
       'explain',
       'plan',
@@ -28,10 +28,20 @@ describe('minimal document metadata', () => {
       'document',
     ]);
     expect(promptSchema.parse({ ...prompt, category: 'review' }).category).toBe('review');
-    expect(promptSchema.safeParse({ ...prompt, category: 'engineering' }).success).toBe(false);
+    expect(promptSchema.parse({ ...prompt, category: 'engineering' }).category).toBe('engineering');
+    expect(() => promptSchema.parse({ ...prompt, category: 'a'.repeat(65) })).toThrow();
     expect(decodeYaml('version: 1\nname: Review\ncategory: REVIEW\ncontent: safe').category).toBe(
       'review',
     );
+    expect(() =>
+      decodeYaml('version: 1\nname: Review\ncategory: engineering\ncontent: safe'),
+    ).toThrow('approved profile categories');
+    expect(
+      decodeYaml('version: 1\nname: Review\ncategory: engineering\ncontent: safe', [
+        ...promptCategories,
+        'engineering',
+      ]).category,
+    ).toBe('engineering');
     for (const field of [
       'id',
       'builtin',

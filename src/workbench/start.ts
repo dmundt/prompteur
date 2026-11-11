@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { basename } from 'node:path';
 import { LocalFiles } from '../platform/local-files';
 import { LibraryService, messageOf } from '../application/library';
+import { appendExactFilter } from '../application/search';
 import {
   decodeLegacyYaml,
   newPrompt,
@@ -33,9 +34,19 @@ class Workbench implements vscode.Disposable {
   private readonly editor: NativeEditor;
   private readonly tree: PromptTree;
   private target: vscode.TextEditor | undefined;
+  private searchBox: vscode.InputBox | undefined;
   private copiedPrompt: { data: PromptData; source: string } | undefined;
+  private readonly approvedCategories = new Set<string>();
 
   constructor(private readonly context: vscode.ExtensionContext) {
+    const savedCategories = context.globalState.get<unknown>('approvedPromptCategories', []);
+    if (Array.isArray(savedCategories))
+      for (const value of savedCategories) {
+        if (typeof value !== 'string') continue;
+        const category = value.trim().toLowerCase();
+        if (category && !promptCategories.includes(category as PromptCategory))
+          this.approvedCategories.add(category);
+      }
     const userStorage =
       context.globalStorageUri.scheme === 'file'
         ? context.globalStorageUri
@@ -58,8 +69,9 @@ class Workbench implements vscode.Disposable {
         },
       ),
       (error) => this.report(error),
+      () => this.allowedCategories(),
     );
-    this.editor = new NativeEditor(this.service, this.roots);
+    this.editor = new NativeEditor(this.service, this.roots, () => this.allowedCategories());
     this.tree = new PromptTree(
       this.service,
       () => this.roots.has('workspace'),
@@ -95,6 +107,7 @@ class Workbench implements vscode.Disposable {
       search: () => this.search(),
       clearSearch: async () => {
         this.tree.query = '';
+        if (this.searchBox) this.searchBox.value = '';
         this.tree.refresh();
       },
       refresh: async () => {
@@ -112,10 +125,64 @@ class Workbench implements vscode.Disposable {
           }
         }),
       );
+    this.disposables.push(
+      vscode.commands.registerCommand(
+        'prompteur.filterFromTooltip',
+        async (kind: unknown, value: unknown) => {
+          try {
+            await this.filterFromTooltip(kind, value);
+          } catch (error) {
+            this.report(error);
+            throw error;
+          }
+        },
+      ),
+      vscode.commands.registerCommand(
+        'prompteur.openPromptPath',
+        async (scope: unknown, path: unknown) => {
+          try {
+            await this.openPromptPath(scope, path);
+          } catch (error) {
+            this.report(error);
+            throw error;
+          }
+        },
+      ),
+    );
   }
 
   private report(error: unknown): void {
     void vscode.window.showErrorMessage(`Prompteur: ${messageOf(error)}`);
+  }
+
+  private allowedCategories(): string[] {
+    return [
+      ...promptCategories,
+      ...[...this.approvedCategories].sort((left, right) => left.localeCompare(right)),
+    ];
+  }
+
+  private categoryValue(value: string): string | undefined {
+    const normalized = value.trim().toLowerCase();
+    return this.allowedCategories().find((category) => category === normalized);
+  }
+
+  private async filterFromTooltip(kind: unknown, value: unknown): Promise<void> {
+    if ((kind !== 'tag' && kind !== 'category') || typeof value !== 'string' || !value.trim())
+      throw new Error('Invalid prompt filter link');
+    this.tree.query = appendExactFilter(this.tree.query, kind, value);
+    if (this.searchBox) this.searchBox.value = this.tree.query;
+    this.tree.refresh();
+  }
+
+  private async openPromptPath(scope: unknown, path: unknown): Promise<void> {
+    if ((scope !== 'user' && scope !== 'workspace') || typeof path !== 'string')
+      throw new Error('Invalid prompt path link');
+    const entry = (await this.service.get(scope)).entries.find(
+      (candidate) => candidate.path === path,
+    );
+    if (!entry) throw new Error('Prompt changed or became invalid. Reload or repair its YAML.');
+    await vscode.window.showTextDocument(this.uri(entry));
   }
 
   private uri(entry: Pick<Entry, 'scope' | 'path'>): vscode.Uri {
@@ -150,16 +217,58 @@ class Workbench implements vscode.Disposable {
     )?.value;
   }
 
-  private async pickCategory(title = 'Choose category'): Promise<PromptCategory | undefined> {
-    return (
-      await vscode.window.showQuickPick(
-        promptCategories.map((category) => ({
-          label: category.charAt(0).toUpperCase() + category.slice(1),
-          value: category,
-        })),
-        { title },
-      )
-    )?.value;
+  private async pickCategory(title = 'Choose category'): Promise<string | undefined> {
+    const addCategoryValue = '__add_category__';
+    const choices = this.allowedCategories().map((category) => ({
+      label: category.charAt(0).toUpperCase() + category.slice(1),
+      value: category,
+    }));
+    choices.push({ label: '$(add) Add Category...', value: addCategoryValue });
+    const choice = await vscode.window.showQuickPick(choices, { title });
+    if (!choice) return undefined;
+    return choice.value === addCategoryValue ? this.addCategory() : choice.value;
+  }
+
+  private async addCategory(): Promise<string | undefined> {
+    const value = await vscode.window.showInputBox({
+      title: 'Add prompt category',
+      prompt: 'Category name for this VS Code profile',
+      validateInput: (input) => {
+        const category = input.trim().toLowerCase();
+        if (!category) return 'Category name is required';
+        if (category.length > 64) return 'Category name must be 64 characters or fewer';
+        if (this.categoryValue(category) || category === '__add_category__')
+          return 'Category is already approved';
+        return undefined;
+      },
+    });
+    if (!value?.trim()) return undefined;
+    const category = value.trim().toLowerCase();
+    const answer = await vscode.window.showWarningMessage(
+      `Add "${category}" to this VS Code profile's User and Workspace categories?`,
+      { modal: true },
+      'Add Category',
+    );
+    if (answer !== 'Add Category') return undefined;
+
+    this.approvedCategories.add(category);
+    try {
+      await this.context.globalState.update(
+        'approvedPromptCategories',
+        [...this.approvedCategories].sort((left, right) => left.localeCompare(right)),
+      );
+    } catch (error) {
+      this.approvedCategories.delete(category);
+      throw error;
+    }
+    for (const scope of this.roots.keys()) {
+      try {
+        await this.service.refresh(scope);
+      } catch (error) {
+        this.report(error);
+      }
+    }
+    return category;
   }
 
   private assertTrusted(entry: Entry): void {
@@ -220,11 +329,9 @@ class Workbench implements vscode.Disposable {
     if (scope === 'workspace' && !vscode.workspace.isTrusted)
       throw new Error('Trust this workspace before modifying its library');
     const category =
-      node?.kind === 'category'
-        ? promptCategories.find((allowed) => allowed === node.category.trim().toLowerCase())
-        : await this.pickCategory();
+      node?.kind === 'category' ? this.categoryValue(node.category) : await this.pickCategory();
     if (!category) {
-      if (node?.kind === 'category') throw new Error('Choose one of the seven prompt categories.');
+      if (node?.kind === 'category') throw new Error('Choose an approved prompt category.');
       return;
     }
     const name = await vscode.window.showInputBox({
@@ -251,7 +358,7 @@ class Workbench implements vscode.Disposable {
       source: string;
       data: ReturnType<typeof decodeLegacyYaml>;
       previousCategory: string;
-      category: PromptCategory;
+      category: string;
     }[] = [];
     const candidatePaths = [
       ...new Set([
@@ -270,7 +377,7 @@ class Workbench implements vscode.Disposable {
       }
       const previousCategory = data.category.trim();
       const normalized = previousCategory.toLowerCase();
-      let category = promptCategories.find((value) => value === normalized);
+      let category = this.categoryValue(normalized);
       category ??= legacyCategoryTargets[normalized];
       if (!category) {
         const promptName = data.name.replace(/\s+/g, ' ').slice(0, 60);
@@ -423,9 +530,9 @@ class Workbench implements vscode.Disposable {
       throw new Error('Trust this workspace before modifying its library');
     const category =
       node?.kind === 'category'
-        ? promptCategories.find((allowed) => allowed === node.category.trim().toLowerCase())
+        ? this.categoryValue(node.category)
         : this.copiedPrompt.data.category;
-    if (!category) throw new Error('Choose one of the seven prompt categories.');
+    if (!category) throw new Error('Choose an approved prompt category.');
     const data = {
       ...this.copiedPrompt.data,
       tags: [...this.copiedPrompt.data.tags],
@@ -484,8 +591,9 @@ class Workbench implements vscode.Disposable {
 
   private async search(): Promise<void> {
     const box = vscode.window.createInputBox();
-    box.title = 'Filter prompts (use tag:name for a tag)';
+    box.title = 'Filter prompts (tag:value, category:value)';
     box.value = this.tree.query;
+    this.searchBox = box;
     const changed = box.onDidChangeValue((value) => {
       this.tree.query = value;
       this.tree.refresh();
@@ -494,6 +602,7 @@ class Workbench implements vscode.Disposable {
     box.onDidHide(() => {
       changed.dispose();
       accepted.dispose();
+      if (this.searchBox === box) this.searchBox = undefined;
       box.dispose();
     });
     box.show();

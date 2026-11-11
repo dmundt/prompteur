@@ -2,12 +2,12 @@
 
 Prompteur is a local desktop VS Code extension without a server, webview, cloud SDK, or provider framework.
 
-- `core/documents.ts`: six-field prompt validation with seven canonical categories, YAML parsing/serialization, path checks, and path-based identity.
+- `core/documents.ts`: six-field prompt structure, runtime-approved categories, YAML parsing/serialization, path checks, and path-based identity.
 - `core/render.ts`: bounded one-pass substitution of four fixed variables.
 - `application/library.ts`: lazy per-scope cache, serialized writes/reloads, validation problems, and notifications.
 - `application/search.ts`: reused lowercase search text, exact tags, and alphabetical results.
 - `platform/local-files.ts`: reads/scans, expected-source writes/deletes, locks, atomic replacement, and symlink protection.
-- `workbench`: one category tree, native editor diagnostics/highlighting, debounced watchers, snapshot previews, and commands.
+- `workbench`: one category tree with allowlisted metadata links, native editor diagnostics/highlighting, debounced watchers, snapshot previews, and commands.
 
 The small filesystem port exists for testability, not hypothetical storage providers. Core/application code does not import VS Code. No ordering, metadata store, generic transfer protocol, or library settings remains.
 
@@ -17,8 +17,8 @@ Generation captures the source editor before pickers, uses valid dirty prompt bu
 
 The workbench checks Workspace Trust before using workspace prompts; the filesystem adapter independently checks it before workspace writes/deletes. User prompts remain available. Native document saves are not reformatted by the extension.
 
-Category migration is explicit: legacy prompts remain repairable problems until the user previews and confirms source-aware rewrites. There is no automatic migration during loading.
+Seven built-in categories are supplemented by a profile-wide approved list in VS Code extension state. Legacy prompts remain repairable problems until the user previews and confirms source-aware rewrites; there is no automatic migration during loading.
 
 No file import/export commands, archive format, or generic transfer layer exists. Prompt-record copies use the small window-local buffer. Starters are copied directly, skipping occupied paths. Multi-file starter installation reports partial progress rather than emulating a transaction.
 
-No UI state is persisted. Existing legacy state and non-prompt files are ignored and preserved.
+Only the approved category list is persisted as profile-level UI state. Existing legacy state and non-prompt files are otherwise ignored and preserved.

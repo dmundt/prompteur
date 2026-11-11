@@ -2,7 +2,8 @@
 
 ## Unreleased
 
-- Limit prompts to seven canonical categories; add reviewed, opt-in migration for existing category values.
+- Link prompt tooltip tags/categories to exact filters and relative paths to the YAML source editor.
+- Add seven built-in categories, explicitly approved profile-wide additions, and reviewed migration for existing values.
 - Add window-local prompt-record copy/paste across libraries and categories, separate from generated-text clipboard Copy.
 - Rewrite Marketplace README introduction to summarize prompt workflows, local storage, and trust requirements.
 - Rename Personal library label to User and use matching `person` icon; User library storage remains profile-local.
