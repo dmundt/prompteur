@@ -17,7 +17,7 @@ Press F5 to open an Extension Development Host. Packaging creates a local VSIX; 
 
 ## Daily Workflow
 
-1. Open **Prompteur**, then **New Prompt**. Choose Personal or Workspace.
+1. Open **Prompteur**, then **New Prompt**. Choose User or Workspace.
 2. Edit and save the YAML in VS Code's ordinary text editor.
 3. Browse category groups or use **Filter Prompts**. Search text or combine exact tag filters, such as `tag:security review`.
 4. Open source code and select text if needed, then use **Copy** from the tree or Command Palette.
@@ -51,7 +51,7 @@ Only `selection`, `clipboard`, `filename`, and `workspace` variables are support
 
 ## Libraries
 
-Workspace files live under `.vscode/prompts/prompts/` in the first local workspace folder. Personal files live under `prompts/prompts/` inside this extension's VS Code profile storage directory, typically `<user-data>/User/globalStorage/dmundt.prompteur/prompts/prompts/`.
+Workspace files live under `.vscode/prompts/prompts/` in the first local workspace folder. User library files live under `prompts/prompts/` inside this extension's current VS Code profile storage directory, typically `<user-data>/User/globalStorage/dmundt.prompteur/prompts/prompts/`.
 
 ```text
 .vscode/prompts/
@@ -61,7 +61,7 @@ Workspace files live under `.vscode/prompts/prompts/` in the first local workspa
       incident.yaml
 ```
 
-Nested YAML files are discovered recursively but browsed by category. Both `.yaml` and `.yml` are recognized. Remote/virtual libraries are not supported. Workspace writes, generation, and preview require Workspace Trust; personal prompts remain usable in an untrusted workspace.
+Nested YAML files are discovered recursively but browsed by category. Both `.yaml` and `.yml` are recognized. Remote/virtual libraries are not supported. Workspace writes, generation, and preview require Workspace Trust; User prompts remain usable in an untrusted workspace.
 
 No library settings or usage state is read or written. Existing `settings.yaml`, old rules, Favorites/MRU data, and other user files are left untouched. If an earlier settings file selected a non-default directory, manually move the prompt files under `prompts/`; no automatic migration runs.
 

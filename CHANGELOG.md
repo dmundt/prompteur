@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Rename Personal library label to User and use matching `person` icon; User library storage remains profile-local.
+
 ## 0.4.4
 
 - Condense repeated blank lines in copied and previewed output; isolate unreadable prompts, index category searches, update vulnerable development tooling, and test trust behavior across supported hosts.

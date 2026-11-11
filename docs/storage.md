@@ -4,7 +4,7 @@ YAML files are the only persisted product content. No database, settings, orderi
 
 ## Layout and Model
 
-The workspace root is `.vscode/prompts/` in the first local workspace folder. The personal root is `prompts/` inside extension profile storage. Each root has a fixed `prompts/` subtree containing recursively discovered `.yaml`/`.yml` files.
+The workspace root is `.vscode/prompts/` in the first local workspace folder. The User library root is `prompts/` inside the current VS Code profile's extension storage. Each root has a fixed `prompts/` subtree containing recursively discovered `.yaml`/`.yml` files.
 
 Prompt keys are exactly `version`, `name`, `description`, `category`, `tags`, and `content`. Version 1, nonempty name, and string content are required. Optional defaults are empty description/tags and category `misc`; sparse manually authored files are valid. Categories and tags are ordinary strings. Identity is scope plus relative path; equal display names are allowed.
 

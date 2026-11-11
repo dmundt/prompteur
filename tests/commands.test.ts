@@ -273,7 +273,7 @@ describe('release commands', () => {
     expect(target.document.getText()).toBe('original');
     expect(second.getText()).toContain('NEW) original');
   });
-  it('enforces trust before workspace copy/preview or writes, while personal prompts remain usable', async () => {
+  it('enforces trust before workspace copy/preview or writes, while User prompts remain usable', async () => {
     const node = await addPrompt('workspace', '{{clipboard}}', 'workspace');
     const personal = await addPrompt('personal', 'safe');
     workspace.isTrusted = false;
@@ -341,6 +341,20 @@ describe('release commands', () => {
     await run('edit', problem);
     expect(window.activeTextEditor!.document.uri.fsPath).toBe(path);
   });
+  it('uses User and Workspace labels in the scope picker', async () => {
+    const showQuickPick = vi.spyOn(window, 'showQuickPick');
+    responses.quick.push('User');
+    responses.input.push('User prompt');
+    await run('newPrompt');
+    expect(showQuickPick).toHaveBeenCalledWith(
+      [
+        { label: 'User', value: 'user' },
+        { label: 'Workspace', value: 'workspace' },
+      ],
+      { title: 'Choose library' },
+    );
+    expect((await entries()).some((item) => item.entry.data.name === 'User prompt')).toBe(true);
+  });
   it('handles palette selection and cancellations without mutations', async () => {
     responses.quick.push(null);
     await run('newPrompt');
@@ -358,8 +372,10 @@ describe('release commands', () => {
     context.subscriptions = [];
     await activate(context as unknown as vscode.ExtensionContext);
     expect(await tree().getChildren()).toHaveLength(1);
-    responses.input.push('Personal');
+    responses.input.push('User scoped prompt');
     await run('newPrompt');
-    expect((await entries()).some((item) => item.entry.data.name === 'Personal')).toBe(true);
+    expect((await entries()).some((item) => item.entry.data.name === 'User scoped prompt')).toBe(
+      true,
+    );
   });
 });
