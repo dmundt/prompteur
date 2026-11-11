@@ -74,13 +74,13 @@ describe('minimal document metadata', () => {
     const promptEntry: Entry = {
       key: 'p',
       scope: 'user',
-      path: 'prompts/code-review.prompt.md',
+      path: 'prompts/review-code.prompt.md',
       source: '',
       data: prompt,
     };
     const index = new SearchIndex();
     index.update([promptEntry]);
-    for (const term of ['code-review', 'review', 'quality', 'Inspect'])
+    for (const term of ['review-code', 'review', 'quality', 'Inspect'])
       expect(index.query(term).map((entry) => entry.key)).toContain('p');
     expect(index.query('tag:quality').map((entry) => entry.key)).toContain('p');
     expect(index.query('rust')).toEqual([]);
