@@ -1,6 +1,6 @@
 # Documentation Index
 
-Router for the documentation in this folder. Start here, then open the document that matches your task.
+Documentation index. Select the matching topic below.
 
 ## Find the right document
 
@@ -24,10 +24,10 @@ Router for the documentation in this folder. Start here, then open the document 
 - [ADR 003: Explicit Local Safety Boundaries](./adr/003-local-safety-boundaries.md)
 - [ADR 004: Markdown Frontmatter Prompts Are Authoritative](./adr/004-markdown-frontmatter-prompts.md)
 
-## Update rules
+## Index Rules
 
-- Add every new document to the table above, or to the ADR list for new ADRs, in the same change that creates it.
-- Remove or relink entries in the same change that renames, moves, or deletes a document.
-- Keep each row's task description short and tied to the document's topic. Do not duplicate document content here.
-- Keep titles in this index identical to each document's first `#` heading.
-- Update this index whenever [AGENTS.md](./AGENTS.md) or [adr/AGENTS.md](./adr/AGENTS.md) changes its scope.
+- Add new docs/ADRs to this index in the same change.
+- Update links after rename, move, deletion, or supersession.
+- Keep descriptions short; do not duplicate document text.
+- Match titles to document headings.
+- Update agent-rule links when their scope changes.

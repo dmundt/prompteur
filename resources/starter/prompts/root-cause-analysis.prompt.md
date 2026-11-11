@@ -1,24 +1,20 @@
 ---
 version: 1
 name: Root Cause Analysis
-description: >
-  Turn debugging evidence into falsifiable hypotheses and trace a failure to its origin rather than stopping at its visible symptom.
+description: Trace a failure to its origin using falsifiable, evidence-based hypotheses.
 category: debug
-tags: [ debugging, incident, production, root-cause-analysis, observability ]
+tags: [debugging, incident, production, root-cause-analysis, observability]
 ---
+
 Investigate the failure described here:
 
 {{selection}}
 
-State the observed symptom and the expected behavior separately.
-Build a short evidence-based timeline. Rank plausible causes and give
-one inexpensive check that could disprove each hypothesis.
-Reproduce the failure and use available debugger, test, or runtime evidence
-before calling a cause confirmed. Do not substitute plausible reasoning
-for observation or expose secrets in diagnostics.
-Trace the strongest explanation back to the earliest incorrect input,
-decision, or state transition. Propose a focused correction and a regression
-test. Identify remaining uncertainty and how to verify the fix in practice.
-If selection lacks a failure description, request expected behavior,
-observed behavior, and reproduction evidence. Investigate and recommend;
-do not apply fixes without approval.
+- Separate observed symptom from expected behavior.
+- Build evidence timeline. Rank causes; give one cheap disproof check per hypothesis.
+- Reproduce with debugger/tests/runtime evidence before confirming cause.
+- Do not replace observation with inference or expose secrets.
+- Trace cause to earliest incorrect input/decision/state.
+- Recommend focused fix and regression test. State uncertainty and practical verification.
+- If details are missing, request expected/observed behavior and reproduction evidence.
+- Investigate only; do not fix without approval.

@@ -1,26 +1,20 @@
 ---
 version: 1
 name: Accessibility Audit
-description: >
-  Assess keyboard access, accessible names, focus, assistive-technology behavior, and visual accessibility.
+description: Audit keyboard, assistive-technology, and visual accessibility.
 category: review
-tags: [ audit, accessibility, keyboard, usability ]
+tags: [audit, accessibility, keyboard, usability]
 ---
-Audit accessibility of this interface in {{workspace}}:
+
+Audit accessibility in {{workspace}}:
 
 {{selection}}
 
-Check keyboard-only completion of core workflows, accessible names and
-roles, focus order and restoration, status/error announcements, and
-screen-reader semantics. Review contrast, high-contrast themes, zoom,
-and reliance on color or icons alone where applicable.
-Check whether validation errors are understandable, discoverable, and
-recoverable without losing input or trapping keyboard focus.
-Account for native platform controls rather than assuming web-specific
-fixes apply everywhere. Separate source-backed findings from checks
-requiring an actual UI, theme, keyboard, or screen reader.
-For each finding, give severity, confidence, verified file/line references, affected
-users, smallest fix, and concrete verification steps. List untested areas.
-Do not claim standards compliance from static inspection or modify code.
-If selection is empty, inspect accessible UI implementation and state
-which workflows were covered; request UI context if none is available.
+- Check keyboard-only workflows, names/roles, focus order/restoration, status/errors, and screen-reader semantics.
+- Check contrast, high-contrast themes, zoom, and color/icon dependence.
+- Check validation clarity, discovery, recovery, input retention, and focus trapping.
+- Account for native controls; avoid unsupported web-only fixes.
+- Separate source-backed findings from checks requiring live UI, theme, keyboard, or screen reader.
+- For each finding: severity, confidence, verified file/line, affected users, smallest fix, verification.
+- List untested areas. Do not claim standards compliance from static review or modify code.
+- If selection is empty, inspect accessible UI and list covered workflows; request UI context if unavailable.

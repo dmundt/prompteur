@@ -2,15 +2,16 @@
 
 ## Inputs and Boundaries
 
-Implementation started in an empty workspace. The requirements supplied by the user were the product specification. The reference project's repository, website, source files, tests, build scripts, assets, internal structure, strings, and documentation were not fetched or inspected during implementation.
-
-Only the requested user-visible capabilities, data-model concepts, and workflows informed the design. This record describes the development process; it is not a legal opinion or a guarantee about every possible similarity.
+- Started in an empty workspace using user requirements as the specification.
+- Did not fetch or inspect the reference project's repository, website, source, tests, scripts, assets, structure, strings, or docs.
+- Used only requested capabilities, data concepts, and workflows. This is not legal advice or a guarantee against similarity.
 
 ## Independently Authored Artifacts
 
-The source organization, Markdown/frontmatter schema, cache and mutation model, transfer representation, command names/text, native view adapters, tests, documentation, CI pipeline, and Activity Bar SVG were authored for this project. The earlier JSON-based scaffold was discarded when the local-file prompt format became the controlling specification. No reference-project implementation was used as a migration source.
-
-Public VS Code API documentation and standard package type declarations were consulted for platform compatibility. The implementation uses independently maintained general-purpose packages: `yaml`, Zod, TypeScript, Vitest, esbuild, ESLint, Prettier, and VS Code tooling. Their upstream licenses apply to their own code; using them is not a claim that those dependencies were authored here.
+- Authored for this project: source layout, Markdown/frontmatter schema, cache/mutation model, transfer format, commands, adapters, tests, docs, CI, Activity Bar SVG.
+- Discarded the earlier JSON scaffold when local files became authoritative. No reference implementation was used for migration.
+- Consulted public VS Code API docs and standard declarations.
+- Uses upstream packages: `yaml`, Zod, TypeScript, Vitest, esbuild, ESLint, Prettier, VS Code tooling. Their licenses apply; this project does not claim their authorship.
 
 ## Review Checklist
 
@@ -21,4 +22,4 @@ Public VS Code API documentation and standard package type declarations were con
 - Run tests, schema generation, lint, formatting, build, and packaging locally.
 - Preserve this record if future observable-behavior research is added; record the exact permitted inputs before incorporating changes.
 
-Marketplace publication, branding clearance, and external legal review remain separate decisions.
+- Marketplace publication, branding clearance, and external legal review remain separate.

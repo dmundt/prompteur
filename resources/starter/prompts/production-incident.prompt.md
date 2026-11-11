@@ -1,22 +1,21 @@
 ---
 version: 1
 name: Production Incident
-description: >
-  Organize incident evidence, assess user impact, and choose reversible stabilization steps before investigating longer-term corrections.
+description: Assess incident impact and reversible stabilization options from evidence.
 category: debug
-tags: [ incident, production, observability, monitoring, troubleshooting, runbook ]
+tags: [incident, production, observability, monitoring, troubleshooting, runbook]
 ---
+
 Help triage this production incident in {{workspace}}:
 
 {{selection}}
 
-Summarize known impact, timeline, recent changes, and evidence gaps.
-Separate observations from hypotheses. Propose reversible stabilization
-options with prerequisites, risks, rollback conditions, and success signals.
-Preserve evidence and avoid destructive changes or speculative commands.
-Outline parallel investigation tracks and a concise stakeholder update.
-Treat recovery and root-cause confirmation as separate milestones.
-State escalation and stop conditions for each mitigation, including
-worsening impact, uncertain reversibility, and missing authorization.
-If selection is empty, request incident symptoms and known impact.
-Advise only; do not execute production changes.
+- Summarize impact, timeline, recent changes, and evidence gaps.
+- Separate observations from hypotheses.
+- Propose reversible mitigations with prerequisites, risks, rollback conditions, and success signals.
+- Preserve evidence. Avoid destructive changes/speculative commands.
+- Outline parallel investigations and stakeholder update.
+- Separate recovery from root-cause confirmation.
+- State escalation/stop conditions: worsening impact, uncertain rollback, missing authorization.
+- If selection is empty, request symptoms and impact.
+- Advise only; do not change production.

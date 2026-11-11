@@ -1,14 +1,24 @@
 # Internal API and Commands
 
-No public integration/provider API is exported. Asynchronous command failures display a native error and reject; cancellations return without mutation.
+- No public integration/provider API.
+- Async command failures show native errors and reject; cancellations do not mutate.
 
-`LibraryService` accepts a filesystem port with `list`, `read`, expected-source `write`, and expected-source `remove`. It provides lazy `get`, incremental/full `refresh`, case-insensitive `search`, validated `save`/`writeSource`, `delete`, and subscriptions. Snapshots contain entries and validation problems; consumers treat them as immutable.
+- `LibraryService` filesystem port: `list`, `read`, expected-source `write`/`remove`.
+- Operations: lazy `get`, incremental/full `refresh`, case-insensitive `search`, validated `save`/`writeSource`, `delete`, subscriptions.
+- Snapshots contain entries/problems; treat as immutable.
 
-The built-in prompt categories are `explain`, `plan`, `implement`, `review`, `test`, `debug`, and `document`; users may explicitly approve additional profile-wide values. Runtime library validation checks this approved list. The generated JSON Schema describes frontmatter metadata; profile-dependent category approval remains a runtime check. Prompt bodies are raw Markdown after the closing frontmatter delimiter.
+- Built-ins: `explain`, `plan`, `implement`, `review`, `test`, `debug`, `document`.
+- Users may approve additional profile-wide categories; runtime validates them.
+- JSON Schema covers frontmatter. Prompt body is raw Markdown after closing `---`.
 
-`prompteur.defaultScope` applies to untargeted New Prompt, Add Starter Library, and Paste Prompt actions; explicit tree scope/category targets take precedence. `ask` preserves scope picking. Selecting Workspace without a local workspace library reports an error instead of redirecting to User. `prompteur.preferredCategory` preselects only a currently approved category and still requires the user to accept a category. `prompteur.showTags` controls prompt-row tag descriptions, defaults to `true`, and does not affect search or tooltip tag links.
+- `prompteur.defaultScope`: applies to untargeted New Prompt, Add Starter Library, and Paste Prompt. Explicit tree targets win. `ask` keeps the picker. Missing Workspace library errors; never redirect to User.
+- `prompteur.preferredCategory`: preselects an approved category; user confirmation remains required.
+- `prompteur.showTags`: toggles row tag labels; defaults `true`. Search and tooltip links remain unchanged.
 
-`SearchIndex` reuses normalized text for unchanged entries and applies full-text, exact-tag, and exact-category filters with alphabetical results. Filters use AND semantics; quoted filter values support spaces (for example `tag:"security review"` and `category:"review"`). Prompt tooltips link tags/categories to the live filter and the relative Markdown path to the source editor. Link commands are internal and re-resolve paths against the current library. `generate(content, context)` returns `{ text, missing }` for the four supported variables and condenses repeated blank lines in generated output.
+- `SearchIndex` reuses normalized unchanged text; filters full text/tags/categories; sorts alphabetically.
+- Filters use AND. Quote values with spaces: `tag:"security review"`, `category:"review"`.
+- Tooltip links filter tags/categories or open the current Markdown path; commands re-resolve paths.
+- `generate(content, context)` returns `{ text, missing }` for four variables and condenses repeated blank lines.
 
 | Command                  | Action                                     |
 | ------------------------ | ------------------------------------------ |
@@ -26,4 +36,7 @@ The built-in prompt categories are `explain`, `plan`, `implement`, `review`, `te
 | `prompteur.refresh`      | Reload available libraries                 |
 | `prompteur.openSettings` | Open Prompteur settings                    |
 
-Tree arguments are private. Palette invocations select scope/prompt when needed. Prompt-record copy/paste is window-local, leaves the source intact, and does not use the OS clipboard. Pasting on a category overrides the copied category; scope and palette paste preserve it. Commands do not invoke AI tools or insert directly into Chat.
+- Tree arguments are private. Palette invocations select scope/prompt as needed.
+- Prompt-record copy/paste is window-local, source-preserving, and separate from OS clipboard.
+- Category paste overrides category; scope/palette paste preserves it.
+- No AI calls or direct Chat insertion.

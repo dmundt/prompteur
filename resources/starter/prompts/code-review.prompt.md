@@ -1,22 +1,20 @@
 ---
 version: 1
 name: Code Review
-description: >
-  Inspect a source change for defects, maintainability risks, performance issues, and security weaknesses. Prioritize findings supported by evidence.
+description: Find evidence-backed defects and risks in a source change.
 category: review
-tags: [ review, quality, maintainability, security ]
+tags: [review, quality, maintainability, security]
 ---
+
 Inspect this change from {{filename}} in {{workspace}}:
 
 {{selection}}
 
-Focus on actionable defects introduced by this change; distinguish any
-pre-existing issues. Exclude style preferences and unrelated cleanup.
-Identify observable defects before preferences. Check boundary conditions,
-error handling, security assumptions, and the cost of the main execution paths.
-For each finding, give severity, confidence, verified file/line evidence,
-user impact, a focused correction, and a regression check.
-Separate confirmed defects from questions that require more context.
-Finish with the most valuable missing tests. Do not invent file locations.
-If selection is empty, inspect an available change diff; otherwise request
-the change to review. Review only; do not modify code.
+- Find actionable defects introduced by this change; separate pre-existing issues.
+- Exclude style preferences and unrelated cleanup.
+- Check boundaries, errors, security assumptions, and hot-path costs.
+- For each finding: severity, confidence, verified file/line, impact, fix, regression test.
+- Separate confirmed defects from questions. Do not invent locations.
+- Finish with highest-value missing tests.
+- If selection is empty, inspect an available diff or request the change.
+- Review only; do not modify code.

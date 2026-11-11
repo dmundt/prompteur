@@ -2,8 +2,14 @@
 
 Status: Accepted.
 
-Generated previews use native plaintext snapshot documents, not rendered Markdown or a live virtual-document provider. Markdown can be authored as prompt content without being rendered by the extension.
+Generated previews use native plaintext snapshots, not rendered Markdown or live virtual documents. Prompt bodies may contain Markdown; the extension does not render them.
 
-Use one VS Code tree, command palette inputs, native Markdown editors with YAML frontmatter diagnostics, decorations, and untitled plaintext previews. Do not introduce webviews or a frontend framework.
+Use one VS Code tree, Command Palette inputs, native Markdown editors/frontmatter diagnostics, decorations, and untitled plaintext previews. No webviews or frontend framework.
 
-Consequences: keyboard behavior, accessibility, theme adaptation, and editor tooling follow host conventions. Users edit prompt bodies as Markdown without a second UI model. Preview output is independent of later edits; reopen to regenerate. Large category groups use lazy batches. User storage resolves to the desktop profile's local path because current hosts may supply non-file user-data URIs.
+Consequences:
+
+- Host provides keyboard, accessibility, theme, and editor behavior.
+- Users edit Markdown directly; no second UI model.
+- Previews are independent snapshots; reopen to regenerate.
+- Large categories use lazy batches.
+- Resolve User storage through local profile path when VS Code returns a non-file URI.

@@ -2,6 +2,11 @@
 
 Status: Accepted. Supersedes ADR 001.
 
-Store each prompt as a `.prompt.md` file. YAML frontmatter contains only `version`, `name`, `description`, `category`, and `tags`; the Markdown body after the closing `---` delimiter is prompt content. Discover only this format. Do not retain a YAML prompt reader, dual-format support, or format converter; existing YAML prompt files remain untouched and ignored because the extension is unpublished.
+Store prompts as `.prompt.md`. Frontmatter fields: `version`, `name`, `description`, `category`, `tags`. Markdown after closing `---` is prompt content. Discover only `.prompt.md`. No YAML reader, dual-format support, or converter; leave unpublished YAML prompts untouched and ignored.
 
-Consequences: prompt prose, Markdown structure, and code fences remain natural text while metadata stays validated and source-control friendly. File paths remain prompt identity. Category migration is not part of the format; profile-approved categories remain runtime validated. YAML continues as the frontmatter serialization format only.
+Consequences:
+
+- Prompt text, Markdown structure, and code fences stay raw; validate metadata and retain Git diffs.
+- File path remains identity.
+- Category migration is separate; runtime validates profile-approved categories.
+- YAML is frontmatter syntax only.

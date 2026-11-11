@@ -1,17 +1,18 @@
 # AGENTS.md
 
-Prompteur is a VS Code extension for local, Git-friendly Markdown prompts with YAML frontmatter. Read [docs/index.md](./docs/index.md) first to find the document for your task.
+Prompteur: VS Code extension for local, Git-friendly Markdown prompts with YAML frontmatter.
+Start at [docs/index.md](./docs/index.md).
 
 ## Project layout
 
-- `src/`: extension source. Core/application code must stay independent of VS Code (see [ADR 003](./docs/adr/003-local-safety-boundaries.md)).
+- `src/`: extension source; core/application code stays VS Code-independent ([ADR 003](./docs/adr/003-local-safety-boundaries.md)).
 - `tests/`: unit tests (`vitest`) and host smoke tests.
 - `scripts/`: build helpers (`schemas.ts`, `run-host-tests.mjs`).
 - `docs/`: documentation. Start at [docs/index.md](./docs/index.md); agent rules for docs are in [docs/AGENTS.md](./docs/AGENTS.md) and for ADRs in [docs/adr/AGENTS.md](./docs/adr/AGENTS.md).
 
 ## Validation commands
 
-Run the smallest command that covers your change, then escalate as needed.
+Run the smallest relevant check, then escalate if needed.
 
 - Type check: `npm run check`
 - Unit tests: `npm test`
@@ -22,17 +23,18 @@ Run the smallest command that covers your change, then escalate as needed.
 
 ## Change rules
 
-- Make surgical changes. Do not fix unrelated pre-existing issues.
-- Treat all versions before 1.0.0 as unpublished development releases, not production baselines. Format or metadata-field changes before 1.0.0 require no legacy conversion or compatibility support; remove obsolete formats and fields directly unless explicitly requested.
-- Keep the extension deliberately boring, simple, and functional. Every feature, label, popup, text, icon, and action must serve an explicit requirement or clear usability need; otherwise, omit it. Prefer native VS Code patterns and the smallest sufficient solution.
-- Keep the Marketplace README introduction to 5–15 factual, scannable lines explaining who the extension is for, what it does, and its concrete differentiators. Avoid hype, buzzwords, filler, and claims that cannot be verified.
-- After each change, check README and CHANGELOG against the resulting product. Keep README accurate to current user-facing behavior; record only user-facing changes in CHANGELOG. Do not log internal-only refactors, tests, or tooling changes.
-- Update directly related documentation in the same change, and keep [docs/index.md](./docs/index.md) in sync with any document you add, rename, or remove.
-- Do not add network access, telemetry, databases, or shell execution. The extension must not invoke AI tools or insert into Chat.
-- Workspace mutations, prompt generation, and preview require Workspace Trust.
-- Do not contradict an accepted ADR. Supersede it with a new ADR instead.
-- Do not add dependencies unless the task requires them. Update `package.json` and the lockfile together.
-- Only comment code that needs clarification.
+- Keep changes surgical; leave unrelated defects untouched.
+- Markdown: dense English only. No filler, fluff, or narrative prose. Use concise facts, lists, tables, and direct instructions. Keep prompt text functional and brief. Preserve third-party/legal notices verbatim.
+- Before 1.0.0, treat releases as unpublished development builds. Format/metadata changes need no legacy conversion or compatibility unless requested; remove obsolete formats/fields directly.
+- Keep UI boring, simple, functional, and native. Every visible element must serve a requirement or usability need.
+- Marketplace README introduction: 5–15 factual, scannable lines. No hype, unverifiable claims, or filler.
+- Keep README current; log only user-facing changes in CHANGELOG. Do not log internal refactors, tests, or tooling.
+- Update related docs with code. Keep [docs/index.md](./docs/index.md) synchronized.
+- No network, telemetry, databases, shell execution, AI calls, or direct Chat insertion.
+- Require Workspace Trust for workspace mutations, generation, and preview.
+- Never contradict an accepted ADR; supersede it with a new ADR.
+- Add dependencies only when required; update manifest and lockfile together.
+- Comment only when clarification is needed.
 
 ## Commit Messages
 

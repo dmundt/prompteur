@@ -1,6 +1,6 @@
 # Architecture
 
-Prompteur is a local desktop VS Code extension without a server, webview, cloud SDK, or provider framework.
+- Local desktop VS Code extension. No server, webview, cloud SDK, or provider framework.
 
 - `core/documents.ts`: Markdown prompt parsing with metadata-only YAML frontmatter, runtime-approved categories, bounded body text, path checks, and path-based identity.
 - `core/render.ts`: bounded one-pass substitution of four fixed variables.
@@ -9,16 +9,28 @@ Prompteur is a local desktop VS Code extension without a server, webview, cloud 
 - `platform/local-files.ts`: reads/scans, expected-source writes/deletes, locks, atomic replacement, and symlink protection.
 - `workbench`: one category tree with allowlisted metadata links, native editor diagnostics/highlighting, debounced watchers, snapshot previews, and commands.
 
-The small filesystem port exists for testability, not hypothetical storage providers. Core/application code does not import VS Code. No ordering, metadata store, generic transfer protocol, or library settings remains.
+- Filesystem port exists for tests, not speculative providers. Core/application do not import VS Code.
+- No library-path configuration, ordering/usage sidecar, or generic transfer protocol.
 
-Tree expansion deduplicates lazy loads. Initial reads use at most sixteen workers; cache entries hold source, decoded prompt, or validation error. Watcher changes debounce for 80 ms, publishing one snapshot per burst. File creation/deletion triggers a rescan; content edits reload the changed files. Input budgets remain enforced. Categories with more than 200 children are batched.
+- Tree expansion deduplicates lazy loads. Initial reads use at most 16 workers.
+- Cache stores source plus decoded prompt or validation error.
+- Watchers debounce 80 ms; publish one snapshot per burst. Create/delete rescans; edits reload changed files.
+- Enforce input budgets. Batch categories above 200 children.
 
-Generation captures the source editor before pickers, uses valid dirty prompt buffers when present, and expands once. **Copy** writes generated text to the OS clipboard without editing source documents. **Copy Prompt/Paste Prompt** use an in-memory buffer owned by the Workbench instance to create new prompt files across scopes/categories; they do not move sources or persist transfer state. Preview opens an untitled plaintext document with generated content. A weak set excludes previews as selection sources; there is no retained preview context, provider, or update timer.
+- Generation captures source editor before pickers, uses valid dirty prompts, and expands once.
+- **Copy** writes generated text to OS clipboard without editing source.
+- **Copy Prompt/Paste Prompt** use a Workbench-local buffer to create copies; never move sources or persist transfer state.
+- Preview opens an untitled plaintext snapshot. A weak set excludes previews as selection sources; no retained context/provider/timer.
 
-The workbench checks Workspace Trust before using workspace prompts; the filesystem adapter independently checks it before workspace writes/deletes. User prompts remain available. Native document saves are not reformatted by the extension.
+- Workbench checks Workspace Trust before Workspace prompt use. Filesystem adapter checks Workspace writes/deletes.
+- User prompts remain available. Native saves are not reformatted.
 
-Seven built-in categories are supplemented by a profile-wide approved list in VS Code extension state. Only `.prompt.md` files are discovered. Existing YAML prompt files remain untouched and are ignored; there is no compatibility reader or format migration.
+- Seven built-in categories plus profile-approved categories in VS Code state.
+- Discover only `.prompt.md`. Ignore existing YAML prompts; no compatibility reader/converter.
 
-No file import/export commands, archive format, or generic transfer layer exists. Prompt-record copies use the small window-local buffer. Starters are copied directly, skipping occupied paths. Multi-file starter installation reports partial progress rather than emulating a transaction.
+- No import/export, archive format, or transfer layer.
+- Prompt copies use a window-local buffer. Starters skip occupied paths.
+- Starter installation reports partial progress; no multi-file transaction.
 
-Only the approved category list is persisted as profile-level UI state. Existing legacy state and non-prompt files are otherwise ignored and preserved.
+- Persist approved categories in extension state; store view preferences in native VS Code settings.
+- Ignore/preserve other legacy state and non-prompt files.

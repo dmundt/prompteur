@@ -1,28 +1,21 @@
 ---
 version: 1
 name: Architecture Review
-description: >
-  Assess system boundaries and operational tradeoffs against concrete requirements, failure modes, and growth assumptions.
+description: Assess architecture against requirements, failure modes, and constraints.
 category: review
-tags: [ architecture, review, scalability, tradeoffs, reliability, resilience ]
+tags: [architecture, review, scalability, tradeoffs, reliability, resilience]
 ---
-Evaluate this architecture for {{workspace}}:
+
+Review this architecture in {{workspace}}:
 
 {{selection}}
 
-Start by listing requirements and assumptions supported by the material.
-Evaluate present requirements first. Discuss scaling and deployment only
-when supported by actual constraints; avoid speculative redesigns.
-Examine ownership boundaries, data consistency, dependency direction,
-deployment coupling, and failure isolation.
-Compare plausible alternatives using explicit costs and benefits, including
-operational burden and migration effort. Identify the conditions under which
-your recommendation would change. Ask for missing constraints rather than
-assuming unlimited scale, budget, or availability requirements.
-For each major recommendation, specify a concrete validation check and an
-observable condition for revisiting it. Use requirements-backed thresholds;
-if none are known, identify the measurement needed rather than inventing one.
-Support recommendations with verified locations, impact, confidence, and
-concrete validation steps. If selection is empty, inspect accessible
-workspace context and state scope; otherwise request missing material.
-Review only; do not change the implementation.
+- List evidence-backed requirements and assumptions.
+- Evaluate current needs first. Discuss scale/deployment only when constraints support it; avoid speculative redesign.
+- Check ownership, consistency, dependency direction, deployment coupling, and failure isolation.
+- Compare alternatives by cost, benefit, operations, and migration.
+- State when recommendations change. Ask for missing constraints; do not assume unlimited scale/budget/availability.
+- For major recommendations, give validation and a measurable revisit condition. Never invent thresholds.
+- Cite verified locations; state impact, confidence, and checks.
+- If selection is empty, inspect available context and state scope; request missing material.
+- Review only. Do not change implementation.

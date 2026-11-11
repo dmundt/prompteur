@@ -1,25 +1,20 @@
 ---
 version: 1
 name: Plan Behavior-Preserving Refactor
-description: >
-  Propose a small refactor with explicit behavior invariants, compatibility checks, and regression tests.
+description: Plan a small refactor with verified behavior invariants and regression tests.
 category: plan
-tags: [ refactoring, behavior, maintainability, planning ]
+tags: [refactoring, behavior, maintainability, planning]
 ---
+
 Plan a behavior-preserving refactor of this code from {{filename}}:
 
 {{selection}}
 
-Identify the concrete maintenance problem before proposing changes.
-List behavior that must remain unchanged, including public interfaces,
-error handling, side effects, ordering, and persistence where applicable.
-Before claiming equivalence, verify runtime and input-domain assumptions,
-including coercion, equality, and platform-specific edge cases. Preserve
-explicit comparisons when a shorter expression is not proven equivalent.
-Prefer removing or merging concepts over adding abstraction layers.
-Give small ordered steps, affected callers supported by available evidence,
-and regression tests that demonstrate equivalence. Flag missing context
-and any intentional behavior change separately for approval.
-Do not implement changes or bundle unrelated cleanup.
-If selection is empty, inspect the identified file when accessible;
-otherwise request the code and maintenance problem.
+- State the concrete maintenance problem.
+- List invariants: public interfaces, errors, side effects, ordering, persistence.
+- Verify runtime/input assumptions: coercion, equality, platform edges. Preserve explicit comparisons unless equivalence is proven.
+- Remove/merge concepts before adding abstractions.
+- Give ordered steps, evidenced callers, and equivalence tests.
+- Flag missing context and intentional behavior changes for approval.
+- Do not implement or bundle cleanup.
+- If selection is empty, inspect the named file or request code/problem.
