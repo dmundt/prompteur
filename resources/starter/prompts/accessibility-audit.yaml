@@ -2,7 +2,7 @@ version: 1
 name: Accessibility Audit
 description: >
   Assess keyboard access, accessible names, focus, assistive-technology behavior, and visual accessibility.
-category: audit
+category: review
 tags: [audit, accessibility, keyboard, usability]
 content: |
   Audit accessibility of this interface in {{workspace}}:

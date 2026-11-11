@@ -155,6 +155,12 @@ describe('release commands', () => {
         when: expect.stringContaining('viewItem =~ /^(scope|category)$/'),
       }),
     );
+    expect(manifest.contributes.menus['view/item/context']).toContainEqual(
+      expect.objectContaining({
+        command: 'prompteur.migrateCategories',
+        when: 'view == prompteur.prompts && viewItem == scope',
+      }),
+    );
     expect(
       manifest.contributes.commands
         .filter((item) =>
@@ -177,7 +183,7 @@ describe('release commands', () => {
   });
   it('creates readable names, suffixes collisions, inherits categories, duplicates and edits', async () => {
     responses.input.push('Code review', 'Code review');
-    const category: TreeNode = { kind: 'category', scope: 'user', category: 'engineering' };
+    const category: TreeNode = { kind: 'category', scope: 'user', category: 'review' };
     await run('newPrompt', category);
     await run('newPrompt', category);
     expect((await entries()).map((node) => node.entry.path).sort()).toEqual([
@@ -185,12 +191,25 @@ describe('release commands', () => {
       'prompts/code-review.prompt.yaml',
     ]);
     const node = (await entries())[0]!;
-    expect(node.entry.data.category).toBe('engineering');
+    expect(node.entry.data.category).toBe('review');
     await run('duplicate', node);
     expect(await entries()).toHaveLength(3);
     await run('edit', node);
     expect(window.activeTextEditor!.document.uri.fsPath).toBe(join(userRoot(), node.entry.path));
     expect(messages.errors).toEqual([]);
+  });
+  it('requires a category choice when creating from a scope', async () => {
+    const showInputBox = vi.spyOn(window, 'showInputBox');
+    responses.quick.push(null);
+    responses.input.push('Cancelled');
+    await run('newPrompt', scopeNode('user'));
+    expect(showInputBox).not.toHaveBeenCalled();
+    expect(await entries('user')).toEqual([]);
+
+    responses.quick.push('Review');
+    responses.input.push('Categorized');
+    await run('newPrompt', scopeNode('user'));
+    expect((await entries('user'))[0]?.entry.data.category).toBe('review');
   });
   it('ignores old settings and preserves existing starter files, even invalid ones', async () => {
     const bundled = resolve('resources/starter/prompts/code-review.yaml');
@@ -239,7 +258,7 @@ describe('release commands', () => {
     const data = {
       ...newPrompt('Shared Prompt'),
       description: 'Reusable description',
-      category: 'review',
+      category: 'review' as const,
       tags: ['security', 'quality'],
       content: 'Review this source',
     };
@@ -257,7 +276,7 @@ describe('release commands', () => {
     await run('copyPrompt', sourceNode);
     expect(env.clipboard.value).toBe('Leave OS clipboard unchanged');
 
-    const target: TreeNode = { kind: 'category', scope: 'workspace', category: 'planning' };
+    const target: TreeNode = { kind: 'category', scope: 'workspace', category: 'plan' };
     workspace.isTrusted = false;
     await expect(run('pastePrompt', target)).rejects.toThrow('Trust');
     await expect(
@@ -269,7 +288,7 @@ describe('release commands', () => {
     const workspaceCopyPath = join(workspaceRoot(), 'prompts', 'shared-prompt-2.prompt.yaml');
     expect(decodeYaml(await fs.readFile(workspaceCopyPath, 'utf8'))).toEqual({
       ...data,
-      category: 'planning',
+      category: 'plan',
     });
     expect(await fs.readFile(workspaceCopyPath, 'utf8')).toContain('# Preserve this note');
     expect(await fs.readFile(sourcePath, 'utf8')).toBe(source);
@@ -285,7 +304,11 @@ describe('release commands', () => {
     await run('pastePrompt', scopeNode('user'));
     expect(messages.info.at(-1)).toContain('Copy a prompt');
 
-    const data = { ...newPrompt('Workspace Source'), category: 'debugging', content: 'Source' };
+    const data = {
+      ...newPrompt('Workspace Source'),
+      category: 'debug' as const,
+      content: 'Source',
+    };
     const path = join(workspaceRoot(), 'prompts', 'workspace-source.yaml');
     await fs.mkdir(join(workspaceRoot(), 'prompts'), { recursive: true });
     await fs.writeFile(path, encodeYaml(data));
@@ -369,11 +392,12 @@ describe('release commands', () => {
     const node = await addPrompt('native', 'safe');
     await run('edit', node);
     const document = window.activeTextEditor!.document;
-    const source = '# preserve ordering\ncontent: "safe"\nname: native\nversion: 1\n';
+    const source =
+      '# preserve ordering\ncontent: "safe"\nname: native\nversion: 1\ncategory: review\n';
     document.change(source);
     await saveDocument(document);
     expect(await fs.readFile(document.uri.fsPath, 'utf8')).toBe(source);
-    document.change('version: 1\nname: Native\ncontent: "{{selection}}"\n');
+    document.change('version: 1\nname: Native\ncontent: "{{selection}}"\ncategory: review\n');
     await run('copy', node);
     expect(window.activeTextEditor!.decorations).toHaveLength(1);
     document.change('version: [');
@@ -431,6 +455,199 @@ describe('release commands', () => {
       { title: 'Choose library' },
     );
     expect((await entries()).some((item) => item.entry.data.name === 'User prompt')).toBe(true);
+  });
+  it('requires one of the seven canonical categories when creating at scope level', async () => {
+    const showQuickPick = vi.spyOn(window, 'showQuickPick');
+    responses.quick.push('Debug');
+    responses.input.push('Triage');
+    await run('newPrompt', scopeNode('user'));
+    expect(showQuickPick).toHaveBeenCalledWith(
+      [
+        { label: 'Explain', value: 'explain' },
+        { label: 'Plan', value: 'plan' },
+        { label: 'Implement', value: 'implement' },
+        { label: 'Review', value: 'review' },
+        { label: 'Test', value: 'test' },
+        { label: 'Debug', value: 'debug' },
+        { label: 'Document', value: 'document' },
+      ],
+      { title: 'Choose category' },
+    );
+    expect((await entries('user'))[0]?.entry.data.category).toBe('debug');
+  });
+  it('creates nothing when category selection is cancelled', async () => {
+    const showInputBox = vi.spyOn(window, 'showInputBox');
+    responses.quick.push(null);
+    await run('newPrompt', scopeNode('user'));
+    expect(showInputBox).not.toHaveBeenCalled();
+    expect(await entries('user')).toEqual([]);
+  });
+  it('rejects creation from a stale noncanonical category node', async () => {
+    const category: TreeNode = { kind: 'category', scope: 'user', category: 'Legacy' };
+    await expect(run('newPrompt', category)).rejects.toThrow('one of the seven');
+    expect(await entries('user')).toEqual([]);
+  });
+  it('exposes category migration on library scope rows', async () => {
+    const manifest = JSON.parse(await fs.readFile('package.json', 'utf8')) as {
+      contributes: {
+        commands: { command: string }[];
+        menus: { 'view/item/context': { command: string; when: string; group: string }[] };
+      };
+    };
+    expect(manifest.contributes.commands.map((command) => command.command)).toContain(
+      'prompteur.migrateCategories',
+    );
+    expect(manifest.contributes.menus['view/item/context']).toContainEqual({
+      command: 'prompteur.migrateCategories',
+      when: 'view == prompteur.prompts && viewItem == scope',
+      group: '4_manage',
+    });
+  });
+  it('reviews legacy category mappings and asks for choices before migrating', async () => {
+    const sourceByName = new Map([
+      ['audit', 'version: 1\nname: Audit Prompt\ncategory: audit\ncontent: Audit\n'],
+      ['case-variant', 'version: 1\nname: Case Variant\ncategory: REVIEW\ncontent: Review\n'],
+      [
+        'engineering',
+        '# Keep this note\nversion: 1\nname: Engineering Prompt\ncategory: engineering\ncontent: Build\n',
+      ],
+      ['missing', 'version: 1\nname: Missing Category\ncontent: Explain\n'],
+      ['misc', 'version: 1\nname: Misc Prompt\ncategory: misc\ncontent: General\n'],
+    ]);
+    await fs.mkdir(join(userRoot(), 'prompts'), { recursive: true });
+    for (const [name, source] of sourceByName)
+      await fs.writeFile(join(userRoot(), 'prompts', `${name}.yaml`), source);
+    await run('refresh');
+
+    responses.quick.push('User', 'Implement', 'Test', 'Explain');
+    responses.warning.push('Migrate');
+    await run('migrateCategories');
+
+    const migrated = await entries('user');
+    const categoryByName = new Map(
+      migrated.map((node) => [node.entry.data.name, node.entry.data.category]),
+    );
+    expect(categoryByName).toEqual(
+      new Map([
+        ['Audit Prompt', 'review'],
+        ['Case Variant', 'review'],
+        ['Engineering Prompt', 'implement'],
+        ['Missing Category', 'explain'],
+        ['Misc Prompt', 'test'],
+      ]),
+    );
+    expect(
+      (await tree().getChildren(scopeNode('user'))).filter((node) => node.kind === 'problem'),
+    ).toEqual([]);
+    expect(await fs.readFile(join(userRoot(), 'prompts', 'engineering.yaml'), 'utf8')).toContain(
+      '# Keep this note',
+    );
+    expect(messages.warnings.at(-1)).toContain('audit -> review');
+    expect(messages.info.at(-1)).toContain('Updated categories in 5 prompts');
+  });
+  it('does not rewrite categories when migration is cancelled and enforces Workspace Trust', async () => {
+    const userSource = 'version: 1\nname: Audit\ncategory: audit\ncontent: Review\n';
+    const userPath = join(userRoot(), 'prompts', 'audit.yaml');
+    await fs.mkdir(join(userRoot(), 'prompts'), { recursive: true });
+    await fs.writeFile(userPath, userSource);
+    await run('refresh');
+    responses.quick.push('User');
+    responses.warning.push(null);
+    await run('migrateCategories');
+    expect(await fs.readFile(userPath, 'utf8')).toBe(userSource);
+
+    const workspaceSource = 'version: 1\nname: Workspace Audit\ncategory: audit\ncontent: Review\n';
+    const workspacePath = join(workspaceRoot(), 'prompts', 'audit.yaml');
+    await fs.mkdir(join(workspaceRoot(), 'prompts'), { recursive: true });
+    await fs.writeFile(workspacePath, workspaceSource);
+    await run('refresh');
+    workspace.isTrusted = false;
+    responses.quick.push('Workspace');
+    await expect(run('migrateCategories')).rejects.toThrow('Trust');
+    expect(await fs.readFile(workspacePath, 'utf8')).toBe(workspaceSource);
+  });
+  it('leaves canonical and malformed prompts unchanged when nothing can be migrated', async () => {
+    const canonical = encodeYaml(newPrompt('Canonical', 'plan'));
+    const canonicalPath = join(userRoot(), 'prompts', 'canonical.yaml');
+    const malformedPath = join(userRoot(), 'prompts', 'malformed.yaml');
+    await fs.mkdir(join(userRoot(), 'prompts'), { recursive: true });
+    await fs.writeFile(canonicalPath, canonical);
+    await fs.writeFile(malformedPath, 'version: [');
+    await run('refresh');
+
+    await run('migrateCategories', scopeNode('user'));
+
+    expect(await fs.readFile(canonicalPath, 'utf8')).toBe(canonical);
+    expect(await fs.readFile(malformedPath, 'utf8')).toBe('version: [');
+    expect(messages.info.at(-1)).toContain('No prompt categories need migration');
+  });
+  it('cancels migration when user rejects per-prompt category choice', async () => {
+    const source = 'version: 1\nname: Specialized\ncategory: engineering\ncontent: Build\n';
+    const path = join(userRoot(), 'prompts', 'specialized.yaml');
+    await fs.mkdir(join(userRoot(), 'prompts'), { recursive: true });
+    await fs.writeFile(path, source);
+    await run('refresh');
+    responses.quick.push(null);
+
+    await run('migrateCategories', scopeNode('user'));
+
+    expect(await fs.readFile(path, 'utf8')).toBe(source);
+    expect(messages.warnings).toEqual([]);
+  });
+  it('truncates long migration mapping and path previews', async () => {
+    const legacy = [
+      ['audit', 'Audit', 'audit'],
+      ['architecture', 'Architecture', 'architecture'],
+      ['debugging', 'Debugging', 'debugging'],
+      ['devops', 'DevOps', 'devops'],
+      ['engineering', 'Engineering', 'engineering'],
+      ['refactor', 'Refactor', 'refactor'],
+      ['security', 'Security', 'security'],
+    ] as const;
+    await fs.mkdir(join(userRoot(), 'prompts'), { recursive: true });
+    for (const [file, name, category] of legacy)
+      await fs.writeFile(
+        join(userRoot(), 'prompts', `${file}.yaml`),
+        `version: 1\nname: ${name}\ncategory: ${category}\ncontent: Review\n`,
+      );
+    await run('refresh');
+    responses.quick.push('Implement');
+    responses.warning.push(null);
+    await run('migrateCategories', scopeNode('user'));
+
+    expect(messages.warnings.at(-1)).toContain('1 more mappings');
+    expect(messages.warnings.at(-1)).toContain('And 2 more prompts');
+    expect(await entries('user')).toHaveLength(0);
+  });
+  it('blocks migration when affected prompt has unsaved editor changes', async () => {
+    const source = 'version: 1\nname: Audit\ncategory: audit\ncontent: Review\n';
+    const path = join(userRoot(), 'prompts', 'audit.yaml');
+    await fs.mkdir(join(userRoot(), 'prompts'), { recursive: true });
+    await fs.writeFile(path, source);
+    await run('refresh');
+    const problem = (await tree().getChildren(scopeNode())).find(
+      (node) => node.kind === 'problem',
+    )!;
+    await run('edit', problem);
+    window.activeTextEditor!.document.change(`${source}# unsaved\n`);
+
+    await expect(run('migrateCategories')).rejects.toThrow('Save or discard');
+    expect(await fs.readFile(path, 'utf8')).toBe(source);
+  });
+  it('rejects source changes made during migration confirmation', async () => {
+    const source = 'version: 1\nname: Audit\ncategory: audit\ncontent: Review\n';
+    const external = 'version: 1\nname: External\ncategory: review\ncontent: New\n';
+    const path = join(userRoot(), 'prompts', 'audit.yaml');
+    await fs.mkdir(join(userRoot(), 'prompts'), { recursive: true });
+    await fs.writeFile(path, source);
+    await run('refresh');
+    vi.spyOn(window, 'showWarningMessage').mockImplementation(async () => {
+      await fs.writeFile(path, external);
+      return 'Migrate';
+    });
+
+    await expect(run('migrateCategories')).rejects.toThrow('stopped after 0 prompts');
+    expect(await fs.readFile(path, 'utf8')).toBe(external);
   });
   it('handles palette selection and cancellations without mutations', async () => {
     responses.quick.push(null);

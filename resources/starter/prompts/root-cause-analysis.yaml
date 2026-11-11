@@ -2,7 +2,7 @@ version: 1
 name: Root Cause Analysis
 description: >
   Turn debugging evidence into falsifiable hypotheses and trace a failure to its origin rather than stopping at its visible symptom.
-category: debugging
+category: debug
 tags: [debugging, incident, production, root-cause-analysis, observability]
 content: |
   Investigate the failure described here:

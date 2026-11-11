@@ -2,7 +2,7 @@ version: 1
 name: Production Incident
 description: >
   Organize incident evidence, assess user impact, and choose reversible stabilization steps before investigating longer-term corrections.
-category: devops
+category: debug
 tags: [incident, production, observability, monitoring, troubleshooting, runbook]
 content: |
   Help triage this production incident in {{workspace}}:

@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { decodeYaml, encodeYaml, newPrompt, promptSchema, type Entry } from '../src/core/documents';
+import {
+  decodeYaml,
+  encodeYaml,
+  newPrompt,
+  promptCategories,
+  promptSchema,
+  type Entry,
+} from '../src/core/documents';
 import { SearchIndex } from '../src/application/search';
 
 const prompt = {
@@ -10,8 +17,21 @@ const prompt = {
 };
 
 describe('minimal document metadata', () => {
-  it('accepts free categories and rejects removed metadata fields', () => {
-    expect(promptSchema.parse({ ...prompt, category: 'engineering' }).category).toBe('engineering');
+  it('accepts only canonical categories and rejects removed metadata fields', () => {
+    expect(promptCategories).toEqual([
+      'explain',
+      'plan',
+      'implement',
+      'review',
+      'test',
+      'debug',
+      'document',
+    ]);
+    expect(promptSchema.parse({ ...prompt, category: 'review' }).category).toBe('review');
+    expect(promptSchema.safeParse({ ...prompt, category: 'engineering' }).success).toBe(false);
+    expect(decodeYaml('version: 1\nname: Review\ncategory: REVIEW\ncontent: safe').category).toBe(
+      'review',
+    );
     for (const field of [
       'id',
       'builtin',

@@ -2,7 +2,7 @@ version: 1
 name: Plan Behavior-Preserving Refactor
 description: >
   Propose a small refactor with explicit behavior invariants, compatibility checks, and regression tests.
-category: refactor
+category: plan
 tags: [refactoring, behavior, maintainability, planning]
 content: |
   Plan a behavior-preserving refactor of this code from {{filename}}:

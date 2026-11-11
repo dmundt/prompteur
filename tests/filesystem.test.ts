@@ -54,7 +54,7 @@ describe('local filesystem adapter', () => {
     await service.save('workspace', 'prompts/a.yaml', newPrompt('A'), undefined);
     await fs.writeFile(
       join(root, 'workspace', 'prompts', 'a.yaml'),
-      'version: 1\nname: Changed outside editor\ncontent: manual\n',
+      'version: 1\nname: Changed outside editor\ncategory: explain\ncontent: manual\n',
     );
     await service.refresh('workspace', 'prompts/a.yaml');
     expect((await service.get('workspace')).entries[0]?.data.name).toBe('Changed outside editor');

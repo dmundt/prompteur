@@ -11,7 +11,7 @@ import {
 describe('canonical YAML documents', () => {
   it('preserves comments and multiline content across edits', () => {
     const source =
-      '# My instructions\nversion: 1\nname: Review # visible name\ntags:\n  - review # owner note\ncontent: |\n  Review this.\n  Keep spacing.\n';
+      '# My instructions\nversion: 1\nname: Review # visible name\ncategory: review\ntags:\n  - review # owner note\ncontent: |\n  Review this.\n  Keep spacing.\n';
     const prompt = decodeYaml(source);
     const encoded = encodeYaml({ ...prompt, name: 'Code review' }, source);
     expect(encoded).toContain('# My instructions');
@@ -23,7 +23,7 @@ describe('canonical YAML documents', () => {
     expect(encodeYaml(decodeYaml(encoded), encoded)).toBe(encoded);
   });
   it('normalizes BOM, line endings and absent optional fields on save only', () => {
-    const source = 'version: 1\nname: Test\ncontent: hello\n';
+    const source = 'version: 1\nname: Test\ncategory: test\ncontent: hello\n';
     const data = decodeYaml(source);
     const encoded = encodeYaml(data, source);
     expect(encoded).not.toContain('\r');
@@ -78,17 +78,22 @@ describe('canonical YAML documents', () => {
       encodeYaml({
         content: '',
         tags: [],
-        category: 'misc',
+        category: 'explain',
         description: '',
         name: 'Name',
         version: 1,
       }),
     );
   });
-  it('requires version one and accepts free-text categories without an ID', () => {
-    expect(
+  it('requires version one and a canonical category without an ID', () => {
+    expect(decodeYaml('version: 1\nname: Audit\ncategory: REVIEW\ncontent: safe')).toMatchObject({
+      version: 1,
+      name: 'Audit',
+      category: 'review',
+    });
+    expect(() =>
       decodeYaml('version: 1\nname: Audit\ncategory: engineering\ncontent: safe'),
-    ).toMatchObject({ version: 1, name: 'Audit', category: 'engineering' });
+    ).toThrow('Request approval');
     expect(() => decodeYaml('name: Audit\ncontent: safe')).toThrow('version');
     expect(() => decodeYaml('version: 2\nname: Audit\ncontent: safe')).toThrow('version');
   });

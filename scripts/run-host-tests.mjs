@@ -10,7 +10,7 @@ const workspace = join(root, 'sample-project');
 await mkdir(join(workspace, '.vscode', 'prompts', 'prompts'), { recursive: true });
 await writeFile(
   join(workspace, '.vscode', 'prompts', 'prompts', 'review.yaml'),
-  'version: 1\nname: Review\ncontent: Review {{selection}} in {{filename}}\n',
+  'version: 1\nname: Review\ncategory: review\ncontent: Review {{selection}} in {{filename}}\n',
 );
 let executable = process.env.VSCODE_EXECUTABLE_PATH;
 if (
@@ -63,5 +63,5 @@ try {
   });
   if (exitCode !== 0) throw new Error(`VS Code host smoke failed with exit code ${exitCode}`);
 } finally {
-  await rm(root, { force: true, recursive: true });
+  await rm(root, { force: true, recursive: true, maxRetries: 10, retryDelay: 100 });
 }
