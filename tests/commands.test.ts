@@ -122,12 +122,46 @@ describe('release commands', () => {
     ])
       expect(handlers.has(`prompteur.${command}`)).toBe(false);
     const manifest = JSON.parse(await fs.readFile('package.json', 'utf8')) as {
-      contributes: { commands: { command: string }[] };
+      contributes: {
+        commands: { command: string; title: string }[];
+        menus: { 'view/item/context': { command: string; when: string; group: string }[] };
+      };
     };
     expect([...handlers.keys()].sort()).toEqual(
       manifest.contributes.commands.map((item) => item.command).sort(),
     );
     expect(manifest.contributes).not.toHaveProperty('keybindings');
+    const promptMenu = manifest.contributes.menus['view/item/context'].filter(
+      (item) =>
+        item.when.includes('viewItem == prompt') ||
+        item.when.includes('viewItem =~ /^(prompt|problem)$/'),
+    );
+    expect(
+      promptMenu.filter((item) => item.group !== 'inline@1').map((item) => item.command),
+    ).toEqual([
+      'prompteur.copy',
+      'prompteur.duplicate',
+      'prompteur.preview',
+      'prompteur.edit',
+      'prompteur.delete',
+    ]);
+    expect(promptMenu).toContainEqual(
+      expect.objectContaining({ command: 'prompteur.copy', group: 'inline@1' }),
+    );
+    expect(
+      manifest.contributes.commands
+        .filter((item) =>
+          ['prompteur.copy', 'prompteur.duplicate', 'prompteur.preview', 'prompteur.edit'].includes(
+            item.command,
+          ),
+        )
+        .map((item) => [item.command, item.title]),
+    ).toEqual([
+      ['prompteur.edit', 'Edit'],
+      ['prompteur.duplicate', 'Duplicate'],
+      ['prompteur.copy', 'Copy'],
+      ['prompteur.preview', 'Preview'],
+    ]);
     const node = await addPrompt('plain', 'Plain');
     await run('copy', node);
     await run('preview', node);
