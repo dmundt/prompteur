@@ -37,6 +37,7 @@ code --install-extension prompteur-1.2.0.vsix
 - VS Code windows do not share selections; copy in the source window, then paste in the target window.
 - **Copy Text** copies the rendered prompt for Chat or another editor.
 - Prompt hover lists context variables used by the saved prompt, without reading their values. Invalid placeholders are reported in the hover.
+- Hover over categories for their purpose, or User and Workspace for library storage, sync, and Trust guidance. Click the scope's folder location to reveal it in the system file manager.
 - The toolbar filter icon indicates an active filter. Select it to edit the query; use **Clear Filter** to remove it.
 
 - Prompt menu: **Copy Text**, separator, **Copy Prompt**, Preview, Edit, Delete.
