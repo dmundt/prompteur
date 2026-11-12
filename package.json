@@ -2,7 +2,7 @@
   "name": "prompteur",
   "displayName": "Prompteur",
   "description": "Git-friendly local Markdown prompts with categories, tags, and clipboard generation.",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "publisher": "dmundt",
   "icon": "resources/icon.png",
   "license": "MIT",
