@@ -111,7 +111,7 @@ Inspect {{filename}} in {{workspace}}.
 - File path is identity; names may repeat. Filenames use readable slugs and numeric collision suffixes.
 
 - Variables: `selection`, `clipboard`, `filename`, `workspace`.
-- Expand once; collapse repeated blank lines. Empty selection is allowed; other empty values warn.
+- Expand once; collapse repeated blank lines. Empty selection is allowed. Missing filename/workspace context does not block copying; one notification lists missing values. Empty clipboard input requires confirmation. Preview lists missing context.
 - Unknown/malformed placeholders block generation. Read clipboard only when requested.
 
 - **Preview** opens an editable plaintext snapshot; it does not update. Reopen to regenerate. Never render images/HTML.
