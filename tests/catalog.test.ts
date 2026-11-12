@@ -4,15 +4,15 @@ import { LibraryService } from '../src/application/library';
 import { SearchIndex } from '../src/application/search';
 import { LocalFiles } from '../src/platform/local-files';
 import { promptCategories, promptFrontmatterSchema } from '../src/core/documents';
-import { variableTokens } from '../src/core/render';
+import { generate, variableTokens } from '../src/core/render';
 
 describe('bundled prompt starters', () => {
-  it('ships sixteen unique, editable prompts using the ordinary schema', async () => {
+  it('ships eighteen unique, editable prompts using the ordinary schema', async () => {
     const snapshot = await new LibraryService(
       new LocalFiles(() => resolve('resources/starter')),
     ).get('user');
     expect(snapshot.problems).toEqual([]);
-    expect(snapshot.entries).toHaveLength(16);
+    expect(snapshot.entries).toHaveLength(18);
     const paths = new Set<string>();
     const names = new Set<string>();
     for (const entry of snapshot.entries) {
@@ -74,9 +74,25 @@ describe('bundled prompt starters', () => {
       'plan-behavior-preserving-refactor',
       'document-feature-usage',
       'implement-scoped-change',
+      'create-issue',
+      'create-task',
     ])
       expect(snapshot.entries.some((entry) => entry.path === `prompts/${name}.prompt.md`)).toBe(
         true,
       );
+  });
+  it('renders selected context for issue and task drafts', async () => {
+    const snapshot = await new LibraryService(
+      new LocalFiles(() => resolve('resources/starter')),
+    ).get('user');
+    for (const name of ['create-issue', 'create-task']) {
+      const entry = snapshot.entries.find((item) => item.path === `prompts/${name}.prompt.md`);
+      expect(entry).toBeDefined();
+      const result = generate(entry!.data.content, { selection: 'Selected request' });
+      expect(result.missing).toEqual([]);
+      expect(result.text).toContain('Selected request');
+      expect(result.text).toContain('Headline:');
+      expect(result.text).toContain('Description:');
+    }
   });
 });
