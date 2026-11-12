@@ -136,6 +136,7 @@ Inspect {{filename}} in {{workspace}}.
 
 - Workspace root: `.vscode/prompts/prompts/` in the first local workspace.
 - User root: `prompts/prompts/` in this extension's profile storage, typically `<user-data>/User/globalStorage/dmundt.prompteur/prompts/prompts/`.
+- Command Palette > **Prompteur: Reveal User Library Folder** reveals the library root in the system file manager; prompt files are in its `prompts/` subfolder. Create a prompt or add starters first if the library folder does not exist yet.
 
 ```text
 .vscode/prompts/
