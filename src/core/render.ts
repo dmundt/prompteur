@@ -1,6 +1,6 @@
 import { assertTextBudget, generatedByteLimit } from './limits';
 
-export const variableKeys = ['selection', 'clipboard', 'filename', 'workspace'] as const;
+export const variableKeys = ['selection', 'clipboard', 'filename', 'workspace', 'text'] as const;
 export type VariableKey = (typeof variableKeys)[number];
 export type Context = Partial<Record<VariableKey, string>>;
 

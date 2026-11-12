@@ -29,6 +29,7 @@ const contextLabels: Record<VariableKey, string> = {
   clipboard: 'Clipboard',
   filename: 'Filename',
   workspace: 'Workspace',
+  text: 'Text',
 };
 
 export class PromptTree implements vscode.TreeDataProvider<TreeNode>, vscode.Disposable {

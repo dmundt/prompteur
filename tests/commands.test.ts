@@ -17,6 +17,7 @@ import {
   CancellationError,
   Disposable,
   env,
+  EventEmitter,
   FakeDocument,
   FakeEditor,
   FakeMemento,
@@ -195,6 +196,7 @@ describe('release commands', () => {
         configuration: { properties: Record<string, unknown> };
         menus: {
           commandPalette: { command: string; when: string }[];
+          'editor/title': { command: string; when: string; group: string }[];
           'view/item/context': { command: string; when: string; group: string }[];
           'view/title': { command: string; when: string; group: string }[];
         };
@@ -287,6 +289,20 @@ describe('release commands', () => {
     expect(manifest.contributes.menus.commandPalette).toEqual([
       { command: 'prompteur.duplicate', when: 'false' },
       { command: 'prompteur.searchActive', when: 'false' },
+      { command: 'prompteur.useText', when: 'false' },
+      { command: 'prompteur.cancelText', when: 'false' },
+    ]);
+    expect(manifest.contributes.menus['editor/title']).toEqual([
+      {
+        command: 'prompteur.useText',
+        when: 'resourceScheme == untitled && resource in prompteur.textInputDocuments',
+        group: 'navigation@1',
+      },
+      {
+        command: 'prompteur.cancelText',
+        when: 'resourceScheme == untitled && resource in prompteur.textInputDocuments',
+        group: 'navigation@2',
+      },
     ]);
     expect(manifest.contributes.menus['view/title']).toEqual(
       expect.arrayContaining([
@@ -996,6 +1012,78 @@ describe('release commands', () => {
     expect(env.clipboard.value).toBe('Audit workspace: ');
     expect(target.document.getText()).toBe('');
     expect(messages.warnings).toEqual([]);
+  });
+  it('uses multiline text while preserving source context and excluding input editors', async () => {
+    const node = await addPrompt('entered', '{{text}}\n{{text}}\n{{selection}} {{filename}}');
+    await destination('Source selection');
+    const copying = run('copy', node);
+    await vi.waitFor(() => expect(window.activeTextEditor?.document.uri.scheme).toBe('untitled'));
+    const input = window.activeTextEditor!.document;
+    expect(env.clipboard.value).toBe('');
+    input.change('Line one\nLine two');
+    await run('useText');
+    await copying;
+    expect(env.clipboard.value).toBe(
+      'Line one\nLine two\nLine one\nLine two\nSource selection main.ts',
+    );
+    expect(contextKeys.get('prompteur.textInputDocuments')).toEqual([]);
+    const selectionOnly = await addPrompt('selection-only', '{{selection}} {{filename}}');
+    await run('copy', selectionOnly);
+    expect(env.clipboard.value).toBe('Source selection main.ts');
+  });
+  it('cancels text entry without output and previews submitted text', async () => {
+    const node = await addPrompt('entered', '{{text}}');
+    env.clipboard.value = 'Unchanged';
+    const copying = run('copy', node);
+    await vi.waitFor(() => expect(window.activeTextEditor?.document.uri.scheme).toBe('untitled'));
+    await run('cancelText');
+    await copying;
+    expect(env.clipboard.value).toBe('Unchanged');
+    expect(messages.errors).toEqual([]);
+    const previous = window.activeTextEditor!.document;
+    const preview = run('preview', node);
+    await vi.waitFor(() => expect(window.activeTextEditor!.document).not.toBe(previous));
+    window.activeTextEditor!.document.change('User text\nfor preview');
+    await run('useText');
+    await preview;
+    expect(window.activeTextEditor!.document.getText()).toBe('User text\nfor preview');
+    expect(env.clipboard.value).toBe('Unchanged');
+  });
+  it('rechecks Workspace Trust after text entry', async () => {
+    const node = await addPrompt('entered', '{{text}}', 'workspace');
+    const copying = run('copy', node);
+    const rejected = expect(copying).rejects.toThrow('Trust');
+    await vi.waitFor(() => expect(window.activeTextEditor?.document.uri.scheme).toBe('untitled'));
+    window.activeTextEditor!.document.change('User text');
+    workspace.isTrusted = false;
+    await run('useText');
+    await rejected;
+    expect(env.clipboard.value).toBe('');
+  });
+  it('collects Copilot text only for a chosen prompt and honors cancellation', async () => {
+    const first = await addPrompt('text-one', '{{text}}');
+    await addPrompt('text-two', '{{text}}');
+    expect(JSON.parse(await runPromptTool({ query: 'text-' })).status).toBe('ambiguous');
+    expect(contextKeys.get('prompteur.textInputDocuments')).toEqual([]);
+    const result = runPromptTool({ scope: 'user', path: first.entry.path });
+    await vi.waitFor(() => expect(window.activeTextEditor?.document.uri.scheme).toBe('untitled'));
+    window.activeTextEditor!.document.change('Explicit Copilot text\nSecond line');
+    await run('useText');
+    expect(JSON.parse(await result).content).toBe('Explicit Copilot text\nSecond line');
+
+    const cancellation = new EventEmitter<void>();
+    const token = { isCancellationRequested: false, onCancellationRequested: cancellation.event };
+    const previous = window.activeTextEditor!.document;
+    const invocation = promptTool().invoke(
+      { input: { scope: 'user', path: first.entry.path }, toolInvocationToken: undefined },
+      token,
+    );
+    const rejected = expect(invocation).rejects.toBeInstanceOf(CancellationError);
+    await vi.waitFor(() => expect(window.activeTextEditor!.document).not.toBe(previous));
+    token.isCancellationRequested = true;
+    cancellation.fire();
+    await rejected;
+    expect(contextKeys.get('prompteur.textInputDocuments')).toEqual([]);
   });
   it.each(['filename', 'workspace', 'filename, workspace'])(
     'copies without blocking when optional context is missing: %s',
