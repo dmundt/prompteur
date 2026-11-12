@@ -27,6 +27,7 @@ npm run package
 
 - Automated: exact names outrank broader content matches; case/whitespace normalization; duplicate names within/across scopes remain ambiguous; candidate scope/path selects only that prompt; stale paths never substitute another prompt.
 - Automated: invalid input modes, candidate limit/truncation, Workspace Trust, cancellation, and prompt-row action explanations.
+- Automated: exact/full-text/fuzzy modes, case-sensitive free text with case-insensitive filters, relevance/name ordering, live settings, unique-best versus require-choice selection, score ties, cross-scope phase precedence, and no context reads for losing candidates. Cached 10k-entry full-text and fuzzy fallback each have a 200 ms budget.
 - Automated tool mocks and host registration checks do not certify real Copilot discovery, confirmation, or model follow-up.
 - Manual, in an extension-enabled Copilot window:
   1. Enable **Find Prompteur Prompt** in Agent mode; reference `#prompteurPrompt`.
@@ -35,6 +36,9 @@ npm run package
   4. Choose one returned scope/path; verify Copilot invokes the tool without query and receives only that prompt's rendered content.
   5. Remove or rename the candidate; refresh libraries; verify its old path reports not found without replacement.
   6. In Restricted Mode, verify explicit Workspace lookup is rejected.
+  7. Change Search: Matching, Case Sensitive, and Ranking; verify current tree filter updates, retains all phase matches, and agrees with Copilot.
+  8. With a name-prefix match plus a lower-ranked body match, verify Best Match returns the former; Require Choice returns metadata for both. Alphabetical ordering must not change Best Match selection.
+  9. Try a misspelled synthetic name with Fuzzy enabled; verify edit-limit boundaries and equal-distance ambiguity. Confirm empty/filter-only browsing remains alphabetical.
 - Use synthetic fixture prompts/context for manual checks. Do not send private prompt or clipboard content merely to validate the integration.
 - Record actual host/Copilot results and any blocked stages separately; never infer interactive success from unit tests.
 

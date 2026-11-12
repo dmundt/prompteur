@@ -13,7 +13,13 @@ import {
   type Snapshot,
 } from '../core/documents';
 import { libraryByteLimit, libraryEntryLimit } from '../core/limits';
-import { SearchIndex } from './search';
+import {
+  defaultSearchOptions,
+  rankMatches,
+  SearchIndex,
+  type SearchOptions,
+  type SearchMatch,
+} from './search';
 
 export interface FilePort {
   list(scope: Scope): Promise<string[]>;
@@ -42,6 +48,7 @@ export class LibraryService {
     private readonly files: FilePort,
     private readonly report: (error: unknown) => void = console.error,
     private readonly allowedCategories: () => readonly string[] = () => promptCategories,
+    private readonly searchOptions: () => SearchOptions = () => defaultSearchOptions,
   ) {}
 
   readFile(scope: Scope, path: string): Promise<string | undefined> {
@@ -49,8 +56,20 @@ export class LibraryService {
   }
 
   async search(scope: Scope, query: string, category?: string): Promise<Entry[]> {
-    await this.get(scope);
-    return this.cache.get(scope)!.index.query(query, category);
+    return (await this.searchRanked([scope], query, category)).map((match) => match.entry);
+  }
+
+  async searchRanked(
+    scopes: readonly Scope[],
+    query: string,
+    category?: string,
+  ): Promise<SearchMatch[]> {
+    await Promise.all(scopes.map((scope) => this.get(scope)));
+    const options = this.searchOptions();
+    return rankMatches(
+      scopes.flatMap((scope) => this.cache.get(scope)!.index.matches(query, category, options)),
+      options,
+    );
   }
 
   subscribe(listener: (scope: Scope) => void): () => void {

@@ -19,6 +19,7 @@ export class PromptLibraryTool implements vscode.LanguageModelTool<PromptToolInp
     private readonly hasWorkspace: () => boolean,
     private readonly isTrusted: () => boolean,
     private readonly render: (entry: Entry) => Promise<RenderedPrompt>,
+    private readonly selection: () => 'bestMatch' | 'requireChoice' = () => 'bestMatch',
   ) {}
 
   prepareInvocation(): vscode.PreparedToolInvocation {
@@ -27,7 +28,7 @@ export class PromptLibraryTool implements vscode.LanguageModelTool<PromptToolInp
       confirmationMessages: {
         title: 'Share a prompt with Copilot?',
         message:
-          'Search local Prompteur libraries and return a matching prompt to Copilot. A rendered prompt can include the active selection, clipboard text, filename, or workspace name when its template requests those variables.',
+          'Search local Prompteur libraries and return a matching prompt to Copilot. Best Match selection returns a unique highest-ranked prompt without a separate candidate choice, even when lower-ranked matches exist. Ties require a choice. A rendered prompt can include the active selection, clipboard text, filename, or workspace name when its template requests those variables.',
       },
     };
   }
@@ -59,22 +60,19 @@ export class PromptLibraryTool implements vscode.LanguageModelTool<PromptToolInp
     const scopes: Scope[] = input.scope
       ? [input.scope]
       : ['user', ...(this.hasWorkspace() && this.isTrusted() ? ['workspace' as const] : [])];
-    const entries = (await Promise.all(scopes.map((scope) => this.service.get(scope)))).flatMap(
-      (snapshot) => snapshot.entries,
-    );
     let matches: Entry[];
     if (input.path !== undefined) {
+      const entries = (await Promise.all(scopes.map((scope) => this.service.get(scope)))).flatMap(
+        (snapshot) => snapshot.entries,
+      );
       matches = entries.filter((entry) => entry.path === input.path);
     } else {
-      const exact = entries
-        .filter((entry) => entry.data.name.trim().toLowerCase() === query.toLowerCase())
-        .sort(
-          (left, right) =>
-            left.data.name.localeCompare(right.data.name) || left.path.localeCompare(right.path),
-        );
-      matches = exact.length
-        ? exact
-        : (await Promise.all(scopes.map((scope) => this.service.search(scope, query)))).flat();
+      const ranked = await this.service.searchRanked(scopes, query);
+      const best = ranked.reduce((highest, match) => Math.max(highest, match.relevance), -Infinity);
+      const leaders = ranked.filter((match) => match.relevance === best);
+      matches = (this.selection() === 'bestMatch' && leaders.length === 1 ? leaders : ranked).map(
+        (match) => match.entry,
+      );
     }
     if (token.isCancellationRequested) throw new vscode.CancellationError();
     if (scopes.includes('workspace') && !this.isTrusted())

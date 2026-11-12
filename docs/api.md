@@ -4,7 +4,7 @@
 - Async command failures show native errors and reject; cancellations do not mutate.
 
 - `LibraryService` filesystem port: `list`, `read`, expected-source `write`/`remove`.
-- Operations: lazy `get`, incremental/full `refresh`, case-insensitive `search`, validated `save`/`writeSource`, `delete`, subscriptions.
+- Operations: lazy `get`, incremental/full `refresh`, configurable `search`, internal cross-scope `searchRanked`, validated `save`/`writeSource`, `delete`, subscriptions.
 - Snapshots contain entries/problems; treat as immutable.
 
 - Built-ins: `explain`, `plan`, `implement`, `review`, `test`, `debug`, `document`.
@@ -18,7 +18,14 @@
 - `prompteur.groupByCategory`: `true` (default) groups rows; `false` shows a flat prompt list.
 - `prompteur.syncUserPrompts`: `true` (default) opts the User library snapshot into VS Code Settings Sync. Incoming changes reconcile on activation or **Reload Libraries**; Workspace prompts are excluded.
 
-- `SearchIndex` reuses normalized unchanged text; filters full text/tags/categories; sorts alphabetically.
+- `prompteur.search.matching`: `exact`, `fullText` (default), or `fuzzy`. Each phase runs over all eligible entries: whole-name exact first; full-text AND next unless exact-only; fuzzy whole-name fallback last when enabled. Apply category/tag constraints before phase selection.
+- `prompteur.search.caseSensitive`: `false` (default); affects names/free text only. Exact tag/category filters remain case-insensitive.
+- `prompteur.search.ranking`: `relevance` (default) or `name`. Relevance tiers: exact name, name prefix, name substring, description/category/tags/path, body. Multiword full-text relevance uses the weakest matched term. Fuzzy relevance uses smaller edit distance.
+- `prompteur.search.selection`: `bestMatch` (default) or `requireChoice`; Copilot-only selection policy. Best Match renders a unique highest-relevance result; Require Choice requires a unique candidate. Duplicate exact names and highest-relevance ties remain ambiguous. Name/scope/path ordering never breaks selection ties.
+- All four settings use native window scope. Matching/case/ranking changes refresh tree filtering; subsequent tool calls use current settings. Invalid values error explicitly. Tree always retains all matches in its chosen phase.
+- `SearchIndex` caches raw/normalized unchanged fields and parsed category/tag identities. Empty/filter-only queries return all eligible entries alphabetically. Names and queries trim outer whitespace, preserving internal free-text whitespace; filter tokens are removed from name comparison.
+- Fuzzy name distance is bounded Levenshtein: insert/delete/replace cost 1, transposition costs 2. Disabled below 4 free-text characters; limit 1 for 4–7, 2 for 8+. Length pruning, banded rows, and early exit bound work; no fuzzy body matching.
+- `searchRanked` combines all eligible scopes before matching-phase selection, ranking, and candidate truncation. Relevance ties use name/scope/path only for stable presentation.
 - Filters use AND. Quote values with spaces: `tag:"security review"`, `category:"review"`.
 - Tooltip links filter tags/categories or open the current Markdown path; commands re-resolve paths.
 - `generate(content, context)` returns `{ text, missing }` for four variables and condenses repeated blank lines.
@@ -48,7 +55,7 @@
 - `prompteur.duplicate` remains callable for compatibility but is hidden from menus and the Command Palette. Use **Copy Text** for text handoff and **Copy Prompt** / **Paste Prompt** for library copies.
 - VS Code has no supported API to insert into the active Chat composer; users paste the clipboard result.
 - `prompteur_findPrompt` is read-only. Search with `{ query, scope? }` or select a returned candidate with `{ scope, path }`; do not combine query and path. Query length: 1–256 characters; blank queries/paths, invalid scopes, and incomplete/mixed modes error.
-- Query mode searches User and trusted Workspace libraries by default. Trimmed, case-insensitive exact names take priority; otherwise use existing full-text/filter search. Repeated exact names remain ambiguous.
+- Query mode searches User and trusted Workspace libraries by default using shared configured matching. After invocation approval, Best Match can return prompt/context without a separate choice among lower-ranked candidates. Require Choice retains conservative multiple-match handling.
 - Direct mode matches the exact library-relative path in validated library entries; no arbitrary filesystem reads, path normalization, or fallback search. Workspace search and direct lookup require Trust.
 - Results: `match` includes prompt identity (`name`, `category`, `scope`, `path`), rendered `content`, and `missing` variables; `ambiguous` includes up to 10 candidate metadata records and `truncated`, without content; `not_found` identifies the query or requested scope/path. All results include `workspaceOmittedForTrust`.
 - Prompt-row hover explains Copy Text and Copy Prompt; contributed command tooltips use native titles, not an unsupported manifest tooltip field.

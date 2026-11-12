@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { basename } from 'node:path';
 import { LocalFiles } from '../platform/local-files';
 import { LibraryService, messageOf } from '../application/library';
-import { appendExactFilter } from '../application/search';
+import { appendExactFilter, type SearchOptions } from '../application/search';
 import {
   newPrompt,
   promptFolder,
@@ -66,6 +66,7 @@ class Workbench implements vscode.Disposable {
       files,
       (error) => this.report(error),
       () => this.allowedCategories(),
+      () => this.searchOptions(),
     );
     if (vscode.lm?.registerTool)
       this.disposables.push(
@@ -76,6 +77,7 @@ class Workbench implements vscode.Disposable {
             () => this.roots.has('workspace'),
             () => vscode.workspace.isTrusted,
             (entry) => this.generate(entry, this.destination()),
+            () => this.searchOptions().selection,
           ),
         ),
       );
@@ -105,7 +107,8 @@ class Workbench implements vscode.Disposable {
         if (
           event.affectsConfiguration('prompteur.showTags') ||
           event.affectsConfiguration('prompteur.categoryCountMode') ||
-          event.affectsConfiguration('prompteur.groupByCategory')
+          event.affectsConfiguration('prompteur.groupByCategory') ||
+          event.affectsConfiguration('prompteur.search')
         )
           this.tree.refresh();
         if (event.affectsConfiguration('prompteur.syncUserPrompts'))
@@ -181,6 +184,24 @@ class Workbench implements vscode.Disposable {
         },
       ),
     );
+  }
+
+  private searchOptions(): SearchOptions & { selection: 'bestMatch' | 'requireChoice' } {
+    const configuration = vscode.workspace.getConfiguration('prompteur');
+    const matching = configuration.get<unknown>('search.matching', 'fullText');
+    const caseSensitive = configuration.get<unknown>('search.caseSensitive', false);
+    const ranking = configuration.get<unknown>('search.ranking', 'relevance');
+    const selection = configuration.get<unknown>('search.selection', 'bestMatch');
+    if (
+      (matching !== 'exact' && matching !== 'fullText' && matching !== 'fuzzy') ||
+      typeof caseSensitive !== 'boolean' ||
+      (ranking !== 'relevance' && ranking !== 'name') ||
+      (selection !== 'bestMatch' && selection !== 'requireChoice')
+    )
+      throw new Error(
+        'Invalid Prompteur search settings. Check matching, case sensitivity, ranking, and selection.',
+      );
+    return { matching, caseSensitive, ranking, selection };
   }
 
   private report(error: unknown): void {

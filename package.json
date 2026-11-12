@@ -95,6 +95,43 @@
           "scope": "window",
           "description": "Group prompts by category; turn off for a flat list."
         },
+        "prompteur.search.matching": {
+          "type": "string",
+          "enum": [
+            "exact",
+            "fullText",
+            "fuzzy"
+          ],
+          "default": "fullText",
+          "scope": "window",
+          "description": "Match exact prompt names only, prefer exact names before full text, or also fall back to typo-tolerant names when full text finds nothing."
+        },
+        "prompteur.search.caseSensitive": {
+          "type": "boolean",
+          "default": false,
+          "scope": "window",
+          "description": "Match prompt names and free text with case sensitivity. Tag/category filters remain exact and case-insensitive."
+        },
+        "prompteur.search.ranking": {
+          "type": "string",
+          "enum": [
+            "relevance",
+            "name"
+          ],
+          "default": "relevance",
+          "scope": "window",
+          "description": "Order search results by relevance or name. Alphabetical ordering never decides which prompt Copilot automatically selects."
+        },
+        "prompteur.search.selection": {
+          "type": "string",
+          "enum": [
+            "bestMatch",
+            "requireChoice"
+          ],
+          "default": "bestMatch",
+          "scope": "window",
+          "description": "After tool approval, Best Match shares the unique highest-relevance prompt and its requested context, even with lower-ranked matches present. Require Choice returns candidates when multiple prompts match. Duplicate exact names and highest-score ties always require a choice. Library filtering never automatically opens or runs prompts."
+        },
         "prompteur.syncUserPrompts": {
           "type": "boolean",
           "default": true,
@@ -194,7 +231,7 @@
         "name": "prompteur_findPrompt",
         "toolReferenceName": "prompteurPrompt",
         "displayName": "Find Prompteur Prompt",
-        "modelDescription": "Find a saved Prompteur prompt only when the user asks. Search with query and optional scope; case-insensitive exact names take priority over full-text matches. Multiple matches return metadata only: ask the user to choose, then invoke again with the candidate's exact scope and path, without query. Never silently choose between duplicates. A unique match or explicit scope/path selection returns rendered prompt text. Never modify prompts or libraries.",
+        "modelDescription": "Find a saved Prompteur prompt only when the user asks. Search with query and optional scope using configured exact/full-text/fuzzy matching and case sensitivity. Exact names take priority. Best Match selection returns a unique highest-relevance prompt; Require Choice returns metadata for multiple matches. Duplicate exact names and highest-relevance ties always return metadata: ask the user to choose, then invoke with the candidate's exact scope and path, without query. Never choose between tied candidates. A match or explicit scope/path selection returns rendered text. Never modify prompts or libraries.",
         "userDescription": "Find and return a matching saved prompt. Returned prompt text and requested context variables are shared with Copilot Chat.",
         "canBeReferencedInPrompt": true,
         "icon": "$(library)",
