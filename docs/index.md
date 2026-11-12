@@ -23,6 +23,7 @@ Documentation index. Select the matching topic below.
 - [ADR 002: Use Native Editors and Views](./adr/002-native-workbench.md)
 - [ADR 003: Explicit Local Safety Boundaries](./adr/003-local-safety-boundaries.md)
 - [ADR 004: Markdown Frontmatter Prompts Are Authoritative](./adr/004-markdown-frontmatter-prompts.md)
+- [ADR 005: Explicit Copilot Prompt Tool](./adr/005-copilot-prompt-tool.md)
 
 ## Index Rules
 

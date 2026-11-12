@@ -8,6 +8,7 @@
 - `application/search.ts`: reused lowercase search text, exact tags, and alphabetical results.
 - `platform/local-files.ts`: reads/scans, expected-source writes/deletes, locks, atomic replacement, and symlink protection.
 - `workbench`: one category tree with allowlisted metadata links, native editor diagnostics/highlighting, debounced watchers, snapshot previews, and commands.
+- `workbench/prompt-tool.ts`: optional read-only VS Code Language Model Tool for user-approved Copilot prompt search/rendering; no direct model requests.
 
 - Filesystem port exists for tests, not speculative providers. Core/application do not import VS Code.
 - No library-path configuration, ordering/usage sidecar, or generic transfer protocol.
@@ -19,6 +20,7 @@
 
 - Generation captures source editor before pickers, uses valid dirty prompts, and expands once.
 - **Copy** writes generated text to OS clipboard without editing source.
+- Copilot prompt-tool results include matched prompt content and requested variable context; tool use is confirmed by VS Code.
 - **Copy Prompt/Paste Prompt** use a Workbench-local buffer to create copies; never move sources or persist transfer state.
 - Preview opens an untitled plaintext snapshot. A weak set excludes previews as selection sources; no retained context/provider/timer.
 

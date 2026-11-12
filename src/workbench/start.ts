@@ -13,6 +13,7 @@ import {
 } from '../core/documents';
 import { generate, variableTokens, type Context } from '../core/render';
 import { NativeEditor } from './editor';
+import { PromptLibraryTool } from './prompt-tool';
 import { PromptTree, type TreeNode } from './tree';
 import { UserPromptSync } from './user-prompt-sync';
 import { watchLibrary } from './watch';
@@ -66,6 +67,18 @@ class Workbench implements vscode.Disposable {
       (error) => this.report(error),
       () => this.allowedCategories(),
     );
+    if (vscode.lm?.registerTool)
+      this.disposables.push(
+        vscode.lm.registerTool(
+          'prompteur_findPrompt',
+          new PromptLibraryTool(
+            this.service,
+            () => this.roots.has('workspace'),
+            () => vscode.workspace.isTrusted,
+            (entry) => this.generate(entry, this.destination()),
+          ),
+        ),
+      );
     this.userPromptSync = new UserPromptSync(context.globalState, files);
     this.editor = new NativeEditor(this.service, this.roots, () => this.allowedCategories());
     this.tree = new PromptTree(

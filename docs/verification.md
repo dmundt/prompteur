@@ -12,14 +12,15 @@ npm run package
 - Coverage gate: 91% for lines, statements, functions, branches across `src/`, including VS Code adapters.
 - Remove tests for removed features; do not retain compatibility scaffolding.
 
-- Unit/integration coverage: metadata-only frontmatter; category approval/removal guards/count modes; settings defaults/overrides and gear command; comments/unknown fields; malformed delimiters/YAML/aliases/depth; exact body preservation; ignored YAML; path identity; conflicts/recovery; resource/path safety; search/filters/tooltips; 10k search; groups/batches/watchers; variables; CRUD/previews/copy/paste; cancellation; Trust.
+- Unit/integration coverage: metadata-only frontmatter; category approval/removal guards/count modes; settings defaults/overrides and gear command; comments/unknown fields; malformed delimiters/YAML/aliases/depth; exact body preservation; ignored YAML; path identity; conflicts/recovery; resource/path safety; search/filters/tooltips; 10k search; groups/batches/watchers; variables; CRUD/previews/copy/paste; read-only Copilot prompt search/render, confirmation, and Workspace Trust; cancellation.
 
 - Filesystem tests: conflicts, stale writes/deletes, path confinement, oversized input.
-- Release-boundary tests: sole view/command manifest, no import/export, old state preserved.
+- Release-boundary tests: sole view, contributed commands and one read-only tool; no import/export or extension dependency; old state preserved.
 - Native-save tests: preserve user formatting.
 
 - Host smoke: isolated workspace/profile; Trust enabled; startup prompts disabled.
-- Checks Restricted Mode blocking, User prompt use, clipboard/source preservation, removed Insert command, starters, plaintext preview.
+- Checks Restricted Mode blocking, User prompt use, clipboard handoff, source preservation, removed Insert command, starters, and plaintext preview.
+- Host smoke verifies Language Model Tool registration when supported; tool search/render is unit-tested with a VS Code API mock. Tests and extension code make no model-provider requests.
 - Runner restores clipboard and removes temp workspace data.
 
 - `VSCODE_TEST_VERSION`: select host version; default `stable`.
