@@ -71,7 +71,7 @@ describe('native tree interactions', () => {
   it('shows distinct saved prompt context in hover without reading values', async () => {
     const { port, files } = memoryFiles();
     const contents = [
-      ['context', '{{filename}} {{selection}} {{filename}} {{ clipboard }} {{workspace}}'],
+      ['context', '{{filename}} {{selection}} {{filename}} {{ clipboard }} {{workspace}} {{text}}'],
       ['none', 'No placeholders'],
       ['invalid', '{{selection}} {{unknown}}'],
       ['unbalanced', '{{selection'],
@@ -89,7 +89,7 @@ describe('native tree interactions', () => {
       return (tree.getTreeItem(entry!).tooltip as MarkdownString).value;
     };
 
-    expect(hover('context')).toContain('Context: Filename, Selection, Clipboard, Workspace');
+    expect(hover('context')).toContain('Context: Filename, Selection, Clipboard, Workspace, Text');
     expect(hover('none')).not.toContain('Context:');
     expect(hover('invalid')).toContain('Context unavailable: Unsupported variable: unknown');
     expect(hover('unbalanced')).toContain('Context unavailable: Unbalanced variable braces');

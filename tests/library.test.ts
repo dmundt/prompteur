@@ -173,6 +173,11 @@ describe('prompt library', () => {
 
 describe('prompt search and rendering', () => {
   it('substitutes once and handles empty, invalid and unbalanced variables explicitly', () => {
+    expect(generate('{{text}}\n{{text}}', { text: 'First\n{{selection}}' })).toEqual({
+      text: 'First\n{{selection}}\nFirst\n{{selection}}',
+      missing: [],
+    });
+    expect(generate('{{text}}', {})).toEqual({ text: '', missing: ['text'] });
     expect(
       generate('{{selection}} {{filename}}', { selection: '{{clipboard}}', filename: 'a.ts' }),
     ).toEqual({
