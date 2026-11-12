@@ -98,7 +98,6 @@ code --install-extension prompteur-1.1.0.vsix
 - No Copilot tool support required. **Copy Text** renders variables before copying.
 - Direct Chat composer insertion is unavailable. For another window, copy in the source window and paste in the target.
 - **Copy Prompt** / **Paste Prompt** copy library records; use **Copy Text** for chat handoff.
-- Prompt-row hover explains both copy actions; menu labels remain short.
 
 ## Prompt Files
 
