@@ -68,6 +68,47 @@ describe('native tree interactions', () => {
     expect((await service.get('user')).entries).toHaveLength(1);
     tree.dispose();
   });
+  it('shows distinct saved prompt context in hover without reading values', async () => {
+    const { port, files } = memoryFiles();
+    const contents = [
+      ['context', '{{filename}} {{selection}} {{filename}} {{ clipboard }} {{workspace}}'],
+      ['none', 'No placeholders'],
+      ['invalid', '{{selection}} {{unknown}}'],
+      ['unbalanced', '{{selection'],
+    ] as const;
+    for (const [name, content] of contents)
+      files.set(`user:prompts/${name}.prompt.md`, encodeMarkdown({ ...newPrompt(name), content }));
+    const report = vi.fn();
+    const service = new LibraryService(port);
+    const tree = new PromptTree(service, () => false, report);
+    const categories = await tree.getChildren({ kind: 'scope', scope: 'user' });
+    const entries = await tree.getChildren(categories[0]!);
+    const hover = (name: string) => {
+      const entry = entries.find((node) => node.kind === 'entry' && node.entry.data.name === name);
+      expect(entry).toBeDefined();
+      return (tree.getTreeItem(entry!).tooltip as MarkdownString).value;
+    };
+
+    expect(hover('context')).toContain('Context: Filename, Selection, Clipboard, Workspace');
+    expect(hover('none')).not.toContain('Context:');
+    expect(hover('invalid')).toContain('Context unavailable: Unsupported variable: unknown');
+    expect(hover('unbalanced')).toContain('Context unavailable: Unbalanced variable braces');
+    files.set(
+      'user:prompts/context.prompt.md',
+      encodeMarkdown({ ...newPrompt('context'), content: '{{workspace}}' }),
+    );
+    await service.refresh('user', 'prompts/context.prompt.md');
+    const refreshed = await tree.getChildren(categories[0]!);
+    const updated = refreshed.find(
+      (node) => node.kind === 'entry' && node.entry.data.name === 'context',
+    );
+    expect(updated).toBeDefined();
+    expect((tree.getTreeItem(updated!).tooltip as MarkdownString).value).toContain(
+      'Context: Workspace',
+    );
+    expect(report).not.toHaveBeenCalled();
+    tree.dispose();
+  });
   it('lazily batches large category groups', async () => {
     const { port, files } = memoryFiles();
     for (let index = 0; index < 201; index++)
