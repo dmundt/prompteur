@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Improve prompt tree responsiveness for large libraries when opening categories or using flat view.
+- Speed up User library synchronization for larger prompt collections.
 
 ## 1.2.0
 
