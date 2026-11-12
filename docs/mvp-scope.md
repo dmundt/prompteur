@@ -13,7 +13,7 @@
 - View settings: Default Scope (`ask`), Preferred Category (empty), Show Tags (`true`), Group by Category (`true`).
 - Variables: selection, clipboard, filename, workspace, explicitly entered multiline text.
 - On-demand plaintext preview snapshot.
-- 18 optional starters across seven built-in categories.
+- 37 optional starters across seven built-in categories, at least five per category.
 - Diagnostics, token highlighting, debounced watchers, bounded input, safe/conflict-aware writes.
 - Workspace Trust, explicit errors, unit/integration tests, VS Code host smoke test.
 

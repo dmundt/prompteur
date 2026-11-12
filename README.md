@@ -157,17 +157,17 @@ Inspect {{filename}} in {{workspace}}.
 
 ## Starters
 
-**Add Starter Library** copies 18 editable prompts:
+**Add Starter Library** copies 37 editable prompts, at least five per category:
 
-- **Explain:** Explain Selected Code.
-- **Plan:** Clarify Requirements; Plan Smallest Useful Implementation; Plan Behavior-Preserving Refactor.
-- **Implement:** Implement Scoped Change.
+- **Explain:** Explain Selected Code; Explain Execution Flow; Explain an API Contract; Explain a Configuration; Explain a Code Change.
+- **Plan:** Clarify Requirements; Plan Smallest Useful Implementation; Plan Behavior-Preserving Refactor; Plan a Data Migration; Plan a Dependency Upgrade.
+- **Implement:** Implement Scoped Change; Fix a Reproduced Bug; Implement an API Endpoint; Implement Input Validation; Implement Error Handling.
 - **Review:** Review Code; Review Complexity; Review Architecture; Review Security; Audit Release Readiness; Audit Implementation Completeness; Audit Accessibility.
-- **Test:** Generate Focused Unit Tests.
-- **Debug:** Triage Production Incident; Analyze Root Cause.
-- **Document:** Document Feature Usage; Create Issue; Create Task.
+- **Test:** Generate Focused Unit Tests; Generate Integration Tests; Generate Regression Tests; Generate Boundary Tests; Plan End-to-End Tests.
+- **Debug:** Triage Production Incident; Analyze Root Cause; Diagnose a Failing Test; Investigate a Performance Problem; Diagnose a Build Failure.
+- **Document:** Document Feature Usage; Create Issue; Create Task; Document an API Contract; Write a Troubleshooting Guide.
 
-- Create Issue, Create Task, Clarify Requirements, Plan Smallest Useful Implementation, and Implement Scoped Change request entered `text`; code-oriented starters retain `selection`.
+- Request-based starters use entered `text`; code, diff, configuration, and diagnostic starters use `selection`. Hover a prompt to inspect its context variables.
 - Installation is opt-in. Rerun after updates to add missing starters.
 - Never replace existing files, including invalid ones. Writes are safe per-file, not transactional; failures report completed count.
 - Completion reports added files and saved files that match or differ from the bundled versions. Differences can be edits or older versions. Unsaved editors without saved files are skipped; comparisons use saved contents.

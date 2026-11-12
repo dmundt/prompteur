@@ -7,12 +7,17 @@ import { promptCategories, promptFrontmatterSchema } from '../src/core/documents
 import { generate, variableTokens } from '../src/core/render';
 
 describe('bundled prompt starters', () => {
-  it('ships eighteen unique, editable prompts using the ordinary schema', async () => {
+  it('ships thirty-seven unique, editable prompts with at least five per category', async () => {
     const snapshot = await new LibraryService(
       new LocalFiles(() => resolve('resources/starter')),
     ).get('user');
     expect(snapshot.problems).toEqual([]);
-    expect(snapshot.entries).toHaveLength(18);
+    expect(snapshot.entries).toHaveLength(37);
+    for (const category of promptCategories)
+      expect(
+        snapshot.entries.filter((entry) => entry.data.category === category).length,
+        category,
+      ).toBeGreaterThanOrEqual(5);
     const paths = new Set<string>();
     const names = new Set<string>();
     for (const entry of snapshot.entries) {
@@ -37,6 +42,15 @@ describe('bundled prompt starters', () => {
       expect(names.has(entry.data.name)).toBe(false);
       names.add(entry.data.name);
       expect(() => variableTokens(entry.data.content)).not.toThrow();
+      const rendered = generate(entry.data.content, {
+        selection: 'Selected code or evidence',
+        text: 'Entered request',
+        clipboard: 'Clipboard content',
+        filename: 'example.ts',
+        workspace: 'project',
+      });
+      expect(rendered.missing).toEqual([]);
+      expect(rendered.text).not.toMatch(/\{\{[a-z]+\}\}/);
     }
   });
   it('satisfies security, generic technology-review and incident discovery examples', async () => {
