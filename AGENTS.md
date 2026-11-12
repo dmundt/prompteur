@@ -5,7 +5,7 @@ Start at [docs/index.md](./docs/index.md).
 
 ## Project layout
 
-- `src/`: extension source; core/application code stays VS Code-independent ([ADR 003](./docs/adr/003-local-safety-boundaries.md)).
+- `src/`: extension source; core/application code stays VS Code-independent ([ADR 003](./docs/adr/003-local-safety-boundaries.md), [ADR 005](./docs/adr/005-copilot-prompt-tool.md)).
 - `tests/`: unit tests (`vitest`) and host smoke tests.
 - `scripts/`: build helpers (`schemas.ts`, `run-host-tests.mjs`).
 - `docs/`: documentation. Start at [docs/index.md](./docs/index.md); agent rules for docs are in [docs/AGENTS.md](./docs/AGENTS.md) and for ADRs in [docs/adr/AGENTS.md](./docs/adr/AGENTS.md).
@@ -30,7 +30,8 @@ Run the smallest relevant check, then escalate if needed.
 - Marketplace README introduction: 5–15 factual, scannable lines. No hype, unverifiable claims, or filler.
 - Keep README current; log only user-facing changes in CHANGELOG. Do not log internal refactors, tests, or tooling.
 - Update related docs with code. Keep [docs/index.md](./docs/index.md) synchronized.
-- No network, telemetry, databases, shell execution, AI calls, or direct Chat insertion.
+- No extension-owned network/provider calls, telemetry, databases, or shell execution. The user-approved read-only Copilot prompt tool may return requested prompt content/context to the configured model.
+- No direct Chat composer insertion; **Copy** uses clipboard handoff until VS Code provides a supported API.
 - Require Workspace Trust for workspace mutations, generation, and preview.
 - Never contradict an accepted ADR; supersede it with a new ADR.
 - Add dependencies only when required; update manifest and lockfile together.

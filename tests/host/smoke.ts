@@ -14,6 +14,11 @@ export async function run(): Promise<void> {
   await extension.activate();
   const activation = performance.now() - start;
   process.stdout.write(`[host] Activation: ${activation.toFixed(1)} ms\n`);
+  if (typeof vscode.lm?.registerTool === 'function')
+    assert.ok(
+      vscode.lm.tools.some((tool) => tool.name === 'prompteur_findPrompt'),
+      'Copilot prompt search tool must register when the host supports Language Model Tools',
+    );
   if (process.env.PROMPTEUR_TEST_ENFORCE_ACTIVATION === 'true')
     assert.ok(activation < 200, `Activation exceeded 200 ms: ${activation.toFixed(1)}`);
   const document = await vscode.workspace.openTextDocument({
