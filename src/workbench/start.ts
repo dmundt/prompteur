@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { basename } from 'node:path';
 import { LocalFiles } from '../platform/local-files';
 import { LibraryService, messageOf } from '../application/library';
-import { appendExactFilter } from '../application/search';
+import { appendExactFilter, type SearchOptions } from '../application/search';
 import {
   newPrompt,
   promptFolder,
@@ -13,6 +13,7 @@ import {
 } from '../core/documents';
 import { generate, variableTokens, type Context } from '../core/render';
 import { NativeEditor } from './editor';
+import { PromptLibraryTool } from './prompt-tool';
 import { PromptTree, type TreeNode } from './tree';
 import { UserPromptSync } from './user-prompt-sync';
 import { watchLibrary } from './watch';
@@ -65,7 +66,21 @@ class Workbench implements vscode.Disposable {
       files,
       (error) => this.report(error),
       () => this.allowedCategories(),
+      () => this.searchOptions(),
     );
+    if (vscode.lm?.registerTool)
+      this.disposables.push(
+        vscode.lm.registerTool(
+          'prompteur_findPrompt',
+          new PromptLibraryTool(
+            this.service,
+            () => this.roots.has('workspace'),
+            () => vscode.workspace.isTrusted,
+            (entry) => this.generate(entry, this.destination()),
+            () => this.searchOptions().selection,
+          ),
+        ),
+      );
     this.userPromptSync = new UserPromptSync(context.globalState, files);
     this.editor = new NativeEditor(this.service, this.roots, () => this.allowedCategories());
     this.tree = new PromptTree(
@@ -92,7 +107,8 @@ class Workbench implements vscode.Disposable {
         if (
           event.affectsConfiguration('prompteur.showTags') ||
           event.affectsConfiguration('prompteur.categoryCountMode') ||
-          event.affectsConfiguration('prompteur.groupByCategory')
+          event.affectsConfiguration('prompteur.groupByCategory') ||
+          event.affectsConfiguration('prompteur.search')
         )
           this.tree.refresh();
         if (event.affectsConfiguration('prompteur.syncUserPrompts'))
@@ -168,6 +184,24 @@ class Workbench implements vscode.Disposable {
         },
       ),
     );
+  }
+
+  private searchOptions(): SearchOptions & { selection: 'bestMatch' | 'requireChoice' } {
+    const configuration = vscode.workspace.getConfiguration('prompteur');
+    const matching = configuration.get<unknown>('search.matching', 'fullText');
+    const caseSensitive = configuration.get<unknown>('search.caseSensitive', false);
+    const ranking = configuration.get<unknown>('search.ranking', 'relevance');
+    const selection = configuration.get<unknown>('search.selection', 'bestMatch');
+    if (
+      (matching !== 'exact' && matching !== 'fullText' && matching !== 'fuzzy') ||
+      typeof caseSensitive !== 'boolean' ||
+      (ranking !== 'relevance' && ranking !== 'name') ||
+      (selection !== 'bestMatch' && selection !== 'requireChoice')
+    )
+      throw new Error(
+        'Invalid Prompteur search settings. Check matching, case sensitivity, ranking, and selection.',
+      );
+    return { matching, caseSensitive, ranking, selection };
   }
 
   private report(error: unknown): void {
@@ -472,9 +506,26 @@ class Workbench implements vscode.Disposable {
     const catalog = await new LibraryService(new LocalFiles(() => directory.fsPath)).get('user');
     if (catalog.problems.length) throw new Error('Bundled starter prompts are invalid');
     let added = 0;
+    let identical = 0;
+    let different = 0;
+    let unsaved = 0;
     for (const entry of catalog.entries) {
-      if ((await this.service.readFile(scope, entry.path)) !== undefined) continue;
       try {
+        const existing = await this.service.readFile(scope, entry.path);
+        if (existing !== undefined) {
+          if (existing === entry.source) identical++;
+          else different++;
+          continue;
+        }
+        const uri = this.uri({ scope, path: entry.path }).toString();
+        if (
+          vscode.workspace.textDocuments.some(
+            (document) => document.uri.toString() === uri && document.isDirty,
+          )
+        ) {
+          unsaved++;
+          continue;
+        }
         await this.service.writeSource(scope, entry.path, entry.source, undefined);
         added++;
       } catch (error) {
@@ -485,7 +536,7 @@ class Workbench implements vscode.Disposable {
       }
     }
     void vscode.window.showInformationMessage(
-      `Added ${added} starter prompts. Existing files were kept.`,
+      `Added ${added} starter prompts. Saved files matching bundled versions: ${identical}; differing: ${different}. Unsaved editors without saved files skipped: ${unsaved}. No existing files were overwritten.`,
     );
   }
 
@@ -527,6 +578,7 @@ class Workbench implements vscode.Disposable {
       data: { ...entry.data, tags: [...entry.data.tags] },
       source: entry.source,
     };
+    await vscode.commands.executeCommand('setContext', 'prompteur.hasCopiedPrompt', true);
     void vscode.window.showInformationMessage(
       'Prompt copied. Paste Prompt to create a library copy.',
     );
@@ -581,15 +633,20 @@ class Workbench implements vscode.Disposable {
     if (!entry) return;
     const result = await this.generate(entry, target);
     if (
-      result.missing.length &&
+      result.missing.includes('clipboard') &&
       (await vscode.window.showWarningMessage(
-        `Empty variable values: ${result.missing.join(', ')}`,
+        'Clipboard is empty. Copy the prompt without clipboard input?',
         { modal: true },
         'Continue',
       )) !== 'Continue'
     )
       return;
     await vscode.env.clipboard.writeText(result.text);
+    void vscode.window.showInformationMessage(
+      result.missing.length
+        ? `Copied without context: ${result.missing.join(', ')}.`
+        : 'Text copied. Paste into Chat or editor.',
+    );
   }
 
   private async preview(node?: TreeNode): Promise<void> {
@@ -651,6 +708,7 @@ class Workbench implements vscode.Disposable {
 }
 
 export async function start(context: vscode.ExtensionContext): Promise<void> {
+  await vscode.commands.executeCommand('setContext', 'prompteur.hasCopiedPrompt', false);
   const workbench = new Workbench(context);
   context.subscriptions.push(workbench);
   await workbench.initialize();

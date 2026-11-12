@@ -6,7 +6,7 @@
 - Category/tag organization and full-text search.
 - Copy or preview generated text with selection, clipboard, filename, and workspace variables.
 - User library in profile storage; Workspace library in `.vscode/prompts`.
-- No Prompteur account, direct network service, AI provider, or telemetry. User prompts sync through VS Code Settings Sync by default. Workspace writes, generation, and preview require Trust.
+- No Prompteur account, direct model calls, or telemetry. Optional Copilot tool returns requested prompt text and used variables to the configured model after VS Code confirmation. User prompts sync through VS Code Settings Sync by default. Workspace writes, generation, and preview require Trust.
 - Stable release. Prompt file format version: 1.
 
 ## Install and Run
@@ -18,7 +18,7 @@
 npm ci
 npm run build
 npm run package
-code --install-extension prompteur-1.0.0.vsix
+code --install-extension prompteur-1.1.0.vsix
 ```
 
 - Press F5 to open Extension Development Host.
@@ -26,34 +26,79 @@ code --install-extension prompteur-1.0.0.vsix
 
 ## Daily Workflow
 
-1. Open **Prompteur** > **New Prompt**; choose User or Workspace.
+1. Open **Prompteur** > **New**; choose User or Workspace.
 2. Edit/save Markdown in VS Code's text editor.
 3. Browse categories or **Filter Prompts**; combine text and exact tags (for example, `tag:security review`).
-4. Select source text, then run **Copy** from the tree or Command Palette.
-5. Paste generated text into Chat or another app/window. Copy never edits source or inserts into Chat.
+4. Select source text, then run **Copy Text** from a prompt row or the Command Palette.
+5. Paste generated text into Chat. Direct insertion into the Chat composer is not available.
 
 - Generation reads selection from the current or last active non-library, non-preview editor in the same window.
 - Selecting a placeholder in a prompt body does not provide context.
 - VS Code windows do not share selections; copy in the source window, then paste in the target window.
+- **Copy Text** copies the rendered prompt for Chat or another editor.
+- Prompt hover lists context variables used by the saved prompt, without reading their values. Invalid placeholders are reported in the hover.
 
-- Prompt menu: Edit, Duplicate, Delete, **Copy Prompt**, Preview.
-- **Copy Prompt** stores a window-local record; **Paste Prompt** creates a file on User/Workspace scope or category. Category target overrides category; source remains.
-- **Copy** generates text to the OS clipboard. Workspace source/destination requires Trust.
+- Prompt menu: **Copy Text**, separator, **Copy Prompt**, Preview, Edit, Delete.
+- **Copy Prompt** stores a window-local prompt record; **Paste Prompt** creates a file on User/Workspace scope or category. Paste is enabled after copying; category target overrides category; source remains.
+- **Copy Text** generates text to the OS clipboard. Workspace source/destination requires Trust.
 - Commands: Command Palette > **Prompteur**. **Clear Filter** resets search; **Reload Libraries** rescans.
 
 - View gear opens settings:
-  - **Default Scope**: User, Workspace, or Ask for untargeted New Prompt/Add Starter Library/Paste Prompt. Ask shows the picker when both libraries exist; otherwise it selects User. Explicit tree targets win.
+  - **Default Scope**: User, Workspace, or Ask for untargeted New/Add Starter Library/Paste Prompt. Ask shows the picker when both libraries exist; otherwise it selects User. Explicit tree targets win.
   - **Preferred Category**: preselect approved category; user confirmation remains required.
   - **Show Tags**: show/hide row labels; default On. Search and tooltips remain unchanged.
   - **Category Count Mode**: Filtered (default), Total, or Hidden. Search still controls which categories appear.
   - **Group by Category**: On by default; turn off for a flat prompt list.
   - **Sync User Prompts**: On by default; uses VS Code Settings Sync between instances. Incoming changes apply on activation or **Reload Libraries**. Workspace prompts do not sync.
+  - **Search: Matching**: `fullText` (default) prefers exact names, then full text; `exact` matches whole names only; `fuzzy` also tries typo-tolerant names when neither earlier phase matches.
+  - **Search: Case Sensitive**: Off by default; applies to names/free text. Tag/category filters remain exact and case-insensitive.
+  - **Search: Ranking**: `relevance` (default) or `name`. Relevance prefers exact names, name prefixes, name substrings, metadata, then body text; multiword queries use their weakest matching field.
+  - **Search: Selection**: `bestMatch` (default) lets Copilot return the unique highest-relevance prompt after tool approval, even with lower-ranked matches present. `requireChoice` returns candidates whenever multiple prompts match. Duplicate exact names and highest-score ties always require a choice. Tree filtering never automatically opens or runs prompts.
 
 - Built-in virtual categories: Explain, Plan, Implement, Review, Test, Debug, Document.
 - Add profile-wide categories only after confirmation. Remove unused categories with **Remove Prompt Category**; reassign prompts first.
 - Tags cross categories; **Show Tags** controls row labels. Tooltip links filter exact tags/categories or open the Markdown file.
 - Filters use AND semantics; quote values with spaces (for example, `tag:"security review"`).
-- Search covers names, descriptions, tags, content, and paths. Results sort alphabetically.
+- Search covers names, descriptions, categories, tags, content, and paths. Matching/case/ranking settings apply to both tree filtering and Copilot. Existing exact-name queries now hide broader tree matches; default ordering is relevance, not alphabetical. Empty/filter-only queries retain alphabetical browsing.
+- Fuzzy fallback compares the whole free-text query to prompt names: no fuzzy matching below 4 characters; 1 edit for 4–7, 2 for 8+. Insertions, deletions, and replacements count as edits; adjacent transposition counts as two. Filters still apply. Fuzzy results rank by fewer edits.
+- Settings apply without reloading. Prompt files remain unchanged; no migration required.
+
+## Use Prompts with Chat
+
+### Copilot Tool: No Copy/Paste
+
+1. Enable Prompteur and Copilot Chat in the same VS Code window. Use a VS Code version that supports extension Language Model Tools.
+2. Save a prompt or install **Add Starter Library**. Select source code if the prompt uses `{{selection}}`.
+3. Open Copilot Chat in **Agent** mode. Enable **Find Prompteur Prompt** in the tool picker if needed.
+4. Reference the tool and state the task:
+
+   ```text
+   Use #prompteurPrompt to find "Review Code", then follow that prompt to review my changes. Do not edit files.
+   ```
+
+5. Approve sharing when VS Code requests confirmation. VS Code may offer **Always Allow**.
+
+- Exact prompt names take priority according to configured case sensitivity; surrounding whitespace is ignored. Optional fuzzy fallback applies only after full-text finds nothing.
+- One match, or a unique highest-relevance match with `bestMatch`: returns the rendered prompt and missing-context details to Copilot. This may share requested context without a separate candidate-choice round.
+- Repeated exact names, highest-score ties, or multiple matches with `requireChoice`: returns names, User/Workspace scope, category, and path without prompt content. Choose a candidate; Copilot can retrieve its exact scope/path without another search.
+- Alphabetical result ordering never decides auto-selection. Set `prompteur.search.selection` to `requireChoice` to retain conservative multiple-match handling.
+- Example follow-up: `Use the Workspace candidate at prompts/review-code.prompt.md.` Copilot supplies `scope: "workspace"` and that `path`, omitting `query`.
+- No match: reports not found.
+- Missing candidate path: reports not found; never substitutes another prompt. Refresh the search if a prompt was renamed or removed.
+- Tool output becomes model context, not text inserted into the Chat composer. Following the prompt depends on the model and your request.
+- The tool is read-only; it cannot create, edit, or delete prompts. Workspace prompt results require Trust.
+- Prompt text and requested selection, clipboard, filename, or workspace variables are shared with the configured model. Context comes from the same VS Code window.
+- Prompteur makes no direct model/provider calls. Copilot performs the requested task.
+
+### Manual Handoff: Any Chat
+
+1. Select source code if the prompt uses `{{selection}}`.
+2. Run **Copy Text** from the prompt row, context menu, or Command Palette.
+3. Paste into Copilot Chat, an Agents window, or another chat client; submit.
+
+- No Copilot tool support required. **Copy Text** renders variables before copying.
+- Direct Chat composer insertion is unavailable. For another window, copy in the source window and paste in the target.
+- **Copy Prompt** / **Paste Prompt** copy library records; use **Copy Text** for chat handoff.
 
 ## Prompt Files
 
@@ -77,7 +122,7 @@ Inspect {{filename}} in {{workspace}}.
 - File path is identity; names may repeat. Filenames use readable slugs and numeric collision suffixes.
 
 - Variables: `selection`, `clipboard`, `filename`, `workspace`.
-- Expand once; collapse repeated blank lines. Empty selection is allowed; other empty values warn.
+- Expand once; collapse repeated blank lines. Empty selection is allowed. Missing filename/workspace context does not block copying; one notification lists missing values. Empty clipboard input requires confirmation. Preview lists missing context.
 - Unknown/malformed placeholders block generation. Read clipboard only when requested.
 
 - **Preview** opens an editable plaintext snapshot; it does not update. Reopen to regenerate. Never render images/HTML.
@@ -118,6 +163,7 @@ Inspect {{filename}} in {{workspace}}.
 
 - Installation is opt-in. Rerun after updates to add missing starters.
 - Never replace existing files, including invalid ones. Writes are safe per-file, not transactional; failures report completed count.
+- Completion reports added files and saved files that match or differ from the bundled versions. Differences can be edits or older versions. Unsaved editors without saved files are skipped; comparisons use saved contents.
 
 - No import/export or bundles. In-app copies use a temporary window-local buffer; use the filesystem across windows/apps.
 

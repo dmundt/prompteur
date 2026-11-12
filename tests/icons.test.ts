@@ -27,9 +27,9 @@ describe('Activity Bar icon', () => {
     expect(root.getAttribute('viewBox')).toBe('0 0 16 16');
     expect(root.getAttribute('fill')).toBe('none');
     expect(root.getAttribute('stroke')).toBe('#ffffff');
-    expect(root.getAttribute('stroke-width')).toBe('0.8');
-    expect(root.getAttribute('stroke-linecap')).toBe('square');
-    expect(root.getAttribute('stroke-linejoin')).toBe('miter');
+    expect(root.getAttribute('stroke-width')).toBe('1');
+    expect(root.getAttribute('stroke-linecap')).toBe('round');
+    expect(root.getAttribute('stroke-linejoin')).toBe('round');
     expect(root.getAttribute('role')).toBe('img');
     expect(root.getAttribute('aria-label')).toBe('Prompteur circus tent');
     expect(root.getAttribute('aria-label')).toBe(
