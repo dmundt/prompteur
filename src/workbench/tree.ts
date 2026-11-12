@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { LibraryService, messageOf } from '../application/library';
-import type { Entry, PromptCategory, Scope } from '../core/documents';
+import type { Entry, Problem, PromptCategory, Scope } from '../core/documents';
 import { variableTokens, type VariableKey } from '../core/render';
 
 export type TreeNode =
@@ -13,7 +13,7 @@ export type TreeNode =
       totalCount?: number;
     }
   | { kind: 'entry'; scope: Scope; entry: Entry }
-  | { kind: 'problem'; scope: Scope; path: string; message: string }
+  | ({ kind: 'problem'; scope: Scope } & Problem)
   | { kind: 'batch'; scope: Scope; label: string; children: TreeNode[] };
 
 const basename = (path: string): string => path.slice(path.lastIndexOf('/') + 1);
@@ -58,6 +58,8 @@ export class PromptTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dis
     private readonly categoryCountMode: () => 'filtered' | 'total' | 'hidden' = () => 'filtered',
     private readonly groupByCategory: () => boolean = () => true,
     private readonly libraryRoot: (scope: Scope) => Pick<vscode.Uri, 'fsPath'> | undefined = () =>
+      undefined,
+    private readonly customCategoryDescription: (category: string) => string | undefined = () =>
       undefined,
   ) {
     this.unsubscribe = service.subscribe(() => this.refresh());
@@ -105,16 +107,20 @@ export class PromptTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dis
       const label = visibleCount === undefined ? name : `${name} (${visibleCount})`;
       const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.Collapsed);
       item.id = `${node.scope}:category:${node.category.toLowerCase()}`;
-      item.contextValue = 'category';
+      const description = this.customCategoryDescription(node.category.toLowerCase());
+      item.contextValue = description === undefined ? 'category' : 'customCategory';
+      if (description !== undefined) item.description = 'custom';
       item.tooltip =
         categoryDescriptions.get(node.category.trim().toLowerCase()) ??
-        'User-defined category for organizing prompts.';
+        (description || 'User-defined category for organizing prompts.');
       return item;
     }
     if (node.kind === 'problem') {
       const item = new vscode.TreeItem(basename(node.path));
-      item.contextValue = 'problem';
-      item.tooltip = node.message;
+      item.contextValue = node.unapprovedCategory ? 'categoryProblem' : 'problem';
+      item.tooltip = node.unapprovedCategory
+        ? `${node.message}\nRight-click > Approve Prompt Category to use this category.`
+        : node.message;
       item.iconPath = new vscode.ThemeIcon('warning');
       item.command = {
         command: 'prompteur.edit',
