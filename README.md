@@ -18,7 +18,7 @@
 npm ci
 npm run build
 npm run package
-code --install-extension prompteur-1.0.0.vsix
+code --install-extension prompteur-1.1.0.vsix
 ```
 
 - Press F5 to open Extension Development Host.
