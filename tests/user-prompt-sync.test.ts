@@ -92,7 +92,11 @@ describe('User prompt Settings Sync', () => {
 
     await sync.configure(true);
 
-    expect(state.syncedKeys).toEqual([userPromptSyncStateKey, 'approvedPromptCategories']);
+    expect(state.syncedKeys).toEqual([
+      userPromptSyncStateKey,
+      'approvedPromptCategories',
+      'promptCategoryDescriptions',
+    ]);
     expect(files.has('user:prompts/stale.prompt.md')).toBe(false);
     expect(files.get('user:prompts/remote.prompt.md')).toBe('remote prompt');
     expect(files.get('user:prompts/conflict.prompt.md')).toBe('local edit');

@@ -4,6 +4,7 @@ import type { FilePort } from '../application/library';
 
 export const userPromptSyncStateKey = 'syncedUserPrompts';
 const approvedCategoriesStateKey = 'approvedPromptCategories';
+export const categoryDescriptionsStateKey = 'promptCategoryDescriptions';
 const baselineKey = 'userPromptSyncBaseline';
 
 interface SyncState {
@@ -76,7 +77,11 @@ export class UserPromptSync {
 
   configure(enabled: boolean): Promise<void> {
     this.enabled = enabled;
-    this.state.setKeysForSync(enabled ? [userPromptSyncStateKey, approvedCategoriesStateKey] : []);
+    this.state.setKeysForSync(
+      enabled
+        ? [userPromptSyncStateKey, approvedCategoriesStateKey, categoryDescriptionsStateKey]
+        : [],
+    );
     return enabled ? this.reconcile() : Promise.resolve();
   }
 

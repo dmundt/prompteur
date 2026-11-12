@@ -113,6 +113,7 @@ describe('native tree interactions', () => {
     const children = await tree.getChildren(roots[0]);
     expect(children.map((node) => node.kind)).toEqual(['category', 'problem']);
     expect(tree.getTreeItem(children[0]!).contextValue).toBe('category');
+    expect(tree.getTreeItem(children[0]!).description).toBeUndefined();
     expect(tree.getTreeItem(children[0]!).label).toBe('Review (1)');
     expect(tree.getTreeItem(children[1]!).contextValue).toBe('problem');
     expect(tree.getTreeItem(children[0]!).iconPath).toBeUndefined();

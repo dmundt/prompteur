@@ -9,6 +9,10 @@
 
 - Built-ins: `explain`, `plan`, `implement`, `review`, `test`, `debug`, `document`.
 - Users may approve profile-wide categories; runtime validates them. Remove a custom category only when no valid prompt uses it.
+- **Add Prompt Category** creates approved categories independently of prompt creation. **Approve Prompt Category** on an unapproved-category problem row rechecks the saved file, asks for optional help, and requires profile approval. It never rewrites prompt content or silently approves YAML values.
+- Custom category creation asks for an optional single-line description, trimmed to at most 240 characters. **Edit Category Description** targets a custom category row or offers a native picker of approved custom categories, including unused ones. Blank clears help; Escape cancels without changes. Built-in descriptions are read-only. Description edits update both scopes' hover without modifying prompt files or requiring Workspace Trust.
+- Custom category rows display a muted `custom` description. **Rename Category...** accepts a distinct, unapproved name (normalized lowercase, maximum 64 characters), confirms affected saved prompts across both libraries, and preserves category help, filenames, comments, and body text. Built-ins cannot be renamed. Unsaved affected editors, invalid library prompts, or untrusted workspace writes block rename. Preferred Category settings and active filters remain unchanged.
+- Rename uses expected-source writes. On failure it attempts source-checked rollback; newer file content is never overwritten. Incomplete recovery reports affected paths and retains both approved categories for repair.
 - JSON Schema covers frontmatter. Prompt body is raw Markdown after closing `---`.
 
 - `prompteur.defaultScope`: applies to untargeted New, Add Starter Library, and Paste Prompt. Explicit tree targets win. `ask` shows the picker when both libraries exist; otherwise it selects User. Missing configured Workspace library errors; never redirect to User.
@@ -30,23 +34,27 @@
 - Tooltip links filter tags/categories or open the current Markdown path; commands re-resolve paths.
 - `generate(content, context)` returns `{ text, missing }` for `selection`, `clipboard`, `filename`, `workspace`, and `text`; condenses repeated blank lines.
 
-| Command                     | Action                                          |
-| --------------------------- | ----------------------------------------------- |
-| `prompteur.newPrompt`       | Create and open prompt Markdown                 |
-| `prompteur.addStarters`     | Copy missing starter prompts                    |
-| `prompteur.removeCategory`  | Remove an unused profile-approved category      |
-| `prompteur.edit`            | Open source or damaged Markdown prompt          |
-| `prompteur.delete`          | Confirm and delete a saved prompt               |
-| `prompteur.duplicate`       | Copy to a readable collision-safe filename      |
-| `prompteur.copy`            | Generate and copy to clipboard                  |
-| `prompteur.copyPrompt`      | Copy prompt data to a window-local buffer       |
-| `prompteur.pastePrompt`     | Create prompt copy in a library/category        |
-| `prompteur.preview`         | Open an independent plaintext snapshot          |
-| `prompteur.search`          | Open live main-tree filter                      |
-| `prompteur.clearSearch`     | Reset filter                                    |
-| `prompteur.refresh`         | Reload available libraries                      |
-| `prompteur.openSettings`    | Open Prompteur settings                         |
-| `prompteur.openUserLibrary` | Reveal User library root in system file manager |
+| Command                             | Action                                          |
+| ----------------------------------- | ----------------------------------------------- |
+| `prompteur.newPrompt`               | Create and open prompt Markdown                 |
+| `prompteur.addStarters`             | Copy missing starter prompts                    |
+| `prompteur.removeCategory`          | Remove an unused profile-approved category      |
+| `prompteur.addCategory`             | Approve a profile category without a new prompt |
+| `prompteur.approveCategory`         | Approve a saved prompt's unapproved category    |
+| `prompteur.renameCategory`          | Rename custom category and affected prompts     |
+| `prompteur.editCategoryDescription` | Edit optional custom category hover help        |
+| `prompteur.edit`                    | Open source or damaged Markdown prompt          |
+| `prompteur.delete`                  | Confirm and delete a saved prompt               |
+| `prompteur.duplicate`               | Copy to a readable collision-safe filename      |
+| `prompteur.copy`                    | Generate and copy to clipboard                  |
+| `prompteur.copyPrompt`              | Copy prompt data to a window-local buffer       |
+| `prompteur.pastePrompt`             | Create prompt copy in a library/category        |
+| `prompteur.preview`                 | Open an independent plaintext snapshot          |
+| `prompteur.search`                  | Open live main-tree filter                      |
+| `prompteur.clearSearch`             | Reset filter                                    |
+| `prompteur.refresh`                 | Reload available libraries                      |
+| `prompteur.openSettings`            | Open Prompteur settings                         |
+| `prompteur.openUserLibrary`         | Reveal User library root in system file manager |
 
 - Tree arguments are private. Palette invocations select scope/prompt as needed.
 - Prompt-record copy/paste is window-local, source-preserving, and separate from OS clipboard. Paste is enabled when the window-local buffer contains a copied prompt.
