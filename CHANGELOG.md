@@ -4,6 +4,7 @@
 
 ## 1.1.0
 
+- Simplify the Activity Bar tent icon.
 - Show saved prompt context variables in the prompt hover.
 - Report how many existing starter files match or differ from bundled versions; keep existing files and unsaved edits.
 - Remove User and Workspace scope icons to reduce tree-view visual noise.
