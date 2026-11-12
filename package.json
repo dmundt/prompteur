@@ -238,6 +238,12 @@
         "icon": "$(refresh)"
       },
       {
+        "command": "prompteur.openUserLibrary",
+        "title": "Reveal User Library Folder",
+        "category": "Prompteur",
+        "icon": "$(folder-opened)"
+      },
+      {
         "command": "prompteur.openSettings",
         "title": "Prompteur Settings",
         "category": "Prompteur",
