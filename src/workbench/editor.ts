@@ -83,19 +83,18 @@ export class NativeEditor implements vscode.Disposable {
       const data = decodeMarkdown(source, this.allowedCategories());
       const bodyOffset = source.length - data.content.length;
       diagnosticOffset = bodyOffset;
+      let tokens: ReturnType<typeof variableTokens>;
       try {
-        variableTokens(data.content);
+        tokens = variableTokens(data.content);
       } catch (error) {
         throw new PromptDocumentError(messageOf(error), bodyOffset);
       }
       this.diagnostics.set(document.uri, []);
-      const ranges = [
-        ...data.content.matchAll(/{{\s*(selection|clipboard|filename|workspace)\s*}}/g),
-      ].map(
-        (match) =>
+      const ranges = tokens.map(
+        (token) =>
           new vscode.Range(
-            document.positionAt(bodyOffset + match.index),
-            document.positionAt(bodyOffset + match.index + match[0].length),
+            document.positionAt(bodyOffset + token.start),
+            document.positionAt(bodyOffset + token.start + token.length),
           ),
       );
       for (const editor of vscode.window.visibleTextEditors)

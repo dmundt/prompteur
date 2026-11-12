@@ -17,6 +17,7 @@ import { PromptLibraryTool } from './prompt-tool';
 import { PromptTree, type TreeNode } from './tree';
 import { UserPromptSync } from './user-prompt-sync';
 import { watchLibrary } from './watch';
+import { TextInput } from './text-input';
 
 const addCategoryValue = '__add_category__';
 const removeCategoryValue = '__remove_category__';
@@ -28,6 +29,7 @@ class Workbench implements vscode.Disposable {
   private readonly userPromptSync: UserPromptSync;
   private readonly editor: NativeEditor;
   private readonly tree: PromptTree;
+  private readonly textInput = new TextInput();
   private target: vscode.TextEditor | undefined;
   private searchBox: vscode.InputBox | undefined;
   private filterContextUpdate: Promise<void> = Promise.resolve();
@@ -77,7 +79,7 @@ class Workbench implements vscode.Disposable {
             this.service,
             () => this.roots.has('workspace'),
             () => vscode.workspace.isTrusted,
-            (entry) => this.generate(entry, this.destination()),
+            (entry, token) => this.generate(entry, this.destination(), token),
             () => this.searchOptions().selection,
           ),
         ),
@@ -97,6 +99,7 @@ class Workbench implements vscode.Disposable {
     );
     this.disposables.push(
       this.editor,
+      this.textInput,
       this.tree,
       vscode.window.createTreeView('prompteur.prompts', {
         treeDataProvider: this.tree,
@@ -135,6 +138,8 @@ class Workbench implements vscode.Disposable {
       preview: (node) => this.preview(node),
       search: () => this.search(),
       searchActive: () => this.search(),
+      useText: () => this.textInput.submit(),
+      cancelText: () => this.textInput.cancel(),
       openSettings: async () => {
         await vscode.commands.executeCommand(
           'workbench.action.openSettings',
@@ -156,6 +161,7 @@ class Workbench implements vscode.Disposable {
           try {
             await action(node);
           } catch (error) {
+            if (error instanceof vscode.CancellationError) return;
             this.report(error);
             throw error;
           }
@@ -257,7 +263,8 @@ class Workbench implements vscode.Disposable {
     return (
       !editor.document.isClosed &&
       !this.editor.contains(editor.document.uri) &&
-      !this.editor.isPreview(editor.document)
+      !this.editor.isPreview(editor.document) &&
+      !this.textInput.contains(editor.document)
     );
   }
 
@@ -621,11 +628,14 @@ class Workbench implements vscode.Disposable {
     await vscode.window.showTextDocument(this.uri({ scope, path }));
   }
 
-  private async generate(entry: Entry, target: vscode.TextEditor | undefined) {
+  private async generate(
+    entry: Entry,
+    target: vscode.TextEditor | undefined,
+    token?: vscode.CancellationToken,
+  ) {
     this.assertTrusted(entry);
-    const needsClipboard = variableTokens(entry.data.content).some(
-      (token) => token.name === 'clipboard',
-    );
+    const tokens = variableTokens(entry.data.content);
+    const needsClipboard = tokens.some((token) => token.name === 'clipboard');
     const context: Context = {
       selection: target?.document.getText(target.selection) ?? '',
       clipboard: needsClipboard ? await vscode.env.clipboard.readText() : '',
@@ -635,6 +645,10 @@ class Workbench implements vscode.Disposable {
         vscode.workspace.workspaceFolders?.[0]?.name ??
         '',
     };
+    if (tokens.some((token) => token.name === 'text'))
+      context.text = await this.textInput.request(token);
+    if (token?.isCancellationRequested) throw new vscode.CancellationError();
+    this.assertTrusted(entry);
     return generate(entry.data.content, context);
   }
 
@@ -720,6 +734,7 @@ class Workbench implements vscode.Disposable {
 export async function start(context: vscode.ExtensionContext): Promise<void> {
   await vscode.commands.executeCommand('setContext', 'prompteur.hasCopiedPrompt', false);
   await vscode.commands.executeCommand('setContext', 'prompteur.filterActive', false);
+  await vscode.commands.executeCommand('setContext', 'prompteur.textInputDocuments', []);
   const workbench = new Workbench(context);
   context.subscriptions.push(workbench);
   await workbench.initialize();

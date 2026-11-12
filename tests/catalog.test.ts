@@ -81,18 +81,25 @@ describe('bundled prompt starters', () => {
         true,
       );
   });
-  it('renders selected context for issue and task drafts', async () => {
+  it('renders explicit text for request-based starters', async () => {
     const snapshot = await new LibraryService(
       new LocalFiles(() => resolve('resources/starter')),
     ).get('user');
-    for (const name of ['create-issue', 'create-task']) {
+    for (const name of [
+      'create-issue',
+      'create-task',
+      'clarify-requirements',
+      'plan-smallest-useful-implementation',
+      'implement-scoped-change',
+    ]) {
       const entry = snapshot.entries.find((item) => item.path === `prompts/${name}.prompt.md`);
       expect(entry).toBeDefined();
-      const result = generate(entry!.data.content, { selection: 'Selected request' });
+      const result = generate(entry!.data.content, {
+        text: 'Entered request',
+        workspace: 'project',
+      });
       expect(result.missing).toEqual([]);
-      expect(result.text).toContain('Selected request');
-      expect(result.text).toContain('Headline:');
-      expect(result.text).toContain('Description:');
+      expect(result.text).toContain('Entered request');
     }
   });
 });

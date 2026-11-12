@@ -17,9 +17,10 @@ npm run package
 - Filesystem tests: conflicts, stale writes/deletes, path confinement, oversized input.
 - Release-boundary tests: sole view, contributed commands and one read-only tool; no import/export or extension dependency; old state preserved.
 - Native-save tests: preserve user formatting.
+- Text-input tests: multiline/repeated substitution, blank/size validation, cancel/close/disposal, concurrency, source context exclusion, Trust recheck, and Copilot selection/cancellation.
 
 - Host smoke: isolated workspace/profile; Trust enabled; startup prompts disabled.
-- Checks Restricted Mode blocking, User prompt use, clipboard handoff, source preservation, removed Insert command, starters, and plaintext preview.
+- Checks Restricted Mode blocking, User prompt use, clipboard handoff, source preservation, removed Insert command, starters, plaintext preview, and multiline text submission.
 - Host smoke verifies Language Model Tool registration when supported; tool search/render is unit-tested with a VS Code API mock. Tests and extension code make no model-provider requests.
 - Runner restores clipboard and removes temp workspace data.
 

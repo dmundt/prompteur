@@ -173,6 +173,10 @@ export class FakeDocument {
     this.isDirty = true;
     changed.fire({ document: this });
   }
+  close() {
+    this.isClosed = true;
+    closed.fire(this);
+  }
 }
 export class FakeEditor {
   selection = new Range(new Position(0, 0), new Position(0, 0));

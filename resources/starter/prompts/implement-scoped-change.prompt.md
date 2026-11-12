@@ -8,7 +8,7 @@ tags: [implementation, feature, bugfix, verification]
 
 Implement this scoped change in {{workspace}}:
 
-{{selection}}
+{{text}}
 
 - If request is empty or essential behavior ambiguous, ask before editing.
 - Inspect relevant source, callers, tests, and patterns. Do not invent APIs or unseen content.

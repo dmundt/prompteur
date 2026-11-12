@@ -18,7 +18,10 @@ export class PromptLibraryTool implements vscode.LanguageModelTool<PromptToolInp
     private readonly service: LibraryService,
     private readonly hasWorkspace: () => boolean,
     private readonly isTrusted: () => boolean,
-    private readonly render: (entry: Entry) => Promise<RenderedPrompt>,
+    private readonly render: (
+      entry: Entry,
+      token: vscode.CancellationToken,
+    ) => Promise<RenderedPrompt>,
     private readonly selection: () => 'bestMatch' | 'requireChoice' = () => 'bestMatch',
   ) {}
 
@@ -28,7 +31,7 @@ export class PromptLibraryTool implements vscode.LanguageModelTool<PromptToolInp
       confirmationMessages: {
         title: 'Share a prompt with Copilot?',
         message:
-          'Search local Prompteur libraries and return a matching prompt to Copilot. Best Match selection returns a unique highest-ranked prompt without a separate candidate choice, even when lower-ranked matches exist. Ties require a choice. A rendered prompt can include the active selection, clipboard text, filename, or workspace name when its template requests those variables.',
+          'Search local Prompteur libraries and return a matching prompt to Copilot. Best Match selection returns a unique highest-ranked prompt without a separate candidate choice, even when lower-ranked matches exist. Ties require a choice. A rendered prompt can include the active selection, clipboard text, filename, workspace name, or explicitly entered multiline text when its template requests those variables.',
       },
     };
   }
@@ -114,7 +117,7 @@ export class PromptLibraryTool implements vscode.LanguageModelTool<PromptToolInp
     }
 
     const entry = matches[0]!;
-    const rendered = await this.render(entry);
+    const rendered = await this.render(entry, token);
     if (token.isCancellationRequested) throw new vscode.CancellationError();
     return this.result(
       JSON.stringify(

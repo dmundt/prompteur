@@ -8,7 +8,7 @@ tags: [task, tracking, work]
 
 Draft a task from this context:
 
-{{selection}}
+{{text}}
 
 - Output only `Headline: ...` and `Description: ...`; keep both concise.
 - State the work to do, desired outcome, and relevant constraints.
