@@ -595,16 +595,20 @@ class Workbench implements vscode.Disposable {
     if (!entry) return;
     const result = await this.generate(entry, target);
     if (
-      result.missing.length &&
+      result.missing.includes('clipboard') &&
       (await vscode.window.showWarningMessage(
-        `Empty variable values: ${result.missing.join(', ')}`,
+        'Clipboard is empty. Copy the prompt without clipboard input?',
         { modal: true },
         'Continue',
       )) !== 'Continue'
     )
       return;
     await vscode.env.clipboard.writeText(result.text);
-    void vscode.window.showInformationMessage('Text copied. Paste into Chat or editor.');
+    void vscode.window.showInformationMessage(
+      result.missing.length
+        ? `Copied without context: ${result.missing.join(', ')}.`
+        : 'Text copied. Paste into Chat or editor.',
+    );
   }
 
   private async preview(node?: TreeNode): Promise<void> {
