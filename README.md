@@ -49,12 +49,18 @@ code --install-extension prompteur-1.1.0.vsix
   - **Category Count Mode**: Filtered (default), Total, or Hidden. Search still controls which categories appear.
   - **Group by Category**: On by default; turn off for a flat prompt list.
   - **Sync User Prompts**: On by default; uses VS Code Settings Sync between instances. Incoming changes apply on activation or **Reload Libraries**. Workspace prompts do not sync.
+  - **Search: Matching**: `fullText` (default) prefers exact names, then full text; `exact` matches whole names only; `fuzzy` also tries typo-tolerant names when neither earlier phase matches.
+  - **Search: Case Sensitive**: Off by default; applies to names/free text. Tag/category filters remain exact and case-insensitive.
+  - **Search: Ranking**: `relevance` (default) or `name`. Relevance prefers exact names, name prefixes, name substrings, metadata, then body text; multiword queries use their weakest matching field.
+  - **Search: Selection**: `bestMatch` (default) lets Copilot return the unique highest-relevance prompt after tool approval, even with lower-ranked matches present. `requireChoice` returns candidates whenever multiple prompts match. Duplicate exact names and highest-score ties always require a choice. Tree filtering never automatically opens or runs prompts.
 
 - Built-in virtual categories: Explain, Plan, Implement, Review, Test, Debug, Document.
 - Add profile-wide categories only after confirmation. Remove unused categories with **Remove Prompt Category**; reassign prompts first.
 - Tags cross categories; **Show Tags** controls row labels. Tooltip links filter exact tags/categories or open the Markdown file.
 - Filters use AND semantics; quote values with spaces (for example, `tag:"security review"`).
-- Search covers names, descriptions, tags, content, and paths. Results sort alphabetically.
+- Search covers names, descriptions, categories, tags, content, and paths. Matching/case/ranking settings apply to both tree filtering and Copilot. Existing exact-name queries now hide broader tree matches; default ordering is relevance, not alphabetical. Empty/filter-only queries retain alphabetical browsing.
+- Fuzzy fallback compares the whole free-text query to prompt names: no fuzzy matching below 4 characters; 1 edit for 4–7, 2 for 8+. Insertions, deletions, and replacements count as edits; adjacent transposition counts as two. Filters still apply. Fuzzy results rank by fewer edits.
+- Settings apply without reloading. Prompt files remain unchanged; no migration required.
 
 ## Use Prompts with Chat
 
@@ -71,9 +77,10 @@ code --install-extension prompteur-1.1.0.vsix
 
 5. Approve sharing when VS Code requests confirmation. VS Code may offer **Always Allow**.
 
-- Exact prompt names take priority over full-text matches, ignoring case and surrounding whitespace.
-- One match: returns the rendered prompt and missing-context details to Copilot.
-- Multiple matches, including repeated exact names: returns names, User/Workspace scope, category, and path without prompt content. Choose a candidate; Copilot can retrieve its exact scope/path without another search.
+- Exact prompt names take priority according to configured case sensitivity; surrounding whitespace is ignored. Optional fuzzy fallback applies only after full-text finds nothing.
+- One match, or a unique highest-relevance match with `bestMatch`: returns the rendered prompt and missing-context details to Copilot. This may share requested context without a separate candidate-choice round.
+- Repeated exact names, highest-score ties, or multiple matches with `requireChoice`: returns names, User/Workspace scope, category, and path without prompt content. Choose a candidate; Copilot can retrieve its exact scope/path without another search.
+- Alphabetical result ordering never decides auto-selection. Set `prompteur.search.selection` to `requireChoice` to retain conservative multiple-match handling.
 - Example follow-up: `Use the Workspace candidate at prompts/review-code.prompt.md.` Copilot supplies `scope: "workspace"` and that `path`, omitting `query`.
 - No match: reports not found.
 - Missing candidate path: reports not found; never substitutes another prompt. Refresh the search if a prompt was renamed or removed.

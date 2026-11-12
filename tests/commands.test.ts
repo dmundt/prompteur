@@ -245,6 +245,17 @@ describe('release commands', () => {
           default: 'filtered',
         },
         'prompteur.groupByCategory': { type: 'boolean', default: true },
+        'prompteur.search.matching': {
+          enum: ['exact', 'fullText', 'fuzzy'],
+          default: 'fullText',
+          scope: 'window',
+        },
+        'prompteur.search.caseSensitive': { type: 'boolean', default: false },
+        'prompteur.search.ranking': { enum: ['relevance', 'name'], default: 'relevance' },
+        'prompteur.search.selection': {
+          enum: ['bestMatch', 'requireChoice'],
+          default: 'bestMatch',
+        },
         'prompteur.syncUserPrompts': {
           type: 'boolean',
           default: true,
@@ -469,6 +480,126 @@ describe('release commands', () => {
     expect(result.status).toBe('match');
     expect(result.prompt.path).toBe('prompts/review.prompt.md');
     expect(result.content).toBe('Exact prompt');
+  });
+  it('auto-selects the unique best across scopes without reading losing prompt context', async () => {
+    await addPrompt('alpha', 'inspect {{clipboard}}');
+    await addPrompt('inspect-carefully', 'Winner {{selection}}', 'workspace');
+    await destination('selected');
+    const readClipboard = vi.spyOn(env.clipboard, 'readText');
+    const result = JSON.parse(await runPromptTool({ query: 'inspect' }));
+    expect(result.status).toBe('match');
+    expect(result.prompt.scope).toBe('workspace');
+    expect(result.content).toBe('Winner selected');
+    expect(readClipboard).not.toHaveBeenCalled();
+    workspace.configuration.set('prompteur.search.selection', 'requireChoice');
+    const candidates = JSON.parse(await runPromptTool({ query: 'inspect' }));
+    expect(candidates.status).toBe('ambiguous');
+    expect(candidates.matches.map((match: { name: string }) => match.name)).toEqual([
+      'inspect-carefully',
+      'alpha',
+    ]);
+    expect(candidates).not.toHaveProperty('content');
+    expect(readClipboard).not.toHaveBeenCalled();
+    workspace.configuration.set('prompteur.search.ranking', 'name');
+    const alphabetical = JSON.parse(await runPromptTool({ query: 'inspect' }));
+    expect(alphabetical.matches.map((match: { name: string }) => match.name)).toEqual([
+      'alpha',
+      'inspect-carefully',
+    ]);
+    workspace.configuration.set('prompteur.search.selection', 'bestMatch');
+    expect(JSON.parse(await runPromptTool({ query: 'inspect' })).content).toBe('Winner selected');
+  });
+  it('applies matching phases across both scopes before choosing a result', async () => {
+    await addPrompt('other', 'inspect');
+    await addPrompt('inspect', 'Exact workspace', 'workspace');
+    expect(JSON.parse(await runPromptTool({ query: 'inspect' })).content).toBe('Exact workspace');
+    workspace.configuration.set('prompteur.search.matching', 'fuzzy');
+    await addPrompt('reviex', 'Fuzzy user');
+    await addPrompt('another', 'review', 'workspace');
+    const result = JSON.parse(await runPromptTool({ query: 'review' }));
+    expect(result.content).toBe('review');
+    expect(result.prompt.scope).toBe('workspace');
+  });
+  it('keeps fuzzy score ties ambiguous and uses distance rather than alphabetical order', async () => {
+    workspace.configuration.set('prompteur.search.matching', 'fuzzy');
+    await addPrompt('reviewyy', 'Farther');
+    await addPrompt('reviewxy', 'Closer {{selection}}');
+    await destination('context');
+    expect(JSON.parse(await runPromptTool({ query: 'reviewxx' })).content).toBe('Closer context');
+    await addPrompt('reviewxz', 'Tied {{clipboard}}', 'workspace');
+    const readClipboard = vi.spyOn(env.clipboard, 'readText');
+    const result = JSON.parse(await runPromptTool({ query: 'reviewxx' }));
+    expect(result.status).toBe('ambiguous');
+    expect(result.matches.map((match: { name: string }) => match.name)).toEqual([
+      'reviewxy',
+      'reviewxz',
+      'reviewyy',
+    ]);
+    expect(result).not.toHaveProperty('content');
+    expect(readClipboard).not.toHaveBeenCalled();
+  });
+  it('computes best match before candidate truncation even with alphabetical ordering', async () => {
+    for (let index = 0; index < 11; index++) await addPrompt(`alpha-${index}`, 'inspect');
+    await addPrompt('z-inspect', 'Best');
+    workspace.configuration.set('prompteur.search.ranking', 'name');
+    expect(JSON.parse(await runPromptTool({ query: 'inspect' })).content).toBe('Best');
+    workspace.configuration.set('prompteur.search.selection', 'requireChoice');
+    const result = JSON.parse(await runPromptTool({ query: 'inspect' }));
+    expect(result.matches).toHaveLength(10);
+    expect(result.truncated).toBe(true);
+    expect(result).not.toHaveProperty('content');
+  });
+  it('refreshes library filtering for live settings while leaving every matching row visible', async () => {
+    await addPrompt('alpha', 'Inspect body');
+    const named = await addPrompt('Inspect-carefully', 'Name match');
+    const refresh = vi.spyOn(tree(), 'refresh');
+    tree().query = 'Inspect';
+    expect((await entries()).map((node) => node.entry.data.name)).toEqual([
+      'Inspect-carefully',
+      'alpha',
+    ]);
+    workspace.configuration.set('prompteur.search.ranking', 'name');
+    configurationChanged.fire({
+      affectsConfiguration: (section) => section === 'prompteur.search',
+    });
+    expect(refresh).toHaveBeenCalled();
+    expect((await entries()).map((node) => node.entry.data.name)).toEqual([
+      'alpha',
+      'Inspect-carefully',
+    ]);
+    workspace.configuration.set('prompteur.search.matching', 'exact');
+    expect(await entries()).toEqual([]);
+    tree().query = 'inspect-carefully';
+    expect(await entries()).toHaveLength(1);
+    workspace.configuration.set('prompteur.search.caseSensitive', true);
+    expect(await entries()).toEqual([]);
+    expect(JSON.parse(await runPromptTool({ query: 'inspect-carefully' })).status).toBe(
+      'not_found',
+    );
+    expect(JSON.parse(await runPromptTool({ scope: 'user', path: named.entry.path })).content).toBe(
+      'Name match',
+    );
+    workspace.configuration.set('prompteur.search.matching', 'fuzzy');
+    workspace.configuration.set('prompteur.search.caseSensitive', false);
+    tree().query = 'Inspect-carefullx';
+    expect(await entries()).toHaveLength(1);
+    expect(JSON.parse(await runPromptTool({ query: tree().query })).content).toBe('Name match');
+    tree().query = '';
+    expect(await entries()).toHaveLength(2);
+  });
+  it.each([
+    ['matching', 'unsupported'],
+    ['caseSensitive', 'yes'],
+    ['ranking', 'recent'],
+    ['selection', 'first'],
+  ])('reports invalid search.%s configuration explicitly', async (key, value) => {
+    await addPrompt('inspect', 'Body');
+    workspace.configuration.set(`prompteur.search.${key}`, value);
+    await expect(runPromptTool({ query: 'inspect' })).rejects.toThrow(
+      'Invalid Prompteur search settings',
+    );
+    expect(await entries()).toEqual([]);
+    expect(messages.errors.at(-1)).toContain('Invalid Prompteur search settings');
   });
   it('keeps duplicate exact names ambiguous and renders only the explicitly selected candidate', async () => {
     await addPrompt('review', 'Personal review');
