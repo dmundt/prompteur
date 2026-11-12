@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Add Create Issue and Create Task starters for concise headlines and descriptions.
 - Show an active filter icon in the prompt view toolbar.
 
 ## 1.1.0
