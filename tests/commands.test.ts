@@ -4,19 +4,26 @@ import * as fs from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { activate } from '../src/extension';
+import type { PromptToolInput } from '../src/workbench/prompt-tool';
 import { decodeMarkdown, encodeMarkdown, newPrompt } from '../src/core/documents';
+import { LocalFiles } from '../src/platform/local-files';
 import type { PromptTree, TreeNode } from '../src/workbench/tree';
 import {
   collections,
   commands,
   commandExecutions,
+  contextKeys,
   configurationChanged,
+  CancellationError,
+  Disposable,
   env,
   FakeDocument,
   FakeEditor,
   FakeMemento,
   handlers,
   inputBoxes,
+  languageModelTools,
+  LanguageModelTextPart,
   MarkdownString,
   messages,
   providers,
@@ -39,6 +46,23 @@ let context: {
   subscriptions: { dispose(): void }[];
 };
 const run = (name: string, node?: TreeNode) => commands.executeCommand(`prompteur.${name}`, node);
+const noCancellation: vscode.CancellationToken = {
+  isCancellationRequested: false,
+  onCancellationRequested: () => new Disposable(),
+};
+const promptTool = () =>
+  languageModelTools.get('prompteur_findPrompt') as vscode.LanguageModelTool<PromptToolInput>;
+const runPromptTool = async (input: PromptToolInput) => {
+  const result = await promptTool().invoke(
+    { input, toolInvocationToken: undefined },
+    noCancellation,
+  );
+  if (!result) throw new Error('Prompt tool returned no result');
+  return result.content
+    .filter((part): part is vscode.LanguageModelTextPart => part instanceof LanguageModelTextPart)
+    .map((part) => part.value)
+    .join('');
+};
 const userRoot = () => join(root, 'user', 'prompts');
 const workspaceRoot = () => join(root, 'project', '.vscode', 'prompts');
 const tree = () => views.get('prompteur.prompts')!.treeDataProvider as PromptTree;
@@ -154,14 +178,23 @@ describe('release commands', () => {
       'import',
       'export',
       'insert',
+      'sendToChat',
       'migrateCategories',
     ])
       expect(handlers.has(`prompteur.${command}`)).toBe(false);
     const manifest = JSON.parse(await fs.readFile('package.json', 'utf8')) as {
+      activationEvents: string[];
+      extensionDependencies?: string[];
       contributes: {
-        commands: { command: string; title: string }[];
+        commands: { command: string; title: string; enablement?: string }[];
+        languageModelTools: {
+          name: string;
+          canBeReferencedInPrompt: boolean;
+          inputSchema: { properties: Record<string, unknown>; oneOf: unknown[] };
+        }[];
         configuration: { properties: Record<string, unknown> };
         menus: {
+          commandPalette: { command: string; when: string }[];
           'view/item/context': { command: string; when: string; group: string }[];
           'view/title': { command: string; when: string; group: string }[];
         };
@@ -174,6 +207,24 @@ describe('release commands', () => {
         'prompteur.openPromptPath',
       ].sort(),
     );
+    expect(manifest.activationEvents).toContain('onLanguageModelTool:prompteur_findPrompt');
+    expect(manifest.extensionDependencies).toBeUndefined();
+    expect(manifest.contributes.languageModelTools).toHaveLength(1);
+    expect(manifest.contributes.languageModelTools[0]).toMatchObject({
+      name: 'prompteur_findPrompt',
+      canBeReferencedInPrompt: true,
+      inputSchema: {
+        properties: {
+          query: { type: 'string', minLength: 1, maxLength: 256 },
+          scope: { type: 'string', enum: ['user', 'workspace'] },
+          path: { type: 'string', minLength: 1 },
+        },
+        oneOf: [
+          { required: ['query'], not: { required: ['path'] } },
+          { required: ['scope', 'path'], not: { required: ['query'] } },
+        ],
+      },
+    });
     expect(manifest.contributes).not.toHaveProperty('keybindings');
     expect(manifest.contributes.menus['view/title']).toContainEqual({
       command: 'prompteur.openSettings',
@@ -195,6 +246,17 @@ describe('release commands', () => {
           default: 'filtered',
         },
         'prompteur.groupByCategory': { type: 'boolean', default: true },
+        'prompteur.search.matching': {
+          enum: ['exact', 'fullText', 'fuzzy'],
+          default: 'fullText',
+          scope: 'window',
+        },
+        'prompteur.search.caseSensitive': { type: 'boolean', default: false },
+        'prompteur.search.ranking': { enum: ['relevance', 'name'], default: 'relevance' },
+        'prompteur.search.selection': {
+          enum: ['bestMatch', 'requireChoice'],
+          default: 'bestMatch',
+        },
         'prompteur.syncUserPrompts': {
           type: 'boolean',
           default: true,
@@ -208,18 +270,23 @@ describe('release commands', () => {
         item.when.includes('viewItem =~ /^(prompt|problem)$/'),
     );
     expect(
-      promptMenu.filter((item) => item.group !== 'inline@1').map((item) => item.command),
+      promptMenu.filter((item) => !item.group.startsWith('inline@')).map((item) => item.command),
     ).toEqual([
       'prompteur.copy',
       'prompteur.copyPrompt',
-      'prompteur.duplicate',
       'prompteur.preview',
       'prompteur.edit',
       'prompteur.delete',
     ]);
-    expect(promptMenu).toContainEqual(
+    expect(promptMenu.filter((item) => item.group.startsWith('inline@'))).toEqual([
       expect.objectContaining({ command: 'prompteur.copy', group: 'inline@1' }),
-    );
+    ]);
+    const contextItems = promptMenu.filter((item) => !item.group.startsWith('inline@'));
+    expect(contextItems[0]?.group).toBe('0_text@1');
+    expect(contextItems.slice(1).every((item) => item.group.split('@')[0] !== '0_text')).toBe(true);
+    expect(manifest.contributes.menus.commandPalette).toEqual([
+      { command: 'prompteur.duplicate', when: 'false' },
+    ]);
     expect(manifest.contributes.menus['view/item/context']).toContainEqual(
       expect.objectContaining({
         command: 'prompteur.pastePrompt',
@@ -240,12 +307,24 @@ describe('release commands', () => {
     ).toEqual([
       ['prompteur.edit', 'Edit'],
       ['prompteur.duplicate', 'Duplicate'],
-      ['prompteur.copy', 'Copy'],
+      ['prompteur.copy', 'Copy Text'],
       ['prompteur.preview', 'Preview'],
     ]);
+    expect(manifest.contributes.commands).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ command: 'prompteur.newPrompt', title: 'New' }),
+        expect.objectContaining({ command: 'prompteur.copyPrompt', title: 'Copy Prompt' }),
+        expect.objectContaining({
+          command: 'prompteur.pastePrompt',
+          title: 'Paste Prompt',
+          enablement: 'prompteur.hasCopiedPrompt',
+        }),
+      ]),
+    );
     const node = await addPrompt('plain', 'Plain');
     const before = new Map(context.globalState.values);
     await run('copy', node);
+    expect(messages.info.at(-1)).toBe('Text copied. Paste into Chat or editor.');
     await run('preview', node);
     expect(context.globalState.values).toEqual(before);
     expect(providers.size).toBe(0);
@@ -318,7 +397,94 @@ describe('release commands', () => {
     );
     await destination();
     await run('copy', node);
-    expect(env.clipboard.value).toContain('Inspect this change');
+    expect(env.clipboard.value).toContain('Review the selected code or available diff:');
+  });
+  it('summarizes saved matches and differences while preserving dirty and invalid prompts', async () => {
+    const starterDir = resolve('resources/starter/prompts');
+    const paths = (await fs.readdir(starterDir))
+      .filter((path) => path.endsWith('.prompt.md'))
+      .sort();
+    const matching = paths[0]!;
+    const invalid = paths[1]!;
+    const unsaved = paths[2]!;
+    const target = join(userRoot(), 'prompts');
+    await fs.mkdir(target, { recursive: true });
+    const original = await fs.readFile(join(starterDir, matching), 'utf8');
+    await fs.writeFile(join(target, matching), original);
+    await fs.writeFile(join(target, invalid), 'invalid frontmatter');
+    const dirtyExisting = new FakeDocument(Uri.file(join(target, matching)), original);
+    dirtyExisting.change('Unsaved changes to an existing prompt');
+    const dirtyMissing = new FakeDocument(Uri.file(join(target, unsaved)), '');
+    dirtyMissing.change('Unsaved new prompt');
+    workspace.textDocuments.push(dirtyExisting, dirtyMissing);
+
+    await run('addStarters', scopeNode());
+    expect(messages.info.at(-1)).toBe(
+      'Added 13 starter prompts. Saved files matching bundled versions: 1; differing: 1. Unsaved editors without saved files skipped: 1. No existing files were overwritten.',
+    );
+    expect(await fs.readFile(join(target, matching), 'utf8')).toBe(original);
+    expect(await fs.readFile(join(target, invalid), 'utf8')).toBe('invalid frontmatter');
+    await expect(fs.stat(join(target, unsaved))).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(dirtyExisting.getText()).toBe('Unsaved changes to an existing prompt');
+    expect(dirtyMissing.getText()).toBe('Unsaved new prompt');
+    expect(dirtyExisting.isDirty && dirtyMissing.isDirty).toBe(true);
+  });
+  it('summarizes identical starters when rerun', async () => {
+    await run('addStarters', scopeNode());
+    await run('addStarters', scopeNode());
+    expect(messages.info.at(-1)).toContain(
+      'Saved files matching bundled versions: 16; differing: 0',
+    );
+  });
+  it('reports a concurrent starter creation without overwriting it', async () => {
+    const originalWrite = LocalFiles.prototype.write;
+    let racedPath = '';
+    vi.spyOn(LocalFiles.prototype, 'write').mockImplementation(async function (
+      this: LocalFiles,
+      scope,
+      path,
+      text,
+      expected,
+    ) {
+      if (!racedPath && scope === 'user' && expected === undefined) {
+        racedPath = join(userRoot(), path);
+        await fs.mkdir(join(userRoot(), 'prompts'), { recursive: true });
+        await fs.writeFile(racedPath, 'concurrent content');
+      }
+      return originalWrite.call(this, scope, path, text, expected);
+    });
+    await expect(run('addStarters', scopeNode())).rejects.toThrow(
+      'Starter installation stopped after 0 prompts: File changed on disk',
+    );
+    expect(await fs.readFile(racedPath, 'utf8')).toBe('concurrent content');
+    expect(messages.info).toHaveLength(0);
+  });
+  it('reports partial starter progress on failure and refuses untrusted workspace writes', async () => {
+    const originalWrite = LocalFiles.prototype.write;
+    let attempts = 0;
+    vi.spyOn(LocalFiles.prototype, 'write').mockImplementation(async function (
+      this: LocalFiles,
+      scope,
+      path,
+      text,
+      expected,
+    ) {
+      if (++attempts === 2) throw new Error('Disk unavailable');
+      return originalWrite.call(this, scope, path, text, expected);
+    });
+    await expect(run('addStarters', scopeNode())).rejects.toThrow(
+      'Starter installation stopped after 1 prompts: Disk unavailable',
+    );
+    expect(await fs.readdir(join(userRoot(), 'prompts'))).toHaveLength(1);
+    expect(messages.info).toHaveLength(0);
+    vi.restoreAllMocks();
+    workspace.isTrusted = false;
+    await expect(run('addStarters', scopeNode('workspace'))).rejects.toThrow(
+      'Trust this workspace',
+    );
+    await expect(fs.stat(join(workspaceRoot(), 'prompts'))).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
   });
   it('copies retained editor selections without changing source or persistent state', async () => {
     const node = await addPrompt();
@@ -333,6 +499,362 @@ describe('release commands', () => {
     await run('copy', plain);
     expect(env.clipboard.value).toBe('{{selection}} project');
     expect(context.globalState.values).toEqual(before);
+  });
+  it('copies generated prompt text to the clipboard with paste guidance', async () => {
+    const node = await addPrompt('chat', 'Review {{selection}} in {{filename}}');
+    const target = await destination('selected code');
+    await run('copy', node);
+    expect(env.clipboard.value).toBe('Review selected code in main.ts');
+    expect(messages.info.at(-1)).toBe('Text copied. Paste into Chat or editor.');
+    expect(target.document.getText()).toBe('selected code');
+  });
+  it('lets the Command Palette copy selected prompt text', async () => {
+    await addPrompt('palette', 'Ask a useful question');
+    await run('copy');
+    expect(env.clipboard.value).toBe('Ask a useful question');
+  });
+  it('registers a read-only prompt tool and returns rendered prompt text with confirmation', async () => {
+    const node = await addPrompt('review', 'Review {{selection}} in {{filename}}');
+    await destination('selected code');
+    const prepared = await promptTool().prepareInvocation?.(
+      { input: { query: 'review' } },
+      noCancellation,
+    );
+    const confirmation = prepared?.confirmationMessages?.message;
+    expect(typeof confirmation === 'string' ? confirmation : confirmation?.value).toContain(
+      'active selection, clipboard text',
+    );
+    const result = JSON.parse(await runPromptTool({ query: 'review', scope: 'user' })) as {
+      status: string;
+      workspaceOmittedForTrust: boolean;
+      prompt: { name: string; scope: string; path: string };
+      missing: string[];
+      content: string;
+    };
+    expect(result).toEqual({
+      status: 'match',
+      workspaceOmittedForTrust: false,
+      prompt: {
+        name: 'review',
+        category: 'explain',
+        scope: 'user',
+        path: 'prompts/review.prompt.md',
+      },
+      missing: [],
+      content: 'Review selected code in main.ts',
+    });
+    expect(await fs.readFile(join(userRoot(), node.entry.path), 'utf8')).toBe(node.entry.source);
+  });
+  it('returns prompt metadata rather than content when search is ambiguous', async () => {
+    await addPrompt('shared-one', 'Use shared pattern one');
+    await addPrompt('shared-two', 'Use shared pattern two');
+    const result = JSON.parse(await runPromptTool({ query: 'shared' })) as {
+      status: string;
+      workspaceOmittedForTrust: boolean;
+      matches: { name: string; scope: string; path: string }[];
+      truncated: boolean;
+    };
+    expect(result.status).toBe('ambiguous');
+    expect(result.workspaceOmittedForTrust).toBe(false);
+    expect(result.matches.map((match) => match.name)).toEqual(['shared-one', 'shared-two']);
+    expect(result.matches.every((match) => match.scope === 'user')).toBe(true);
+    expect(result.truncated).toBe(false);
+    expect(result).not.toHaveProperty('content');
+  });
+  it('prefers a trimmed case-insensitive exact name over full-text matches', async () => {
+    await addPrompt('review', 'Exact prompt');
+    await addPrompt('other', 'Mention review in this broader match');
+    const result = JSON.parse(await runPromptTool({ query: '  REVIEW  ' }));
+    expect(result.status).toBe('match');
+    expect(result.prompt.path).toBe('prompts/review.prompt.md');
+    expect(result.content).toBe('Exact prompt');
+  });
+  it('auto-selects the unique best across scopes without reading losing prompt context', async () => {
+    await addPrompt('alpha', 'inspect {{clipboard}}');
+    await addPrompt('inspect-carefully', 'Winner {{selection}}', 'workspace');
+    await destination('selected');
+    const readClipboard = vi.spyOn(env.clipboard, 'readText');
+    const result = JSON.parse(await runPromptTool({ query: 'inspect' }));
+    expect(result.status).toBe('match');
+    expect(result.prompt.scope).toBe('workspace');
+    expect(result.content).toBe('Winner selected');
+    expect(readClipboard).not.toHaveBeenCalled();
+    workspace.configuration.set('prompteur.search.selection', 'requireChoice');
+    const candidates = JSON.parse(await runPromptTool({ query: 'inspect' }));
+    expect(candidates.status).toBe('ambiguous');
+    expect(candidates.matches.map((match: { name: string }) => match.name)).toEqual([
+      'inspect-carefully',
+      'alpha',
+    ]);
+    expect(candidates).not.toHaveProperty('content');
+    expect(readClipboard).not.toHaveBeenCalled();
+    workspace.configuration.set('prompteur.search.ranking', 'name');
+    const alphabetical = JSON.parse(await runPromptTool({ query: 'inspect' }));
+    expect(alphabetical.matches.map((match: { name: string }) => match.name)).toEqual([
+      'alpha',
+      'inspect-carefully',
+    ]);
+    workspace.configuration.set('prompteur.search.selection', 'bestMatch');
+    expect(JSON.parse(await runPromptTool({ query: 'inspect' })).content).toBe('Winner selected');
+  });
+  it('applies matching phases across both scopes before choosing a result', async () => {
+    await addPrompt('other', 'inspect');
+    await addPrompt('inspect', 'Exact workspace', 'workspace');
+    expect(JSON.parse(await runPromptTool({ query: 'inspect' })).content).toBe('Exact workspace');
+    workspace.configuration.set('prompteur.search.matching', 'fuzzy');
+    await addPrompt('reviex', 'Fuzzy user');
+    await addPrompt('another', 'review', 'workspace');
+    const result = JSON.parse(await runPromptTool({ query: 'review' }));
+    expect(result.content).toBe('review');
+    expect(result.prompt.scope).toBe('workspace');
+  });
+  it('keeps fuzzy score ties ambiguous and uses distance rather than alphabetical order', async () => {
+    workspace.configuration.set('prompteur.search.matching', 'fuzzy');
+    await addPrompt('reviewyy', 'Farther');
+    await addPrompt('reviewxy', 'Closer {{selection}}');
+    await destination('context');
+    expect(JSON.parse(await runPromptTool({ query: 'reviewxx' })).content).toBe('Closer context');
+    await addPrompt('reviewxz', 'Tied {{clipboard}}', 'workspace');
+    const readClipboard = vi.spyOn(env.clipboard, 'readText');
+    const result = JSON.parse(await runPromptTool({ query: 'reviewxx' }));
+    expect(result.status).toBe('ambiguous');
+    expect(result.matches.map((match: { name: string }) => match.name)).toEqual([
+      'reviewxy',
+      'reviewxz',
+      'reviewyy',
+    ]);
+    expect(result).not.toHaveProperty('content');
+    expect(readClipboard).not.toHaveBeenCalled();
+  });
+  it('computes best match before candidate truncation even with alphabetical ordering', async () => {
+    for (let index = 0; index < 11; index++) await addPrompt(`alpha-${index}`, 'inspect');
+    await addPrompt('z-inspect', 'Best');
+    workspace.configuration.set('prompteur.search.ranking', 'name');
+    expect(JSON.parse(await runPromptTool({ query: 'inspect' })).content).toBe('Best');
+    workspace.configuration.set('prompteur.search.selection', 'requireChoice');
+    const result = JSON.parse(await runPromptTool({ query: 'inspect' }));
+    expect(result.matches).toHaveLength(10);
+    expect(result.truncated).toBe(true);
+    expect(result).not.toHaveProperty('content');
+  });
+  it('refreshes library filtering for live settings while leaving every matching row visible', async () => {
+    await addPrompt('alpha', 'Inspect body');
+    const named = await addPrompt('Inspect-carefully', 'Name match');
+    const refresh = vi.spyOn(tree(), 'refresh');
+    tree().query = 'Inspect';
+    expect((await entries()).map((node) => node.entry.data.name)).toEqual([
+      'Inspect-carefully',
+      'alpha',
+    ]);
+    workspace.configuration.set('prompteur.search.ranking', 'name');
+    configurationChanged.fire({
+      affectsConfiguration: (section) => section === 'prompteur.search',
+    });
+    expect(refresh).toHaveBeenCalled();
+    expect((await entries()).map((node) => node.entry.data.name)).toEqual([
+      'alpha',
+      'Inspect-carefully',
+    ]);
+    workspace.configuration.set('prompteur.search.matching', 'exact');
+    expect(await entries()).toEqual([]);
+    tree().query = 'inspect-carefully';
+    expect(await entries()).toHaveLength(1);
+    workspace.configuration.set('prompteur.search.caseSensitive', true);
+    expect(await entries()).toEqual([]);
+    expect(JSON.parse(await runPromptTool({ query: 'inspect-carefully' })).status).toBe(
+      'not_found',
+    );
+    expect(JSON.parse(await runPromptTool({ scope: 'user', path: named.entry.path })).content).toBe(
+      'Name match',
+    );
+    workspace.configuration.set('prompteur.search.matching', 'fuzzy');
+    workspace.configuration.set('prompteur.search.caseSensitive', false);
+    tree().query = 'Inspect-carefullx';
+    expect(await entries()).toHaveLength(1);
+    expect(JSON.parse(await runPromptTool({ query: tree().query })).content).toBe('Name match');
+    tree().query = '';
+    expect(await entries()).toHaveLength(2);
+  });
+  it.each([
+    ['matching', 'unsupported'],
+    ['caseSensitive', 'yes'],
+    ['ranking', 'recent'],
+    ['selection', 'first'],
+  ])('reports invalid search.%s configuration explicitly', async (key, value) => {
+    await addPrompt('inspect', 'Body');
+    workspace.configuration.set(`prompteur.search.${key}`, value);
+    await expect(runPromptTool({ query: 'inspect' })).rejects.toThrow(
+      'Invalid Prompteur search settings',
+    );
+    expect(await entries()).toEqual([]);
+    expect(messages.errors.at(-1)).toContain('Invalid Prompteur search settings');
+  });
+  it('keeps duplicate exact names ambiguous and renders only the explicitly selected candidate', async () => {
+    await addPrompt('review', 'Personal review');
+    const selected = await addPrompt('review', 'Workspace review {{selection}}', 'workspace');
+    await fs.writeFile(
+      join(workspaceRoot(), selected.entry.path),
+      encodeMarkdown({ ...selected.entry.data, category: 'review' }),
+    );
+    await addPrompt('broader', 'review appears here too');
+    const readClipboard = vi.spyOn(env.clipboard, 'readText');
+    const result = JSON.parse(await runPromptTool({ query: 'review' }));
+    expect(result.status).toBe('ambiguous');
+    expect(result.matches).toEqual([
+      expect.objectContaining({
+        name: 'review',
+        scope: 'user',
+        category: 'explain',
+        path: 'prompts/review.prompt.md',
+      }),
+      expect.objectContaining({
+        name: 'review',
+        scope: 'workspace',
+        category: 'review',
+        path: selected.entry.path,
+      }),
+    ]);
+    expect(result).not.toHaveProperty('content');
+    expect(readClipboard).not.toHaveBeenCalled();
+    await destination('selected code');
+    const candidate = result.matches[1];
+    const rendered = JSON.parse(
+      await runPromptTool({ scope: candidate.scope, path: candidate.path }),
+    );
+    expect(rendered.status).toBe('match');
+    expect(rendered.prompt.scope).toBe('workspace');
+    expect(rendered.content).toBe('Workspace review selected code');
+    expect(JSON.parse(await runPromptTool({ query: 'review', scope: 'user' })).content).toBe(
+      'Personal review',
+    );
+  });
+  it('does not silently select duplicate names within one library', async () => {
+    const first = await addPrompt('one', 'First');
+    const second = await addPrompt('two', 'Second');
+    for (const node of [first, second])
+      await fs.writeFile(
+        join(userRoot(), node.entry.path),
+        encodeMarkdown({ ...node.entry.data, name: 'Same Name' }),
+      );
+    await run('refresh');
+    const result = JSON.parse(await runPromptTool({ query: 'same name', scope: 'user' }));
+    expect(result.status).toBe('ambiguous');
+    expect(result.matches.map((match: { path: string }) => match.path)).toEqual([
+      first.entry.path,
+      second.entry.path,
+    ]);
+    expect(result).not.toHaveProperty('content');
+  });
+  it('reports stale candidate paths without substituting another matching name', async () => {
+    const node = await addPrompt('old', 'Original');
+    const replacement = await addPrompt('replacement', 'Different');
+    await fs.writeFile(
+      join(userRoot(), replacement.entry.path),
+      encodeMarkdown({ ...replacement.entry.data, name: 'old' }),
+    );
+    await fs.unlink(join(userRoot(), node.entry.path));
+    await run('refresh');
+    const result = JSON.parse(await runPromptTool({ scope: 'user', path: node.entry.path }));
+    expect(result).toEqual({
+      status: 'not_found',
+      scope: 'user',
+      path: node.entry.path,
+      workspaceOmittedForTrust: false,
+    });
+    expect(JSON.parse(await runPromptTool({ query: 'old' })).content).toBe('Different');
+    expect(
+      JSON.parse(await runPromptTool({ scope: 'user', path: '../replacement.prompt.md' })).status,
+    ).toBe('not_found');
+  });
+  it('limits ambiguous candidate metadata without rendering prompt content', async () => {
+    for (let index = 0; index < 11; index++) await addPrompt(`shared-${index}`, 'Private body');
+    const result = JSON.parse(await runPromptTool({ query: 'shared' }));
+    expect(result.status).toBe('ambiguous');
+    expect(result.matches).toHaveLength(10);
+    expect(result.truncated).toBe(true);
+    expect(JSON.stringify(result)).not.toContain('Private body');
+  });
+  it.each<unknown>([
+    null,
+    {},
+    { query: 42 },
+    { query: 'review', scope: 'other' },
+    { scope: 'user' },
+    { path: 'prompts/review.prompt.md' },
+    { scope: 'user', path: 42 },
+    { scope: 'user', path: 'prompts/review.prompt.md', query: 'review' },
+  ])('rejects invalid runtime tool input: %j', async (input) => {
+    await expect(
+      // @ts-expect-error Deliberately invoke the tool with an invalid runtime payload.
+      promptTool().invoke({ input, toolInvocationToken: undefined }, noCancellation),
+    ).rejects.toThrow();
+  });
+  it('rejects blank paths and oversized search queries explicitly', async () => {
+    await expect(runPromptTool({ scope: 'user', path: '  ' })).rejects.toThrow('scope and path');
+    await expect(runPromptTool({ query: 'x'.repeat(257) })).rejects.toThrow('256');
+  });
+  it('reports an empty result and rejects an empty search query', async () => {
+    const result = JSON.parse(await runPromptTool({ query: 'no-such-prompt' })) as {
+      status: string;
+      query: string;
+      workspaceOmittedForTrust: boolean;
+    };
+    expect(result).toEqual({
+      status: 'not_found',
+      query: 'no-such-prompt',
+      workspaceOmittedForTrust: false,
+    });
+    await expect(runPromptTool({ query: '  ' })).rejects.toThrow('Enter text to search');
+  });
+  it('requires Workspace Trust before returning Workspace prompt content to Copilot', async () => {
+    await addPrompt('workspace-review', 'Inspect workspace', 'workspace');
+    workspace.isTrusted = false;
+    await expect(runPromptTool({ query: 'workspace', scope: 'workspace' })).rejects.toThrow(
+      'Trust this workspace',
+    );
+    await expect(
+      runPromptTool({ scope: 'workspace', path: 'prompts/workspace-review.prompt.md' }),
+    ).rejects.toThrow('Trust this workspace');
+  });
+  it('reports unavailable Workspace libraries', async () => {
+    for (const disposable of context.subscriptions) disposable.dispose();
+    context.subscriptions = [];
+    workspace.workspaceFolders = [];
+    await activate(context as unknown as vscode.ExtensionContext);
+    await expect(runPromptTool({ query: 'review', scope: 'workspace' })).rejects.toThrow(
+      'Workspace prompt library is unavailable',
+    );
+    await expect(
+      runPromptTool({ scope: 'workspace', path: 'prompts/review.prompt.md' }),
+    ).rejects.toThrow('Workspace prompt library is unavailable');
+  });
+  it('cancels a Copilot prompt lookup when its invocation token is cancelled', async () => {
+    const token = { ...noCancellation, isCancellationRequested: true };
+    await expect(
+      promptTool().invoke({ input: { query: 'review' }, toolInvocationToken: undefined }, token),
+    ).rejects.toBeInstanceOf(CancellationError);
+    await expect(
+      promptTool().invoke(
+        {
+          input: { scope: 'user', path: 'prompts/review.prompt.md' },
+          toolInvocationToken: undefined,
+        },
+        token,
+      ),
+    ).rejects.toBeInstanceOf(CancellationError);
+  });
+  it('omits untrusted Workspace prompts and reports the restriction', async () => {
+    await addPrompt('personal', 'A personal prompt');
+    await addPrompt('workspace-only', 'A workspace prompt', 'workspace');
+    workspace.isTrusted = false;
+    const result = JSON.parse(await runPromptTool({ query: 'personal' })) as {
+      status: string;
+      workspaceOmittedForTrust: boolean;
+      prompt: { scope: string };
+    };
+    expect(result.status).toBe('match');
+    expect(result.workspaceOmittedForTrust).toBe(true);
+    expect(result.prompt.scope).toBe('user');
   });
   it('copies prompt records across scopes and categories without using the OS clipboard', async () => {
     const data = {
@@ -354,6 +876,7 @@ describe('release commands', () => {
     const sourceNode = (await entries('user')).find((node) => node.entry.data.name === data.name)!;
     env.clipboard.value = 'Leave OS clipboard unchanged';
     await run('copyPrompt', sourceNode);
+    expect(contextKeys.get('prompteur.hasCopiedPrompt')).toBe(true);
     expect(env.clipboard.value).toBe('Leave OS clipboard unchanged');
 
     const target: TreeNode = { kind: 'category', scope: 'workspace', category: 'plan' };
@@ -375,6 +898,7 @@ describe('release commands', () => {
     expect(window.activeTextEditor!.document.uri.fsPath).toBe(workspaceCopyPath);
 
     await run('pastePrompt', scopeNode('user'));
+    expect(contextKeys.get('prompteur.hasCopiedPrompt')).toBe(true);
     const userCopy = (await entries('user')).find(
       (node) =>
         node.entry.data.name === data.name && node.entry.path !== 'prompts/source.prompt.md',
@@ -382,6 +906,7 @@ describe('release commands', () => {
     expect(userCopy?.entry.data.category).toBe('review');
   });
   it('requires trusted Workspace source copy and reports paste without a buffer', async () => {
+    expect(contextKeys.get('prompteur.hasCopiedPrompt')).toBe(false);
     await run('pastePrompt', scopeNode('user'));
     expect(messages.info.at(-1)).toContain('Copy a prompt');
 
@@ -397,6 +922,7 @@ describe('release commands', () => {
     const source = (await entries('workspace')).find((node) => node.entry.data.name === data.name)!;
     workspace.isTrusted = false;
     await expect(run('copyPrompt', source)).rejects.toThrow('Trust');
+    expect(contextKeys.get('prompteur.hasCopiedPrompt')).toBe(false);
 
     workspace.isTrusted = true;
     await run('copyPrompt', source);
@@ -413,6 +939,9 @@ describe('release commands', () => {
         'prompts/workspace-source.prompt.md'
       ],
     ).toContain('name: Workspace Source');
+    for (const disposable of context.subscriptions.splice(0)) disposable.dispose();
+    await activate(context as unknown as vscode.ExtensionContext);
+    expect(contextKeys.get('prompteur.hasCopiedPrompt')).toBe(false);
   });
   it('allows empty selections for copy and preview without warnings', async () => {
     const node = await addPrompt('optional', 'Audit workspace: {{selection}}');
@@ -426,12 +955,36 @@ describe('release commands', () => {
     expect(target.document.getText()).toBe('');
     expect(messages.warnings).toEqual([]);
   });
-  it('warns for other empty values, honors cancellation and reports unsupported variables', async () => {
+  it.each(['filename', 'workspace', 'filename, workspace'])(
+    'copies without blocking when optional context is missing: %s',
+    async (missing) => {
+      workspace.workspaceFolders = [];
+      const content = missing
+        .split(', ')
+        .map((name) => `{{${name}}}`)
+        .join(' ');
+      const node = await addPrompt('optional-context', `Review ${content}`);
+      env.clipboard.value = 'previous clipboard';
+      await run('copy', node);
+      expect(env.clipboard.value).toBe(`Review ${missing.includes(',') ? ' ' : ''}`);
+      expect(messages.warnings).toEqual([]);
+      expect(messages.info).toEqual([`Copied without context: ${missing}.`]);
+      await run('preview', node);
+      expect(window.activeTextEditor!.document.getText()).toContain(
+        `Empty variable values: ${missing}`,
+      );
+    },
+  );
+  it('confirms empty clipboard input, honors cancellation and reports unsupported variables', async () => {
     const node = await addPrompt('empty', '{{clipboard}}');
     responses.warning.push(null);
     await run('copy', node);
     expect(env.clipboard.value).toBe('');
-    expect(messages.warnings.at(-1)).toContain('clipboard');
+    expect(messages.warnings.at(-1)).toContain('Clipboard is empty');
+    expect(messages.info).toEqual([]);
+    responses.warning.push('Continue');
+    await run('copy', node);
+    expect(messages.info).toEqual(['Copied without context: clipboard.']);
     const invalid = await addPrompt('invalid', '{{not-supported}}');
     await expect(run('copy', invalid)).rejects.toThrow('Unsupported');
     expect(messages.errors.at(-1)).toContain('Unsupported');

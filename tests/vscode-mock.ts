@@ -43,6 +43,13 @@ export class MarkdownString {
     return this;
   }
 }
+export class LanguageModelTextPart {
+  constructor(public value: string) {}
+}
+export class LanguageModelToolResult {
+  constructor(public content: LanguageModelTextPart[]) {}
+}
+export class CancellationError extends Error {}
 export const TreeItemCollapsibleState = { None: 0, Collapsed: 1, Expanded: 2 };
 export class DataTransferItem {
   constructor(public value: unknown) {}
@@ -231,6 +238,13 @@ export const views = new Map<
 >();
 export const handlers = new Map<string, (...args: unknown[]) => Promise<unknown>>();
 export const providers = new Map<string, { provideTextDocumentContent: () => string }>();
+export const languageModelTools = new Map<string, unknown>();
+export const lm = {
+  registerTool(name: string, tool: unknown) {
+    languageModelTools.set(name, tool);
+    return new Disposable(() => languageModelTools.delete(name));
+  },
+};
 export class FakeInputBox {
   title = '';
   value = '';
@@ -426,6 +440,7 @@ export const env = {
     },
   },
 };
+export const contextKeys = new Map<string, unknown>();
 export const commands = {
   registerCommand: (id: string, handler: (...args: unknown[]) => Promise<unknown>) => {
     handlers.set(id, handler);
@@ -433,6 +448,11 @@ export const commands = {
   },
   async executeCommand(id: string, ...args: unknown[]) {
     commandExecutions.push({ id, args });
+    if (id === 'setContext') {
+      if (typeof args[0] !== 'string') throw new Error('Invalid context key');
+      contextKeys.set(args[0], args[1]);
+      return;
+    }
     if (id === 'workbench.action.openSettings') return;
     if (id === 'markdown.showPreviewToSide') {
       messages.preview = providers.get('prompteur-preview')!.provideTextDocumentContent();
@@ -455,10 +475,12 @@ export function reset() {
   window.activeTextEditor = undefined;
   window.visibleTextEditors = [];
   handlers.clear();
+  contextKeys.clear();
   commandExecutions.splice(0);
   quickPicks.splice(0);
   views.clear();
   providers.clear();
+  languageModelTools.clear();
   collections.splice(0);
   inputBoxes.splice(0);
   watchers.splice(0);

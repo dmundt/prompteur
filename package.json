@@ -2,7 +2,7 @@
   "name": "prompteur",
   "displayName": "Prompteur",
   "description": "Git-friendly local Markdown prompts with categories, tags, and clipboard generation.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "publisher": "dmundt",
   "icon": "resources/icon.png",
   "license": "MIT",
@@ -17,6 +17,9 @@
   "engines": {
     "vscode": "^1.96.0"
   },
+  "activationEvents": [
+    "onLanguageModelTool:prompteur_findPrompt"
+  ],
   "categories": [
     "Other"
   ],
@@ -92,6 +95,43 @@
           "scope": "window",
           "description": "Group prompts by category; turn off for a flat list."
         },
+        "prompteur.search.matching": {
+          "type": "string",
+          "enum": [
+            "exact",
+            "fullText",
+            "fuzzy"
+          ],
+          "default": "fullText",
+          "scope": "window",
+          "description": "Match exact prompt names only, prefer exact names before full text, or also fall back to typo-tolerant names when full text finds nothing."
+        },
+        "prompteur.search.caseSensitive": {
+          "type": "boolean",
+          "default": false,
+          "scope": "window",
+          "description": "Match prompt names and free text with case sensitivity. Tag/category filters remain exact and case-insensitive."
+        },
+        "prompteur.search.ranking": {
+          "type": "string",
+          "enum": [
+            "relevance",
+            "name"
+          ],
+          "default": "relevance",
+          "scope": "window",
+          "description": "Order search results by relevance or name. Alphabetical ordering never decides which prompt Copilot automatically selects."
+        },
+        "prompteur.search.selection": {
+          "type": "string",
+          "enum": [
+            "bestMatch",
+            "requireChoice"
+          ],
+          "default": "bestMatch",
+          "scope": "window",
+          "description": "After tool approval, Best Match shares the unique highest-relevance prompt and its requested context, even with lower-ranked matches present. Require Choice returns candidates when multiple prompts match. Duplicate exact names and highest-score ties always require a choice. Library filtering never automatically opens or runs prompts."
+        },
         "prompteur.syncUserPrompts": {
           "type": "boolean",
           "default": true,
@@ -114,7 +154,7 @@
       },
       {
         "command": "prompteur.newPrompt",
-        "title": "New Prompt",
+        "title": "New",
         "category": "Prompteur",
         "icon": "$(add)"
       },
@@ -138,7 +178,7 @@
       },
       {
         "command": "prompteur.copy",
-        "title": "Copy",
+        "title": "Copy Text",
         "category": "Prompteur",
         "icon": "$(copy)"
       },
@@ -151,6 +191,7 @@
       {
         "command": "prompteur.pastePrompt",
         "title": "Paste Prompt",
+        "enablement": "prompteur.hasCopiedPrompt",
         "category": "Prompteur",
         "icon": "$(clippy)"
       },
@@ -185,7 +226,72 @@
         "icon": "$(gear)"
       }
     ],
+    "languageModelTools": [
+      {
+        "name": "prompteur_findPrompt",
+        "toolReferenceName": "prompteurPrompt",
+        "displayName": "Find Prompteur Prompt",
+        "modelDescription": "Find a saved Prompteur prompt only when the user asks. Search with query and optional scope using configured exact/full-text/fuzzy matching and case sensitivity. Exact names take priority. Best Match selection returns a unique highest-relevance prompt; Require Choice returns metadata for multiple matches. Duplicate exact names and highest-relevance ties always return metadata: ask the user to choose, then invoke with the candidate's exact scope and path, without query. Never choose between tied candidates. A match or explicit scope/path selection returns rendered text. Never modify prompts or libraries.",
+        "userDescription": "Find and return a matching saved prompt. Returned prompt text and requested context variables are shared with Copilot Chat.",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(library)",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "description": "Text to search in prompt names, descriptions, categories, tags, paths, and content."
+            },
+            "scope": {
+              "type": "string",
+              "enum": [
+                "user",
+                "workspace"
+              ],
+              "description": "Optional library to search. Workspace prompts require Workspace Trust."
+            },
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Exact library-relative path returned in candidate metadata. Requires scope; omit query. Missing paths never fall back to another prompt."
+            }
+          },
+          "oneOf": [
+            {
+              "required": [
+                "query"
+              ],
+              "not": {
+                "required": [
+                  "path"
+                ]
+              }
+            },
+            {
+              "required": [
+                "scope",
+                "path"
+              ],
+              "not": {
+                "required": [
+                  "query"
+                ]
+              }
+            }
+          ],
+          "additionalProperties": false
+        }
+      }
+    ],
     "menus": {
+      "commandPalette": [
+        {
+          "command": "prompteur.duplicate",
+          "when": "false"
+        }
+      ],
       "view/title": [
         {
           "command": "prompteur.addStarters",
@@ -217,22 +323,17 @@
         {
           "command": "prompteur.copy",
           "when": "view =~ /^prompteur\\./ && viewItem == prompt",
-          "group": "1_prompt@1"
+          "group": "0_text@1"
         },
         {
           "command": "prompteur.copyPrompt",
           "when": "view =~ /^prompteur\\./ && viewItem == prompt",
-          "group": "1_prompt@2"
-        },
-        {
-          "command": "prompteur.duplicate",
-          "when": "view =~ /^prompteur\\./ && viewItem == prompt",
-          "group": "1_prompt@3"
+          "group": "1_prompt@1"
         },
         {
           "command": "prompteur.preview",
           "when": "view =~ /^prompteur\\./ && viewItem == prompt",
-          "group": "1_prompt@4"
+          "group": "1_prompt@2"
         },
         {
           "command": "prompteur.edit",

@@ -54,8 +54,9 @@
 ## Starters and File Copies
 
 - No import/export commands or bundles.
-- **Copy Prompt/Paste Prompt** use a window-local buffer, create a new `.prompt.md`, and preserve source. Category targets override category.
+- **Copy Prompt/Paste Prompt** use a window-local prompt buffer, create a new `.prompt.md`, and preserve source. Category targets override category.
 - Transfer between windows/apps by copying Markdown files.
 
 - Starters are editable copies. Skip every occupied destination, including invalid files.
+- Summarize added, matching, and differing saved files; skip unsaved editors without saved files. Differences do not identify their cause.
 - Each add is atomic; installation is not. Report partial progress.
