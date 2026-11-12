@@ -6,7 +6,7 @@ Expose saved prompts to Copilot Chat/Agents only through a read-only VS Code Lan
 
 This ADR supersedes ADR 003 only for the prohibition on AI/provider integration. Preserve its filesystem port, serialized conflict-aware mutations, path/symlink protections, and Workspace Trust rules.
 
-Keep text handoff through **Copy** because VS Code exposes no supported API to insert text into the active Chat composer. Do not depend on Copilot Chat as an extension dependency or claim unsupported Agents-window manifest support.
+Keep text handoff through **Copy Text** because VS Code exposes no supported API to insert text into the active Chat composer. Do not depend on Copilot Chat as an extension dependency or claim unsupported Agents-window manifest support.
 
 Consequences:
 

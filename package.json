@@ -117,7 +117,7 @@
       },
       {
         "command": "prompteur.newPrompt",
-        "title": "New Prompt",
+        "title": "New",
         "category": "Prompteur",
         "icon": "$(add)"
       },
@@ -141,7 +141,7 @@
       },
       {
         "command": "prompteur.copy",
-        "title": "Copy",
+        "title": "Copy Text",
         "category": "Prompteur",
         "icon": "$(copy)"
       },
@@ -154,6 +154,7 @@
       {
         "command": "prompteur.pastePrompt",
         "title": "Paste Prompt",
+        "enablement": "prompteur.hasCopiedPrompt",
         "category": "Prompteur",
         "icon": "$(clippy)"
       },
@@ -223,6 +224,12 @@
       }
     ],
     "menus": {
+      "commandPalette": [
+        {
+          "command": "prompteur.duplicate",
+          "when": "false"
+        }
+      ],
       "view/title": [
         {
           "command": "prompteur.addStarters",
@@ -254,22 +261,17 @@
         {
           "command": "prompteur.copy",
           "when": "view =~ /^prompteur\\./ && viewItem == prompt",
-          "group": "1_prompt@1"
+          "group": "0_text@1"
         },
         {
           "command": "prompteur.copyPrompt",
           "when": "view =~ /^prompteur\\./ && viewItem == prompt",
-          "group": "1_prompt@2"
-        },
-        {
-          "command": "prompteur.duplicate",
-          "when": "view =~ /^prompteur\\./ && viewItem == prompt",
-          "group": "1_prompt@3"
+          "group": "1_prompt@1"
         },
         {
           "command": "prompteur.preview",
           "when": "view =~ /^prompteur\\./ && viewItem == prompt",
-          "group": "1_prompt@4"
+          "group": "1_prompt@2"
         },
         {
           "command": "prompteur.edit",
