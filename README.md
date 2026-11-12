@@ -4,7 +4,7 @@
 
 - Local, Git-friendly Markdown prompts for developers who reuse prompts across projects.
 - Category/tag organization and full-text search.
-- Copy or preview generated text with selection, clipboard, filename, and workspace variables.
+- Copy or preview generated text with selection, clipboard, filename, workspace, and entered text variables.
 - User library in profile storage; Workspace library in `.vscode/prompts`.
 - No Prompteur account, direct model calls, or telemetry. Optional Copilot tool returns requested prompt text and used variables to the configured model after VS Code confirmation. User prompts sync through VS Code Settings Sync by default. Workspace writes, generation, and preview require Trust.
 - Stable release. Prompt file format version: 1.
@@ -88,7 +88,7 @@ code --install-extension prompteur-1.1.0.vsix
 - Missing candidate path: reports not found; never substitutes another prompt. Refresh the search if a prompt was renamed or removed.
 - Tool output becomes model context, not text inserted into the Chat composer. Following the prompt depends on the model and your request.
 - The tool is read-only; it cannot create, edit, or delete prompts. Workspace prompt results require Trust.
-- Prompt text and requested selection, clipboard, filename, or workspace variables are shared with the configured model. Context comes from the same VS Code window.
+- Prompt text and requested selection, clipboard, filename, workspace, or entered text variables are shared with the configured model. Context comes from the same VS Code window.
 - Prompteur makes no direct model/provider calls. Copilot performs the requested task.
 
 ### Manual Handoff: Any Chat
@@ -122,7 +122,11 @@ Inspect {{filename}} in {{workspace}}.
 - Reject unknown fields, unsupported versions, malformed YAML, and aliases.
 - File path is identity; names may repeat. Filenames use readable slugs and numeric collision suffixes.
 
-- Variables: `selection`, `clipboard`, `filename`, `workspace`.
+- Variables: `selection`, `clipboard`, `filename`, `workspace`, `text`.
+- `{{text}}` opens an untitled plaintext editor for multiline input. Choose **Use Text** (check icon) or **Cancel** (close icon) in its toolbar. Blank input is rejected; Cancel or closing the input aborts generation. Input is limited to 1 MiB and reused for repeated placeholders. Only one input may be pending per window.
+- Text entry is requested only after choosing a prompt, including through Copilot. No selection/clipboard fallback. Input editors never supply selection/filename context.
+- Prompteur does not save entered text or keep input history. The untitled editor remains open after submission/cancellation; close it manually when finished. VS Code hot exit may retain unsaved editors.
+- `{{text}}` requires Prompteur 1.2.0 or later; older versions reject it. Prompt format remains version 1. Existing installed prompts are not rewritten.
 - Expand once; collapse repeated blank lines. Empty selection is allowed. Missing filename/workspace context does not block copying; one notification lists missing values. Empty clipboard input requires confirmation. Preview lists missing context.
 - Unknown/malformed placeholders block generation. Read clipboard only when requested.
 
@@ -162,6 +166,7 @@ Inspect {{filename}} in {{workspace}}.
 - **Debug:** Triage Production Incident; Analyze Root Cause.
 - **Document:** Document Feature Usage; Create Issue; Create Task.
 
+- Create Issue, Create Task, Clarify Requirements, Plan Smallest Useful Implementation, and Implement Scoped Change request entered `text`; code-oriented starters retain `selection`.
 - Installation is opt-in. Rerun after updates to add missing starters.
 - Never replace existing files, including invalid ones. Writes are safe per-file, not transactional; failures report completed count.
 - Completion reports added files and saved files that match or differ from the bundled versions. Differences can be edits or older versions. Unsaved editors without saved files are skipped; comparisons use saved contents.

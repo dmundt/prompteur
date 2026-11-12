@@ -28,7 +28,7 @@
 - `searchRanked` combines all eligible scopes before matching-phase selection, ranking, and candidate truncation. Relevance ties use name/scope/path only for stable presentation.
 - Filters use AND. Quote values with spaces: `tag:"security review"`, `category:"review"`.
 - Tooltip links filter tags/categories or open the current Markdown path; commands re-resolve paths.
-- `generate(content, context)` returns `{ text, missing }` for four variables and condenses repeated blank lines.
+- `generate(content, context)` returns `{ text, missing }` for `selection`, `clipboard`, `filename`, `workspace`, and `text`; condenses repeated blank lines.
 
 | Command                    | Action                                     |
 | -------------------------- | ------------------------------------------ |
@@ -60,4 +60,6 @@
 - Results: `match` includes prompt identity (`name`, `category`, `scope`, `path`), rendered `content`, and `missing` variables; `ambiguous` includes up to 10 candidate metadata records and `truncated`, without content; `not_found` identifies the query or requested scope/path. All results include `workspaceOmittedForTrust`.
 - Prompt-row hover contains description, category, tags, saved prompt context variables, and path. Invalid placeholders are reported there; context values are not read. Contributed command tooltips use native titles.
 - The prompt view toolbar switches from search to filter icon for a non-whitespace query; either opens the current live filter. **Clear Filter** resets it.
+- `text` uses one native untitled plaintext input per invocation; private editor-title actions submit nonblank text or cancel. Limit: 1 MiB. Close/disposal/tool cancellation aborts pending generation; concurrent input requests error. Input documents are excluded from context sources. Recheck Trust before output.
+- Input toolbar commands are hidden from the Command Palette and shown only for the pending input resource. No extension-owned input persistence; native hot exit can retain unsaved documents.
 - VS Code confirms tool use before prompt data is returned to Copilot. The rendered prompt and any requested context variables become model context; direct model requests and prompt mutations are not performed.

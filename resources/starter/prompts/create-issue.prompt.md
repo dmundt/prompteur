@@ -8,7 +8,7 @@ tags: [issue, tracking, report]
 
 Draft an issue from this context:
 
-{{selection}}
+{{text}}
 
 - Output only `Headline: ...` and `Description: ...`; keep both concise.
 - Describe the problem or desired outcome and relevant context.

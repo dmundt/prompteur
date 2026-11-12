@@ -8,7 +8,7 @@ tags: [requirements, scope, acceptance]
 
 Clarify this request:
 
-{{selection}}
+{{text}}
 
 - Restate desired outcome.
 - Separate requirements, assumptions, constraints, and non-goals.
@@ -16,4 +16,3 @@ Clarify this request:
 - Ask only high-impact questions; suggest defaults without treating them as approved.
 - Define observable acceptance criteria and smallest useful scope.
 - Avoid speculative features. Do not implement.
-- If selection is empty, ask for the request.

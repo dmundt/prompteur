@@ -214,6 +214,18 @@
         "icon": "$(filter)"
       },
       {
+        "command": "prompteur.useText",
+        "title": "Use Text",
+        "category": "Prompteur",
+        "icon": "$(check)"
+      },
+      {
+        "command": "prompteur.cancelText",
+        "title": "Cancel",
+        "category": "Prompteur",
+        "icon": "$(close)"
+      },
+      {
         "command": "prompteur.clearSearch",
         "title": "Clear Filter",
         "category": "Prompteur",
@@ -300,6 +312,26 @@
         {
           "command": "prompteur.searchActive",
           "when": "false"
+        },
+        {
+          "command": "prompteur.useText",
+          "when": "false"
+        },
+        {
+          "command": "prompteur.cancelText",
+          "when": "false"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "prompteur.useText",
+          "when": "resourceScheme == untitled && resource in prompteur.textInputDocuments",
+          "group": "navigation@1"
+        },
+        {
+          "command": "prompteur.cancelText",
+          "when": "resourceScheme == untitled && resource in prompteur.textInputDocuments",
+          "group": "navigation@2"
         }
       ],
       "view/title": [

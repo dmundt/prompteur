@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Add `{{text}}` for explicit multiline input through a native editor. Five request-based starters now use it; existing installed prompts stay unchanged. New placeholder requires 1.2.0 or later; prompt format remains version 1.
 - Add Create Issue and Create Task starters for concise headlines and descriptions.
 - Show an active filter icon in the prompt view toolbar.
 
