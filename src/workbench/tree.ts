@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { LibraryService, messageOf } from '../application/library';
 import type { Entry, Scope } from '../core/documents';
+import { variableTokens, type VariableKey } from '../core/render';
 
 export type TreeNode =
   | { kind: 'scope'; scope: Scope }
@@ -23,9 +24,16 @@ const escapeLinkLabel = (value: string): string =>
     .replace(/([`*_{}[\]<>|])/g, '\\$1');
 const commandUri = (command: string, args: unknown[]): string =>
   `command:${command}?${encodeURIComponent(JSON.stringify(args))}`;
+const contextLabels: Record<VariableKey, string> = {
+  selection: 'Selection',
+  clipboard: 'Clipboard',
+  filename: 'Filename',
+  workspace: 'Workspace',
+};
 
 export class PromptTree implements vscode.TreeDataProvider<TreeNode>, vscode.Disposable {
   private readonly changes = new vscode.EventEmitter<TreeNode | undefined>();
+  private readonly contextSummaries = new WeakMap<Entry, string>();
   readonly onDidChangeTreeData = this.changes.event;
   private readonly unsubscribe: () => void;
   query = '';
@@ -115,6 +123,22 @@ export class PromptTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dis
           )
           .join(' '),
       );
+    }
+    let context = this.contextSummaries.get(entry);
+    if (context === undefined) {
+      try {
+        const names = new Set(variableTokens(entry.data.content).map((token) => token.name));
+        context = names.size
+          ? `Context: ${[...names].map((name) => contextLabels[name]).join(', ')}`
+          : '';
+      } catch (error) {
+        context = `Context unavailable: ${messageOf(error)}`;
+      }
+      this.contextSummaries.set(entry, context);
+    }
+    if (context) {
+      tooltip.appendMarkdown('\n\n');
+      tooltip.appendText(context);
     }
     tooltip.appendMarkdown(
       `\n\n[${escapeLinkLabel(entry.path)}](${commandUri('prompteur.openPromptPath', [entry.scope, entry.path])})`,
