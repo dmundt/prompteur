@@ -30,22 +30,23 @@
 - Tooltip links filter tags/categories or open the current Markdown path; commands re-resolve paths.
 - `generate(content, context)` returns `{ text, missing }` for `selection`, `clipboard`, `filename`, `workspace`, and `text`; condenses repeated blank lines.
 
-| Command                    | Action                                     |
-| -------------------------- | ------------------------------------------ |
-| `prompteur.newPrompt`      | Create and open prompt Markdown            |
-| `prompteur.addStarters`    | Copy missing starter prompts               |
-| `prompteur.removeCategory` | Remove an unused profile-approved category |
-| `prompteur.edit`           | Open source or damaged Markdown prompt     |
-| `prompteur.delete`         | Confirm and delete a saved prompt          |
-| `prompteur.duplicate`      | Copy to a readable collision-safe filename |
-| `prompteur.copy`           | Generate and copy to clipboard             |
-| `prompteur.copyPrompt`     | Copy prompt data to a window-local buffer  |
-| `prompteur.pastePrompt`    | Create prompt copy in a library/category   |
-| `prompteur.preview`        | Open an independent plaintext snapshot     |
-| `prompteur.search`         | Open live main-tree filter                 |
-| `prompteur.clearSearch`    | Reset filter                               |
-| `prompteur.refresh`        | Reload available libraries                 |
-| `prompteur.openSettings`   | Open Prompteur settings                    |
+| Command                     | Action                                          |
+| --------------------------- | ----------------------------------------------- |
+| `prompteur.newPrompt`       | Create and open prompt Markdown                 |
+| `prompteur.addStarters`     | Copy missing starter prompts                    |
+| `prompteur.removeCategory`  | Remove an unused profile-approved category      |
+| `prompteur.edit`            | Open source or damaged Markdown prompt          |
+| `prompteur.delete`          | Confirm and delete a saved prompt               |
+| `prompteur.duplicate`       | Copy to a readable collision-safe filename      |
+| `prompteur.copy`            | Generate and copy to clipboard                  |
+| `prompteur.copyPrompt`      | Copy prompt data to a window-local buffer       |
+| `prompteur.pastePrompt`     | Create prompt copy in a library/category        |
+| `prompteur.preview`         | Open an independent plaintext snapshot          |
+| `prompteur.search`          | Open live main-tree filter                      |
+| `prompteur.clearSearch`     | Reset filter                                    |
+| `prompteur.refresh`         | Reload available libraries                      |
+| `prompteur.openSettings`    | Open Prompteur settings                         |
+| `prompteur.openUserLibrary` | Reveal User library root in system file manager |
 
 - Tree arguments are private. Palette invocations select scope/prompt as needed.
 - Prompt-record copy/paste is window-local, source-preserving, and separate from OS clipboard. Paste is enabled when the window-local buffer contains a copied prompt.

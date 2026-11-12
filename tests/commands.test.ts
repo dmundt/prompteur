@@ -131,6 +131,25 @@ describe('release commands', () => {
     await activate(context as unknown as vscode.ExtensionContext);
     await run('addStarters', scopeNode());
     expect(await entries()).toHaveLength(18);
+    await run('openUserLibrary');
+    expect(commandExecutions.at(-1)).toEqual({
+      id: 'revealFileInOS',
+      args: [Uri.file(userRoot())],
+    });
+  });
+  it('reveals only the User library root without requiring Workspace Trust', async () => {
+    await addPrompt('existing');
+    workspace.isTrusted = false;
+    await run('openUserLibrary', scopeNode('workspace'));
+    expect(commandExecutions.at(-1)).toEqual({
+      id: 'revealFileInOS',
+      args: [Uri.file(userRoot())],
+    });
+  });
+  it('reports an unavailable User library without invoking the system file manager', async () => {
+    await expect(run('openUserLibrary')).rejects.toThrow();
+    expect(messages.errors.at(-1)).toContain(userRoot());
+    expect(commandExecutions.some((item) => item.id === 'revealFileInOS')).toBe(false);
   });
   it('syncs User prompts through VS Code state and supports a flat tree', async () => {
     expect(context.globalState.syncedKeys).toEqual([
