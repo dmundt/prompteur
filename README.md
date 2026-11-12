@@ -6,7 +6,7 @@
 - Category/tag organization and full-text search.
 - Copy or preview generated text with selection, clipboard, filename, and workspace variables.
 - User library in profile storage; Workspace library in `.vscode/prompts`.
-- No Prompteur account, direct network service, AI provider, or telemetry. User prompts sync through VS Code Settings Sync by default. Workspace writes, generation, and preview require Trust.
+- No Prompteur account, direct model calls, or telemetry. Optional Copilot tool returns requested prompt text and used variables to the configured model after VS Code confirmation. User prompts sync through VS Code Settings Sync by default. Workspace writes, generation, and preview require Trust.
 - Stable release. Prompt file format version: 1.
 
 ## Install and Run
@@ -54,6 +54,39 @@ code --install-extension prompteur-1.0.0.vsix
 - Tags cross categories; **Show Tags** controls row labels. Tooltip links filter exact tags/categories or open the Markdown file.
 - Filters use AND semantics; quote values with spaces (for example, `tag:"security review"`).
 - Search covers names, descriptions, tags, content, and paths. Results sort alphabetically.
+
+## Use Prompts with Chat
+
+### Copilot Tool: No Copy/Paste
+
+1. Enable Prompteur and Copilot Chat in the same VS Code window. Use a VS Code version that supports extension Language Model Tools.
+2. Save a prompt or install **Add Starter Library**. Select source code if the prompt uses `{{selection}}`.
+3. Open Copilot Chat in **Agent** mode. Enable **Find Prompteur Prompt** in the tool picker if needed.
+4. Reference the tool and state the task:
+
+   ```text
+   Use #prompteurPrompt to find "Review Code", then follow that prompt to review my changes. Do not edit files.
+   ```
+
+5. Approve sharing when VS Code requests confirmation. VS Code may offer **Always Allow**.
+
+- One match: returns the rendered prompt and missing-context details to Copilot.
+- Multiple matches: returns candidate metadata only; narrow the search.
+- No match: reports not found.
+- Tool output becomes model context, not text inserted into the Chat composer. Following the prompt depends on the model and your request.
+- The tool is read-only; it cannot create, edit, or delete prompts. Workspace prompt results require Trust.
+- Prompt text and requested selection, clipboard, filename, or workspace variables are shared with the configured model. Context comes from the same VS Code window.
+- Prompteur makes no direct model/provider calls. Copilot performs the requested task.
+
+### Manual Handoff: Any Chat
+
+1. Select source code if the prompt uses `{{selection}}`.
+2. Run **Copy** from the prompt row, context menu, or Command Palette.
+3. Paste into Copilot Chat, an Agents window, or another chat client; submit.
+
+- No Copilot tool support required. **Copy** renders variables before copying.
+- Direct Chat composer insertion is unavailable. For another window, copy in the source window and paste in the target.
+- **Copy Prompt** / **Paste Prompt** copy library records; use **Copy** for chat handoff.
 
 ## Prompt Files
 

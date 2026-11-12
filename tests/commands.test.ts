@@ -11,12 +11,16 @@ import {
   commands,
   commandExecutions,
   configurationChanged,
+  CancellationError,
+  Disposable,
   env,
   FakeDocument,
   FakeEditor,
   FakeMemento,
   handlers,
   inputBoxes,
+  languageModelTools,
+  LanguageModelTextPart,
   MarkdownString,
   messages,
   providers,
@@ -39,6 +43,26 @@ let context: {
   subscriptions: { dispose(): void }[];
 };
 const run = (name: string, node?: TreeNode) => commands.executeCommand(`prompteur.${name}`, node);
+const noCancellation: vscode.CancellationToken = {
+  isCancellationRequested: false,
+  onCancellationRequested: () => new Disposable(),
+};
+const promptTool = () =>
+  languageModelTools.get('prompteur_findPrompt') as vscode.LanguageModelTool<{
+    query: string;
+    scope?: 'user' | 'workspace';
+  }>;
+const runPromptTool = async (input: { query: string; scope?: 'user' | 'workspace' }) => {
+  const result = await promptTool().invoke(
+    { input, toolInvocationToken: undefined },
+    noCancellation,
+  );
+  if (!result) throw new Error('Prompt tool returned no result');
+  return result.content
+    .filter((part): part is vscode.LanguageModelTextPart => part instanceof LanguageModelTextPart)
+    .map((part) => part.value)
+    .join('');
+};
 const userRoot = () => join(root, 'user', 'prompts');
 const workspaceRoot = () => join(root, 'project', '.vscode', 'prompts');
 const tree = () => views.get('prompteur.prompts')!.treeDataProvider as PromptTree;
@@ -158,8 +182,15 @@ describe('release commands', () => {
     ])
       expect(handlers.has(`prompteur.${command}`)).toBe(false);
     const manifest = JSON.parse(await fs.readFile('package.json', 'utf8')) as {
+      activationEvents: string[];
+      extensionDependencies?: string[];
       contributes: {
         commands: { command: string; title: string }[];
+        languageModelTools: {
+          name: string;
+          canBeReferencedInPrompt: boolean;
+          inputSchema: { properties: Record<string, unknown> };
+        }[];
         configuration: { properties: Record<string, unknown> };
         menus: {
           'view/item/context': { command: string; when: string; group: string }[];
@@ -174,6 +205,19 @@ describe('release commands', () => {
         'prompteur.openPromptPath',
       ].sort(),
     );
+    expect(manifest.activationEvents).toContain('onLanguageModelTool:prompteur_findPrompt');
+    expect(manifest.extensionDependencies).toBeUndefined();
+    expect(manifest.contributes.languageModelTools).toHaveLength(1);
+    expect(manifest.contributes.languageModelTools[0]).toMatchObject({
+      name: 'prompteur_findPrompt',
+      canBeReferencedInPrompt: true,
+      inputSchema: {
+        properties: {
+          query: { type: 'string', minLength: 1, maxLength: 256 },
+          scope: { type: 'string', enum: ['user', 'workspace'] },
+        },
+      },
+    });
     expect(manifest.contributes).not.toHaveProperty('keybindings');
     expect(manifest.contributes.menus['view/title']).toContainEqual({
       command: 'prompteur.openSettings',
@@ -333,6 +377,102 @@ describe('release commands', () => {
     await run('copy', plain);
     expect(env.clipboard.value).toBe('{{selection}} project');
     expect(context.globalState.values).toEqual(before);
+  });
+  it('registers a read-only prompt tool and returns rendered prompt text with confirmation', async () => {
+    const node = await addPrompt('review', 'Review {{selection}} in {{filename}}');
+    await destination('selected code');
+    const prepared = await promptTool().prepareInvocation?.(
+      { input: { query: 'review' } },
+      noCancellation,
+    );
+    const confirmation = prepared?.confirmationMessages?.message;
+    expect(typeof confirmation === 'string' ? confirmation : confirmation?.value).toContain(
+      'active selection, clipboard text',
+    );
+    const result = JSON.parse(await runPromptTool({ query: 'review', scope: 'user' })) as {
+      status: string;
+      workspaceOmittedForTrust: boolean;
+      prompt: { name: string; scope: string; path: string };
+      missing: string[];
+      content: string;
+    };
+    expect(result).toEqual({
+      status: 'match',
+      workspaceOmittedForTrust: false,
+      prompt: {
+        name: 'review',
+        category: 'explain',
+        scope: 'user',
+        path: 'prompts/review.prompt.md',
+      },
+      missing: [],
+      content: 'Review selected code in main.ts',
+    });
+    expect(await fs.readFile(join(userRoot(), node.entry.path), 'utf8')).toBe(node.entry.source);
+  });
+  it('returns prompt metadata rather than content when search is ambiguous', async () => {
+    await addPrompt('shared-one', 'Use shared pattern one');
+    await addPrompt('shared-two', 'Use shared pattern two');
+    const result = JSON.parse(await runPromptTool({ query: 'shared' })) as {
+      status: string;
+      workspaceOmittedForTrust: boolean;
+      matches: { name: string; scope: string; path: string }[];
+      truncated: boolean;
+    };
+    expect(result.status).toBe('ambiguous');
+    expect(result.workspaceOmittedForTrust).toBe(false);
+    expect(result.matches.map((match) => match.name)).toEqual(['shared-one', 'shared-two']);
+    expect(result.matches.every((match) => match.scope === 'user')).toBe(true);
+    expect(result.truncated).toBe(false);
+    expect(result).not.toHaveProperty('content');
+  });
+  it('reports an empty result and rejects an empty search query', async () => {
+    const result = JSON.parse(await runPromptTool({ query: 'no-such-prompt' })) as {
+      status: string;
+      query: string;
+      workspaceOmittedForTrust: boolean;
+    };
+    expect(result).toEqual({
+      status: 'not_found',
+      query: 'no-such-prompt',
+      workspaceOmittedForTrust: false,
+    });
+    await expect(runPromptTool({ query: '  ' })).rejects.toThrow('Enter text to search');
+  });
+  it('requires Workspace Trust before returning Workspace prompt content to Copilot', async () => {
+    await addPrompt('workspace-review', 'Inspect workspace', 'workspace');
+    workspace.isTrusted = false;
+    await expect(runPromptTool({ query: 'workspace', scope: 'workspace' })).rejects.toThrow(
+      'Trust this workspace',
+    );
+  });
+  it('reports unavailable Workspace libraries', async () => {
+    for (const disposable of context.subscriptions) disposable.dispose();
+    context.subscriptions = [];
+    workspace.workspaceFolders = [];
+    await activate(context as unknown as vscode.ExtensionContext);
+    await expect(runPromptTool({ query: 'review', scope: 'workspace' })).rejects.toThrow(
+      'Workspace prompt library is unavailable',
+    );
+  });
+  it('cancels a Copilot prompt lookup when its invocation token is cancelled', async () => {
+    const token = { ...noCancellation, isCancellationRequested: true };
+    await expect(
+      promptTool().invoke({ input: { query: 'review' }, toolInvocationToken: undefined }, token),
+    ).rejects.toBeInstanceOf(CancellationError);
+  });
+  it('omits untrusted Workspace prompts and reports the restriction', async () => {
+    await addPrompt('personal', 'A personal prompt');
+    await addPrompt('workspace-only', 'A workspace prompt', 'workspace');
+    workspace.isTrusted = false;
+    const result = JSON.parse(await runPromptTool({ query: 'personal' })) as {
+      status: string;
+      workspaceOmittedForTrust: boolean;
+      prompt: { scope: string };
+    };
+    expect(result.status).toBe('match');
+    expect(result.workspaceOmittedForTrust).toBe(true);
+    expect(result.prompt.scope).toBe('user');
   });
   it('copies prompt records across scopes and categories without using the OS clipboard', async () => {
     const data = {

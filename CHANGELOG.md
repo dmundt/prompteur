@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Add a read-only Copilot prompt search/render tool.
+
 ## 1.0.0
 
 - Promote the 0.5.0 beta to the first stable release; prompt format remains version 1.
