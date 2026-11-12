@@ -96,6 +96,7 @@ class Workbench implements vscode.Disposable {
           .getConfiguration('prompteur')
           .get<'filtered' | 'total' | 'hidden'>('categoryCountMode', 'filtered'),
       () => vscode.workspace.getConfiguration('prompteur').get<boolean>('groupByCategory', true),
+      (scope) => this.roots.get(scope),
     );
     this.disposables.push(
       this.editor,
@@ -138,11 +139,7 @@ class Workbench implements vscode.Disposable {
       preview: (node) => this.preview(node),
       search: () => this.search(),
       searchActive: () => this.search(),
-      openUserLibrary: async () => {
-        const root = this.roots.get('user')!;
-        await vscode.workspace.fs.stat(root);
-        await vscode.commands.executeCommand('revealFileInOS', root);
-      },
+      openUserLibrary: () => this.openLibraryFolder('user'),
       openSettings: async () => {
         await vscode.commands.executeCommand(
           'workbench.action.openSettings',
@@ -171,6 +168,14 @@ class Workbench implements vscode.Disposable {
         }),
       );
     this.disposables.push(
+      vscode.commands.registerCommand('prompteur.openLibraryFolder', async (scope: unknown) => {
+        try {
+          await this.openLibraryFolder(scope);
+        } catch (error) {
+          this.report(error);
+          throw error;
+        }
+      }),
       vscode.commands.registerCommand(
         'prompteur.filterFromTooltip',
         async (kind: unknown, value: unknown) => {
@@ -256,6 +261,14 @@ class Workbench implements vscode.Disposable {
     );
     if (!entry) throw new Error('Prompt changed or became invalid. Reload or repair its YAML.');
     await vscode.window.showTextDocument(this.uri(entry));
+  }
+
+  private async openLibraryFolder(scope: unknown): Promise<void> {
+    if (scope !== 'user' && scope !== 'workspace') throw new Error('Invalid library folder link');
+    const root = this.roots.get(scope);
+    if (!root) throw new Error('Workspace library is unavailable');
+    await vscode.workspace.fs.stat(root);
+    await vscode.commands.executeCommand('revealFileInOS', root);
   }
 
   private uri(entry: Pick<Entry, 'scope' | 'path'>): vscode.Uri {

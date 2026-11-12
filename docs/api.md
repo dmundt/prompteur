@@ -60,6 +60,7 @@
 - Direct mode matches the exact library-relative path in validated library entries; no arbitrary filesystem reads, path normalization, or fallback search. Workspace search and direct lookup require Trust.
 - Results: `match` includes prompt identity (`name`, `category`, `scope`, `path`), rendered `content`, and `missing` variables; `ambiguous` includes up to 10 candidate metadata records and `truncated`, without content; `not_found` identifies the query or requested scope/path. All results include `workspaceOmittedForTrust`.
 - Prompt-row hover contains description, category, tags, saved prompt context variables, and path. Invalid placeholders are reported there; context values are not read. Contributed command tooltips use native titles.
+- Category hover describes built-in purposes or identifies a custom category. Scope hover summarizes storage, optional User sync, and Workspace Trust; its folder path links to the system file manager. Links resolve only the current library root, require no Trust, and report missing folders without creating them.
 - The prompt view toolbar switches from search to filter icon for a non-whitespace query; either opens the current live filter. **Clear Filter** resets it.
 - `text` uses a native single-line input box per invocation. Enter submits nonblank text; Escape, disposal, or tool cancellation aborts pending generation. Limit: 1 MiB. Concurrent requests error. Recheck Trust before output.
 - No extension-owned input persistence or history.

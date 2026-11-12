@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { LibraryService, messageOf } from '../application/library';
-import type { Entry, Scope } from '../core/documents';
+import type { Entry, PromptCategory, Scope } from '../core/documents';
 import { variableTokens, type VariableKey } from '../core/render';
 
 export type TreeNode =
@@ -31,6 +31,17 @@ const contextLabels: Record<VariableKey, string> = {
   workspace: 'Workspace',
   text: 'Text',
 };
+const categoryDescriptions = new Map<string, string>(
+  Object.entries({
+    explain: 'Understand code, behavior, and changes.',
+    plan: 'Define requirements, scope, and implementation steps.',
+    implement: 'Make scoped code changes.',
+    review: 'Assess code, architecture, security, and readiness.',
+    test: 'Design or add tests.',
+    debug: 'Diagnose failures and investigate causes.',
+    document: 'Write or improve documentation.',
+  } satisfies Record<PromptCategory, string>),
+);
 
 export class PromptTree implements vscode.TreeDataProvider<TreeNode>, vscode.Disposable {
   private readonly changes = new vscode.EventEmitter<TreeNode | undefined>();
@@ -46,6 +57,8 @@ export class PromptTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dis
     private readonly showTags: () => boolean = () => true,
     private readonly categoryCountMode: () => 'filtered' | 'total' | 'hidden' = () => 'filtered',
     private readonly groupByCategory: () => boolean = () => true,
+    private readonly libraryRoot: (scope: Scope) => Pick<vscode.Uri, 'fsPath'> | undefined = () =>
+      undefined,
   ) {
     this.unsubscribe = service.subscribe(() => this.refresh());
   }
@@ -66,6 +79,20 @@ export class PromptTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dis
       );
       item.id = node.scope;
       item.contextValue = 'scope';
+      const tooltip = new vscode.MarkdownString();
+      tooltip.appendText(
+        node.scope === 'user'
+          ? 'Prompts stored in this VS Code profile; optional VS Code Settings Sync.'
+          : 'Prompts stored in the first workspace folder; writes, generation, and preview require Workspace Trust.',
+      );
+      const root = this.libraryRoot(node.scope);
+      if (root) {
+        tooltip.appendMarkdown(
+          `\n\n[${escapeLinkLabel(root.fsPath)}](${commandUri('prompteur.openLibraryFolder', [node.scope])})`,
+        );
+        tooltip.isTrusted = { enabledCommands: ['prompteur.openLibraryFolder'] };
+      }
+      item.tooltip = tooltip;
       return item;
     }
     if (node.kind === 'batch')
@@ -79,6 +106,9 @@ export class PromptTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dis
       const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.Collapsed);
       item.id = `${node.scope}:category:${node.category.toLowerCase()}`;
       item.contextValue = 'category';
+      item.tooltip =
+        categoryDescriptions.get(node.category.trim().toLowerCase()) ??
+        'User-defined category for organizing prompts.';
       return item;
     }
     if (node.kind === 'problem') {
