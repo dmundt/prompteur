@@ -382,7 +382,7 @@ describe('release commands', () => {
     );
     await destination();
     await run('copy', node);
-    expect(env.clipboard.value).toContain('Inspect this change');
+    expect(env.clipboard.value).toContain('Review the selected code or available diff:');
   });
   it('copies retained editor selections without changing source or persistent state', async () => {
     const node = await addPrompt();
@@ -606,12 +606,36 @@ describe('release commands', () => {
     expect(target.document.getText()).toBe('');
     expect(messages.warnings).toEqual([]);
   });
-  it('warns for other empty values, honors cancellation and reports unsupported variables', async () => {
+  it.each(['filename', 'workspace', 'filename, workspace'])(
+    'copies without blocking when optional context is missing: %s',
+    async (missing) => {
+      workspace.workspaceFolders = [];
+      const content = missing
+        .split(', ')
+        .map((name) => `{{${name}}}`)
+        .join(' ');
+      const node = await addPrompt('optional-context', `Review ${content}`);
+      env.clipboard.value = 'previous clipboard';
+      await run('copy', node);
+      expect(env.clipboard.value).toBe(`Review ${missing.includes(',') ? ' ' : ''}`);
+      expect(messages.warnings).toEqual([]);
+      expect(messages.info).toEqual([`Copied without context: ${missing}.`]);
+      await run('preview', node);
+      expect(window.activeTextEditor!.document.getText()).toContain(
+        `Empty variable values: ${missing}`,
+      );
+    },
+  );
+  it('confirms empty clipboard input, honors cancellation and reports unsupported variables', async () => {
     const node = await addPrompt('empty', '{{clipboard}}');
     responses.warning.push(null);
     await run('copy', node);
     expect(env.clipboard.value).toBe('');
-    expect(messages.warnings.at(-1)).toContain('clipboard');
+    expect(messages.warnings.at(-1)).toContain('Clipboard is empty');
+    expect(messages.info).toEqual([]);
+    responses.warning.push('Continue');
+    await run('copy', node);
+    expect(messages.info).toEqual(['Copied without context: clipboard.']);
     const invalid = await addPrompt('invalid', '{{not-supported}}');
     await expect(run('copy', invalid)).rejects.toThrow('Unsupported');
     expect(messages.errors.at(-1)).toContain('Unsupported');
