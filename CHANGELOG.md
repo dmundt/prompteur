@@ -4,6 +4,7 @@
 
 ## 1.1.0
 
+- Show saved prompt context variables in the prompt hover.
 - Report how many existing starter files match or differ from bundled versions; keep existing files and unsaved edits.
 - Remove User and Workspace scope icons to reduce tree-view visual noise.
 - Copy Text no longer interrupts for missing filename/workspace context; reports missing context after copying. Empty clipboard input still requires confirmation. Review Code starter no longer requires filename/workspace variables; existing saved prompts remain unchanged.
