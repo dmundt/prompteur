@@ -4,18 +4,19 @@ Documentation index. Select the matching topic below.
 
 ## Find the right document
 
-| If you need to...                                   | Read                                 |
-| --------------------------------------------------- | ------------------------------------ |
-| Understand the release boundaries                   | [mvp-scope.md](./mvp-scope.md)       |
-| Understand the component layout                     | [architecture.md](./architecture.md) |
-| Change prompt file format, paths, or validation     | [storage.md](./storage.md)           |
-| Change commands, `LibraryService`, or `SearchIndex` | [api.md](./api.md)                   |
-| Change tree icons                                   | [icons.md](./icons.md)               |
-| Check test, build, or verification expectations     | [verification.md](./verification.md) |
-| Check clean-room implementation constraints         | [clean-room.md](./clean-room.md)     |
-| Understand why a decision was made                  | [adr/](./adr/)                       |
-| Follow agent rules for the docs                     | [AGENTS.md](./AGENTS.md)             |
-| Follow agent rules for ADRs                         | [adr/AGENTS.md](./adr/AGENTS.md)     |
+| If you need to...                                   | Read                                                     |
+| --------------------------------------------------- | -------------------------------------------------------- |
+| Understand the release boundaries                   | [mvp-scope.md](./mvp-scope.md)                           |
+| Understand the component layout                     | [architecture.md](./architecture.md)                     |
+| Change prompt file format, paths, or validation     | [storage.md](./storage.md)                               |
+| Change commands, `LibraryService`, or `SearchIndex` | [api.md](./api.md)                                       |
+| Change tree icons                                   | [icons.md](./icons.md)                                   |
+| Check test, build, or verification expectations     | [verification.md](./verification.md)                     |
+| Check clean-room implementation constraints         | [clean-room.md](./clean-room.md)                         |
+| Understand why a decision was made                  | [adr/](./adr/)                                           |
+| Follow the branch and release workflow              | [../AGENTS.md](../AGENTS.md#branch-and-release-workflow) |
+| Follow agent rules for the docs                     | [AGENTS.md](./AGENTS.md)                                 |
+| Follow agent rules for ADRs                         | [adr/AGENTS.md](./adr/AGENTS.md)                         |
 
 ## Architecture Decision Records
 
