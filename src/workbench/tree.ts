@@ -57,7 +57,6 @@ export class PromptTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dis
       );
       item.id = node.scope;
       item.contextValue = 'scope';
-      item.iconPath = new vscode.ThemeIcon(node.scope === 'user' ? 'person' : 'root-folder');
       return item;
     }
     if (node.kind === 'batch')
