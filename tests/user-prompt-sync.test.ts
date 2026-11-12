@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { UserPromptSync, userPromptSyncStateKey } from '../src/workbench/user-prompt-sync';
 import { memoryFiles } from './helpers';
 
@@ -20,6 +20,50 @@ class SyncState {
 }
 
 describe('User prompt Settings Sync', () => {
+  it('reads local prompts concurrently within a bounded batch and preserves their contents', async () => {
+    const { port, files } = memoryFiles();
+    for (let index = 0; index < 25; index++)
+      files.set(`user:prompts/${index}.prompt.md`, `content ${index}`);
+    let active = 0;
+    let peak = 0;
+    vi.mocked(port.read).mockImplementation(async (scope, path) => {
+      active++;
+      peak = Math.max(peak, active);
+      await new Promise((resolve) => setTimeout(resolve, 2));
+      try {
+        return files.get(`${scope}:${path}`);
+      } finally {
+        active--;
+      }
+    });
+    const state = new SyncState();
+    await new UserPromptSync(state, port).configure(true);
+    const snapshot = state.get<{ files: Record<string, string> }>(userPromptSyncStateKey)!;
+    expect(Object.keys(snapshot.files)).toHaveLength(25);
+    expect(snapshot.files['prompts/24.prompt.md']).toBe('content 24');
+    expect(peak).toBeGreaterThan(1);
+    expect(peak).toBeLessThanOrEqual(16);
+  });
+
+  it('reports the first path failure without changing sync state or files', async () => {
+    const { port, files } = memoryFiles();
+    files.set('user:prompts/a.prompt.md', 'a');
+    files.set('user:prompts/b.prompt.md', 'b');
+    vi.mocked(port.read).mockImplementation(async (_scope, path) => {
+      if (path.endsWith('/a.prompt.md')) {
+        await new Promise((resolve) => setTimeout(resolve, 2));
+        throw new Error('first path failed');
+      }
+      throw new Error('second path failed');
+    });
+    const state = new SyncState();
+    await expect(new UserPromptSync(state, port).configure(true)).rejects.toThrow(
+      'first path failed',
+    );
+    expect(state.get(userPromptSyncStateKey)).toBeUndefined();
+    expect([...files.values()]).toEqual(['a', 'b']);
+  });
+
   it('merges remote changes, preserves local conflicts, and propagates deletions', async () => {
     const { port, files } = memoryFiles();
     files.set('user:prompts/keep.prompt.md', 'unchanged');
