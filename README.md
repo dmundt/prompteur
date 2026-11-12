@@ -162,6 +162,7 @@ Inspect {{filename}} in {{workspace}}.
 
 - Installation is opt-in. Rerun after updates to add missing starters.
 - Never replace existing files, including invalid ones. Writes are safe per-file, not transactional; failures report completed count.
+- Completion reports added files and saved files that match or differ from the bundled versions. Differences can be edits or older versions. Unsaved editors without saved files are skipped; comparisons use saved contents.
 
 - No import/export or bundles. In-app copies use a temporary window-local buffer; use the filesystem across windows/apps.
 
