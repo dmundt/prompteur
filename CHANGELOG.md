@@ -2,9 +2,9 @@
 
 ## Unreleased
 
+- Add 21 starters, including Create Issue and Create Task for concise headlines and descriptions, bringing the library to 37 prompts with at least five per category. Rerun Add Starter Library to add missing files without replacing installed prompts.
 - Add Reveal User Library Folder to open its location in the system file manager.
 - Add `{{text}}` for explicit multiline input through a native editor. Five request-based starters now use it; existing installed prompts stay unchanged. New placeholder requires 1.2.0 or later; prompt format remains version 1.
-- Add Create Issue and Create Task starters for concise headlines and descriptions.
 - Show an active filter icon in the prompt view toolbar.
 
 ## 1.1.0

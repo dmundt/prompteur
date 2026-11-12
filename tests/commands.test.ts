@@ -130,7 +130,7 @@ describe('release commands', () => {
     context.globalStorageUri = Uri.parse('vscode-userdata:/profile/storage');
     await activate(context as unknown as vscode.ExtensionContext);
     await run('addStarters', scopeNode());
-    expect(await entries()).toHaveLength(18);
+    expect(await entries()).toHaveLength(37);
     await run('openUserLibrary');
     expect(commandExecutions.at(-1)).toEqual({
       id: 'revealFileInOS',
@@ -433,7 +433,7 @@ describe('release commands', () => {
       'legacy YAML stays untouched',
     );
     await run('addStarters', scopeNode());
-    expect(await entries()).toHaveLength(18);
+    expect(await entries()).toHaveLength(37);
     expect(await fs.readFile(join(userRoot(), 'prompts', 'code-review.yaml'), 'utf8')).toBe(
       'legacy YAML stays untouched',
     );
@@ -442,9 +442,9 @@ describe('release commands', () => {
     expect(await fs.readFile(bundled, 'utf8')).toBe(original);
     expect(await fs.readFile(join(userRoot(), 'settings.yaml'), 'utf8')).toContain('templates');
   });
-  it('installs eighteen starters as ordinary files without changing bundled source', async () => {
+  it('installs thirty-seven starters as ordinary files without changing bundled source', async () => {
     await run('addStarters', scopeNode());
-    expect(await entries()).toHaveLength(18);
+    expect(await entries()).toHaveLength(37);
     const node = (await entries()).find((item) =>
       item.entry.path.endsWith('review-code.prompt.md'),
     )!;
@@ -468,7 +468,7 @@ describe('release commands', () => {
 
     await run('addStarters', scopeNode());
     expect(messages.info.at(-1)).toContain(
-      'Added 2 starter prompts. Saved files matching bundled versions: 15; differing: 1.',
+      'Added 2 starter prompts. Saved files matching bundled versions: 34; differing: 1.',
     );
     expect(await fs.readFile(existing, 'utf8')).toBe('Existing user content');
     for (const name of ['create-issue', 'create-task'])
@@ -497,7 +497,7 @@ describe('release commands', () => {
 
     await run('addStarters', scopeNode());
     expect(messages.info.at(-1)).toBe(
-      'Added 15 starter prompts. Saved files matching bundled versions: 1; differing: 1. Unsaved editors without saved files skipped: 1. No existing files were overwritten.',
+      'Added 34 starter prompts. Saved files matching bundled versions: 1; differing: 1. Unsaved editors without saved files skipped: 1. No existing files were overwritten.',
     );
     expect(await fs.readFile(join(target, matching), 'utf8')).toBe(original);
     expect(await fs.readFile(join(target, invalid), 'utf8')).toBe('invalid frontmatter');
@@ -510,7 +510,7 @@ describe('release commands', () => {
     await run('addStarters', scopeNode());
     await run('addStarters', scopeNode());
     expect(messages.info.at(-1)).toContain(
-      'Saved files matching bundled versions: 18; differing: 0',
+      'Saved files matching bundled versions: 37; differing: 0',
     );
   });
   it('reports a concurrent starter creation without overwriting it', async () => {
@@ -1372,7 +1372,7 @@ describe('release commands', () => {
   it('uses the default for starters and paste, but never falls back from unavailable Workspace', async () => {
     workspace.configuration.set('prompteur.defaultScope', 'workspace');
     await run('addStarters');
-    expect(await entries('workspace')).toHaveLength(18);
+    expect(await entries('workspace')).toHaveLength(37);
     expect(await entries('user')).toHaveLength(0);
 
     const source = await addPrompt('default-paste', 'Copied');
@@ -1386,7 +1386,7 @@ describe('release commands', () => {
     responses.quick.push('Review');
     responses.input.push('Untrusted Workspace Prompt');
     await expect(run('newPrompt')).rejects.toThrow('Trust');
-    expect(await entries('workspace')).toHaveLength(19);
+    expect(await entries('workspace')).toHaveLength(38);
 
     for (const disposable of context.subscriptions.splice(0)) disposable.dispose();
     workspace.workspaceFolders = [];
