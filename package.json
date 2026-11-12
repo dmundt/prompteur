@@ -194,7 +194,7 @@
         "name": "prompteur_findPrompt",
         "toolReferenceName": "prompteurPrompt",
         "displayName": "Find Prompteur Prompt",
-        "modelDescription": "Search local Prompteur prompt libraries and return one matching prompt with its existing variables rendered. Use only when the user asks to find or use a saved prompt. If multiple prompts match, return candidate metadata and ask for a more specific query. Never modify prompts or libraries.",
+        "modelDescription": "Find a saved Prompteur prompt only when the user asks. Search with query and optional scope; case-insensitive exact names take priority over full-text matches. Multiple matches return metadata only: ask the user to choose, then invoke again with the candidate's exact scope and path, without query. Never silently choose between duplicates. A unique match or explicit scope/path selection returns rendered prompt text. Never modify prompts or libraries.",
         "userDescription": "Find and return a matching saved prompt. Returned prompt text and requested context variables are shared with Copilot Chat.",
         "canBeReferencedInPrompt": true,
         "icon": "$(library)",
@@ -214,10 +214,35 @@
                 "workspace"
               ],
               "description": "Optional library to search. Workspace prompts require Workspace Trust."
+            },
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Exact library-relative path returned in candidate metadata. Requires scope; omit query. Missing paths never fall back to another prompt."
             }
           },
-          "required": [
-            "query"
+          "oneOf": [
+            {
+              "required": [
+                "query"
+              ],
+              "not": {
+                "required": [
+                  "path"
+                ]
+              }
+            },
+            {
+              "required": [
+                "scope",
+                "path"
+              ],
+              "not": {
+                "required": [
+                  "query"
+                ]
+              }
+            }
           ],
           "additionalProperties": false
         }
