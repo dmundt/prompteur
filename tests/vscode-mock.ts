@@ -251,6 +251,8 @@ export const lm = {
 };
 export class FakeInputBox {
   title = '';
+  prompt = '';
+  validationMessage: string | undefined;
   value = '';
   valueChanged = new EventEmitter<string>();
   accepted = new EventEmitter<void>();

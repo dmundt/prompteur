@@ -143,8 +143,6 @@ class Workbench implements vscode.Disposable {
         await vscode.workspace.fs.stat(root);
         await vscode.commands.executeCommand('revealFileInOS', root);
       },
-      useText: () => this.textInput.submit(),
-      cancelText: () => this.textInput.cancel(),
       openSettings: async () => {
         await vscode.commands.executeCommand(
           'workbench.action.openSettings',
@@ -268,8 +266,7 @@ class Workbench implements vscode.Disposable {
     return (
       !editor.document.isClosed &&
       !this.editor.contains(editor.document.uri) &&
-      !this.editor.isPreview(editor.document) &&
-      !this.textInput.contains(editor.document)
+      !this.editor.isPreview(editor.document)
     );
   }
 
@@ -739,7 +736,6 @@ class Workbench implements vscode.Disposable {
 export async function start(context: vscode.ExtensionContext): Promise<void> {
   await vscode.commands.executeCommand('setContext', 'prompteur.hasCopiedPrompt', false);
   await vscode.commands.executeCommand('setContext', 'prompteur.filterActive', false);
-  await vscode.commands.executeCommand('setContext', 'prompteur.textInputDocuments', []);
   const workbench = new Workbench(context);
   context.subscriptions.push(workbench);
   await workbench.initialize();
