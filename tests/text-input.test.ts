@@ -1,60 +1,43 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TextInput } from '../src/workbench/text-input';
 import { documentByteLimit } from '../src/core/limits';
-import {
-  CancellationError,
-  contextKeys,
-  EventEmitter,
-  messages,
-  reset,
-  window,
-  workspace,
-} from './vscode-mock';
+import { CancellationError, EventEmitter, inputBoxes, reset, window } from './vscode-mock';
 
 afterEach(() => {
   vi.restoreAllMocks();
   reset();
 });
 
-async function openedInput() {
-  await vi.waitFor(() => expect(window.activeTextEditor).toBeDefined());
-  return window.activeTextEditor!.document;
-}
-
-describe('multiline prompt input', () => {
-  it('accepts multiline text once and validates blank and oversized input', async () => {
+describe('single-line prompt input', () => {
+  it('accepts text and validates blank, multiline, and oversized input', async () => {
     const input = new TextInput();
     const result = input.request();
-    const document = await openedInput();
-    expect(contextKeys.get('prompteur.textInputDocuments')).toEqual([document.uri.toString()]);
-    const other = await workspace.openTextDocument({
-      language: 'plaintext',
-      content: 'Other editor',
-    });
-    await window.showTextDocument(other);
-    await expect(input.submit()).rejects.toThrow('pending prompt text editor');
-    await window.showTextDocument(document);
-    document.change(' \n ');
-    await input.submit();
-    expect(messages.warnings.at(-1)).toContain('non-empty');
-    document.change('x'.repeat(documentByteLimit + 1));
-    await expect(input.submit()).rejects.toThrow('byte limit');
-    document.change('First line\nSecond line');
-    await input.submit();
-    expect(await result).toBe('First line\nSecond line');
-    expect(contextKeys.get('prompteur.textInputDocuments')).toEqual([]);
+    const box = inputBoxes.at(-1)!;
+    expect(box.title).toBe('Enter prompt text');
+    for (const [value, message] of [
+      ['  ', 'non-empty'],
+      ['one\ntwo', 'single line'],
+      ['x'.repeat(documentByteLimit + 1), 'byte limit'],
+    ]) {
+      box.value = value!;
+      box.accepted.fire();
+      expect(box.validationMessage).toContain(message);
+      box.valueChanged.fire(value!);
+      expect(box.validationMessage).toBeUndefined();
+    }
+    box.value = 'User text';
+    box.accepted.fire();
+    expect(await result).toBe('User text');
     input.dispose();
   });
 
-  it('rejects concurrent requests and cancels when the input closes', async () => {
+  it('rejects concurrent requests and cancels when hidden', async () => {
     const input = new TextInput();
     const result = input.request();
     const cancelled = expect(result).rejects.toBeInstanceOf(CancellationError);
-    const document = await openedInput();
     await expect(input.request()).rejects.toThrow('already pending');
-    document.close();
+    inputBoxes.at(-1)!.hide();
     await cancelled;
-    expect(contextKeys.get('prompteur.textInputDocuments')).toEqual([]);
     input.dispose();
   });
 
@@ -66,7 +49,6 @@ describe('multiline prompt input', () => {
       onCancellationRequested: cancellation.event,
     });
     const cancelled = expect(result).rejects.toBeInstanceOf(CancellationError);
-    await openedInput();
     cancellation.fire();
     await cancelled;
     const next = input.request();
@@ -78,14 +60,15 @@ describe('multiline prompt input', () => {
     ).rejects.toBeInstanceOf(CancellationError);
   });
 
-  it('rejects editor failures and restores availability for the next request', async () => {
+  it('rejects input failures and restores availability for the next request', async () => {
     const input = new TextInput();
-    vi.spyOn(workspace, 'openTextDocument').mockRejectedValueOnce(new Error('Editor unavailable'));
-    await expect(input.request()).rejects.toThrow('Editor unavailable');
+    vi.spyOn(window, 'createInputBox').mockImplementationOnce(() => {
+      throw new Error('Input unavailable');
+    });
+    await expect(input.request()).rejects.toThrow('Input unavailable');
     const result = input.request();
     const cancelled = expect(result).rejects.toBeInstanceOf(CancellationError);
-    await openedInput();
-    input.cancel();
+    inputBoxes.at(-1)!.hide();
     await cancelled;
     input.dispose();
   });

@@ -82,33 +82,8 @@ export async function run(): Promise<void> {
   );
   assert.ok(preview, 'Preview must open a plaintext snapshot');
   assert.match(preview.getText(), /Review/);
-  const textStarter = {
-    kind: 'entry',
-    scope: 'user',
-    entry: { path: 'prompts/create-issue.prompt.md' },
-  };
-  const pendingPreview = vscode.commands.executeCommand('prompteur.preview', textStarter);
-  const inputReady = async () => {
-    for (let attempt = 0; attempt < 100; attempt++) {
-      const active = vscode.window.activeTextEditor;
-      if (active?.document.isUntitled && active.document !== preview && !active.document.getText())
-        return active.document;
-      await new Promise((resolve) => setTimeout(resolve, 20));
-    }
-    throw new Error('Multiline input did not open');
-  };
-  const input = await inputReady();
-  const edit = new vscode.WorkspaceEdit();
-  edit.insert(input.uri, new vscode.Position(0, 0), 'Report a defect\nExpected behavior differs.');
-  assert.ok(await vscode.workspace.applyEdit(edit));
-  await vscode.commands.executeCommand('prompteur.useText');
-  await pendingPreview;
-  assert.match(
-    vscode.window.activeTextEditor!.document.getText(),
-    /Report a defect\r?\nExpected behavior differs\./,
-  );
   assert.deepEqual(await vscode.workspace.fs.readFile(bundled), original);
   process.stdout.write(
-    `[host] Untrusted workspace guard, personal prompt use, source preservation, starter integrity, plaintext preview and multiline input passed; clipboard ${skipClipboard ? 'explicitly skipped' : 'passed'}\n`,
+    `[host] Untrusted workspace guard, personal prompt use, source preservation, starter integrity and plaintext preview passed; single-line input not exercised; clipboard ${skipClipboard ? 'explicitly skipped' : 'passed'}\n`,
   );
 }

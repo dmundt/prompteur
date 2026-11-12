@@ -31,7 +31,7 @@ export class PromptLibraryTool implements vscode.LanguageModelTool<PromptToolInp
       confirmationMessages: {
         title: 'Share a prompt with Copilot?',
         message:
-          'Search local Prompteur libraries and return a matching prompt to Copilot. Best Match selection returns a unique highest-ranked prompt without a separate candidate choice, even when lower-ranked matches exist. Ties require a choice. A rendered prompt can include the active selection, clipboard text, filename, workspace name, or explicitly entered multiline text when its template requests those variables.',
+          'Search local Prompteur libraries and return a matching prompt to Copilot. Best Match selection returns a unique highest-ranked prompt without a separate candidate choice, even when lower-ranked matches exist. Ties require a choice. A rendered prompt can include the active selection, clipboard text, filename, workspace name, or explicitly entered single-line text when its template requests those variables.',
       },
     };
   }
