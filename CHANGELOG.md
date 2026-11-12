@@ -2,11 +2,10 @@
 
 ## Unreleased
 
-- Improve prompt tree responsiveness for large libraries when opening categories or using flat view.
-- Speed up User library synchronization for larger prompt collections.
-
 ## 1.2.0
 
+- Improve prompt tree responsiveness for large libraries when opening categories or using flat view.
+- Speed up User library synchronization for larger prompt collections.
 - Add 21 starters, including Create Issue and Create Task for concise headlines and descriptions, bringing the library to 37 prompts with at least five per category. Rerun Add Starter Library to add missing files without replacing installed prompts.
 - Add Reveal User Library Folder to open its location in the system file manager.
 - Add `{{text}}` for explicit single-line input through a native input box. Five existing request-based starters now use it; installed prompts stay unchanged. New placeholder requires 1.2.0 or later; prompt format remains version 1.
