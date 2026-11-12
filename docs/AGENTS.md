@@ -31,4 +31,4 @@ Rules for API/command code and docs. Source: [api.md](./api.md).
 
 - Do not make direct model requests or insert into Chat. The user-approved `prompteur_findPrompt` Language Model Tool is read-only; its returned prompt text and requested variables become Copilot model context.
 - Sync command changes with [api.md](./api.md).
-- `prompteur.copy`/`prompteur.preview` only produce output; **Copy** copies to the clipboard because VS Code exposes no supported composer insertion API. Preview opens independent plaintext snapshot.
+- `prompteur.copy`/`prompteur.preview` only produce output; **Copy Text** copies to the clipboard because VS Code exposes no supported composer insertion API. Preview opens independent plaintext snapshot.
