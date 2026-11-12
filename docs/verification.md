@@ -26,7 +26,7 @@ npm run package
 ## Copilot Selection Checks
 
 - Automated: exact names outrank broader content matches; case/whitespace normalization; duplicate names within/across scopes remain ambiguous; candidate scope/path selects only that prompt; stale paths never substitute another prompt.
-- Automated: invalid input modes, candidate limit/truncation, Workspace Trust, cancellation, and prompt-row action explanations.
+- Automated: invalid input modes, candidate limit/truncation, Workspace Trust, cancellation, and prompt-row metadata without copy-action explanations.
 - Automated: exact/full-text/fuzzy modes, case-sensitive free text with case-insensitive filters, relevance/name ordering, live settings, unique-best versus require-choice selection, score ties, cross-scope phase precedence, and no context reads for losing candidates. Cached 10k-entry full-text and fuzzy fallback each have a 200 ms budget.
 - Automated tool mocks and host registration checks do not certify real Copilot discovery, confirmation, or model follow-up.
 - Manual, in an extension-enabled Copilot window:
