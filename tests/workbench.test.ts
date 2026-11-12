@@ -12,6 +12,81 @@ afterEach(() => {
   watchers.splice(0);
 });
 describe('native tree interactions', () => {
+  it('escapes scope folder labels and passes only scope to the reveal command', () => {
+    const { port } = memoryFiles();
+    const root = Uri.file('C:\\Library [shared]\\prompts');
+    const tree = new PromptTree(
+      new LibraryService(port),
+      () => false,
+      vi.fn(),
+      undefined,
+      undefined,
+      undefined,
+      () => root,
+    );
+    const tooltip = tree.getTreeItem({ kind: 'scope', scope: 'user' }).tooltip as MarkdownString;
+    expect(tooltip.value).toContain('\\[shared\\]');
+    expect(tooltip.value).toContain(
+      `](command:prompteur.openLibraryFolder?${encodeURIComponent(JSON.stringify(['user']))})`,
+    );
+    expect(tooltip.isTrusted).toEqual({ enabledCommands: ['prompteur.openLibraryFolder'] });
+    expect(port.list).not.toHaveBeenCalled();
+    expect(port.read).not.toHaveBeenCalled();
+    tree.dispose();
+  });
+  it('shows scope and category help without reading library data', () => {
+    const { port } = memoryFiles();
+    const tree = new PromptTree(new LibraryService(port), () => true, vi.fn());
+    const user = tree.getTreeItem({ kind: 'scope', scope: 'user' });
+    const workspace = tree.getTreeItem({ kind: 'scope', scope: 'workspace' });
+    expect((user.tooltip as MarkdownString).value).toBe(
+      'Prompts stored in this VS Code profile; optional VS Code Settings Sync.',
+    );
+    expect((workspace.tooltip as MarkdownString).value).toBe(
+      'Prompts stored in the first workspace folder; writes, generation, and preview require Workspace Trust.',
+    );
+    expect(user).toMatchObject({ label: 'User', id: 'user', contextValue: 'scope' });
+    expect(workspace).toMatchObject({
+      label: 'Workspace',
+      id: 'workspace',
+      contextValue: 'scope',
+    });
+
+    const descriptions = [
+      ['explain', 'Understand code, behavior, and changes.'],
+      ['plan', 'Define requirements, scope, and implementation steps.'],
+      ['implement', 'Make scoped code changes.'],
+      ['review', 'Assess code, architecture, security, and readiness.'],
+      ['test', 'Design or add tests.'],
+      ['debug', 'Diagnose failures and investigate causes.'],
+      ['document', 'Write or improve documentation.'],
+    ] as const;
+    for (const [category, description] of descriptions) {
+      expect(tree.getTreeItem({ kind: 'category', scope: 'user', category }).tooltip).toBe(
+        description,
+      );
+    }
+    const mixedCase = tree.getTreeItem({
+      kind: 'category',
+      scope: 'workspace',
+      category: 'ReViEw',
+      filteredCount: 2,
+    });
+    expect(mixedCase).toMatchObject({
+      label: 'ReViEw (2)',
+      id: 'workspace:category:review',
+      contextValue: 'category',
+      tooltip: 'Assess code, architecture, security, and readiness.',
+    });
+    for (const category of ['Custom', '__proto__', 'constructor']) {
+      expect(tree.getTreeItem({ kind: 'category', scope: 'user', category }).tooltip).toBe(
+        'User-defined category for organizing prompts.',
+      );
+    }
+    expect(port.list).not.toHaveBeenCalled();
+    expect(port.read).not.toHaveBeenCalled();
+    tree.dispose();
+  });
   it('groups prompts by category, ignores old rule files, filters and repairs Markdown prompts', async () => {
     const { port, files } = memoryFiles();
     files.set(
