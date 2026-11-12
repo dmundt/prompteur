@@ -308,20 +308,6 @@ describe('release commands', () => {
     expect(manifest.contributes.menus.commandPalette).toEqual([
       { command: 'prompteur.duplicate', when: 'false' },
       { command: 'prompteur.searchActive', when: 'false' },
-      { command: 'prompteur.useText', when: 'false' },
-      { command: 'prompteur.cancelText', when: 'false' },
-    ]);
-    expect(manifest.contributes.menus['editor/title']).toEqual([
-      {
-        command: 'prompteur.useText',
-        when: 'resourceScheme == untitled && resource in prompteur.textInputDocuments',
-        group: 'navigation@1',
-      },
-      {
-        command: 'prompteur.cancelText',
-        when: 'resourceScheme == untitled && resource in prompteur.textInputDocuments',
-        group: 'navigation@2',
-      },
     ]);
     expect(manifest.contributes.menus['view/title']).toEqual(
       expect.arrayContaining([
@@ -1032,20 +1018,17 @@ describe('release commands', () => {
     expect(target.document.getText()).toBe('');
     expect(messages.warnings).toEqual([]);
   });
-  it('uses multiline text while preserving source context and excluding input editors', async () => {
+  it('uses entered text while preserving source context', async () => {
     const node = await addPrompt('entered', '{{text}}\n{{text}}\n{{selection}} {{filename}}');
     await destination('Source selection');
     const copying = run('copy', node);
-    await vi.waitFor(() => expect(window.activeTextEditor?.document.uri.scheme).toBe('untitled'));
-    const input = window.activeTextEditor!.document;
+    await vi.waitFor(() => expect(inputBoxes.at(-1)?.title).toBe('Enter prompt text'));
+    const input = inputBoxes.at(-1)!;
     expect(env.clipboard.value).toBe('');
-    input.change('Line one\nLine two');
-    await run('useText');
+    input.value = 'Entered text';
+    input.accepted.fire();
     await copying;
-    expect(env.clipboard.value).toBe(
-      'Line one\nLine two\nLine one\nLine two\nSource selection main.ts',
-    );
-    expect(contextKeys.get('prompteur.textInputDocuments')).toEqual([]);
+    expect(env.clipboard.value).toBe('Entered text\nEntered text\nSource selection main.ts');
     const selectionOnly = await addPrompt('selection-only', '{{selection}} {{filename}}');
     await run('copy', selectionOnly);
     expect(env.clipboard.value).toBe('Source selection main.ts');
@@ -1054,28 +1037,28 @@ describe('release commands', () => {
     const node = await addPrompt('entered', '{{text}}');
     env.clipboard.value = 'Unchanged';
     const copying = run('copy', node);
-    await vi.waitFor(() => expect(window.activeTextEditor?.document.uri.scheme).toBe('untitled'));
-    await run('cancelText');
+    await vi.waitFor(() => expect(inputBoxes.at(-1)?.title).toBe('Enter prompt text'));
+    inputBoxes.at(-1)!.hide();
     await copying;
     expect(env.clipboard.value).toBe('Unchanged');
     expect(messages.errors).toEqual([]);
-    const previous = window.activeTextEditor!.document;
+    const previous = inputBoxes.at(-1);
     const preview = run('preview', node);
-    await vi.waitFor(() => expect(window.activeTextEditor!.document).not.toBe(previous));
-    window.activeTextEditor!.document.change('User text\nfor preview');
-    await run('useText');
+    await vi.waitFor(() => expect(inputBoxes.at(-1)).not.toBe(previous));
+    inputBoxes.at(-1)!.value = 'User text for preview';
+    inputBoxes.at(-1)!.accepted.fire();
     await preview;
-    expect(window.activeTextEditor!.document.getText()).toBe('User text\nfor preview');
+    expect(window.activeTextEditor!.document.getText()).toBe('User text for preview');
     expect(env.clipboard.value).toBe('Unchanged');
   });
   it('rechecks Workspace Trust after text entry', async () => {
     const node = await addPrompt('entered', '{{text}}', 'workspace');
     const copying = run('copy', node);
     const rejected = expect(copying).rejects.toThrow('Trust');
-    await vi.waitFor(() => expect(window.activeTextEditor?.document.uri.scheme).toBe('untitled'));
-    window.activeTextEditor!.document.change('User text');
+    await vi.waitFor(() => expect(inputBoxes.at(-1)?.title).toBe('Enter prompt text'));
+    inputBoxes.at(-1)!.value = 'User text';
     workspace.isTrusted = false;
-    await run('useText');
+    inputBoxes.at(-1)!.accepted.fire();
     await rejected;
     expect(env.clipboard.value).toBe('');
   });
@@ -1083,26 +1066,25 @@ describe('release commands', () => {
     const first = await addPrompt('text-one', '{{text}}');
     await addPrompt('text-two', '{{text}}');
     expect(JSON.parse(await runPromptTool({ query: 'text-' })).status).toBe('ambiguous');
-    expect(contextKeys.get('prompteur.textInputDocuments')).toEqual([]);
+    expect(inputBoxes).toHaveLength(0);
     const result = runPromptTool({ scope: 'user', path: first.entry.path });
-    await vi.waitFor(() => expect(window.activeTextEditor?.document.uri.scheme).toBe('untitled'));
-    window.activeTextEditor!.document.change('Explicit Copilot text\nSecond line');
-    await run('useText');
-    expect(JSON.parse(await result).content).toBe('Explicit Copilot text\nSecond line');
+    await vi.waitFor(() => expect(inputBoxes.at(-1)?.title).toBe('Enter prompt text'));
+    inputBoxes.at(-1)!.value = 'Explicit Copilot text';
+    inputBoxes.at(-1)!.accepted.fire();
+    expect(JSON.parse(await result).content).toBe('Explicit Copilot text');
 
     const cancellation = new EventEmitter<void>();
     const token = { isCancellationRequested: false, onCancellationRequested: cancellation.event };
-    const previous = window.activeTextEditor!.document;
+    const previous = inputBoxes.at(-1);
     const invocation = promptTool().invoke(
       { input: { scope: 'user', path: first.entry.path }, toolInvocationToken: undefined },
       token,
     );
     const rejected = expect(invocation).rejects.toBeInstanceOf(CancellationError);
-    await vi.waitFor(() => expect(window.activeTextEditor!.document).not.toBe(previous));
+    await vi.waitFor(() => expect(inputBoxes.at(-1)).not.toBe(previous));
     token.isCancellationRequested = true;
     cancellation.fire();
     await rejected;
-    expect(contextKeys.get('prompteur.textInputDocuments')).toEqual([]);
   });
   it.each(['filename', 'workspace', 'filename, workspace'])(
     'copies without blocking when optional context is missing: %s',

@@ -123,9 +123,8 @@ Inspect {{filename}} in {{workspace}}.
 - File path is identity; names may repeat. Filenames use readable slugs and numeric collision suffixes.
 
 - Variables: `selection`, `clipboard`, `filename`, `workspace`, `text`.
-- `{{text}}` opens an untitled plaintext editor for multiline input. Choose **Use Text** (check icon) or **Cancel** (close icon) in its toolbar. Blank input is rejected; Cancel or closing the input aborts generation. Input is limited to 1 MiB and reused for repeated placeholders. Only one input may be pending per window.
-- Text entry is requested only after choosing a prompt, including through Copilot. No selection/clipboard fallback. Input editors never supply selection/filename context.
-- Prompteur does not save entered text or keep input history. The untitled editor remains open after submission/cancellation; close it manually when finished. VS Code hot exit may retain unsaved editors.
+- `{{text}}` opens a native single-line input. Press Enter to submit; Escape cancels generation. Blank input is rejected; input is limited to 1 MiB and reused for repeated placeholders. Only one input may be pending per window.
+- Text entry is requested only after choosing a prompt, including through Copilot. No selection/clipboard fallback. Prompteur does not save entered text or keep input history.
 - `{{text}}` requires Prompteur 1.2.0 or later; older versions reject it. Prompt format remains version 1. Existing installed prompts are not rewritten.
 - Expand once; collapse repeated blank lines. Empty selection is allowed. Missing filename/workspace context does not block copying; one notification lists missing values. Empty clipboard input requires confirmation. Preview lists missing context.
 - Unknown/malformed placeholders block generation. Read clipboard only when requested.

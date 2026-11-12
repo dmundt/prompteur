@@ -4,7 +4,7 @@
 
 - `core/documents.ts`: Markdown prompt parsing with metadata-only YAML frontmatter, runtime-approved categories, bounded body text, path checks, and path-based identity.
 - `core/render.ts`: bounded one-pass substitution of five fixed variables.
-- `workbench/text-input.ts`: per-window native multiline input lifecycle; excludes input documents from context capture. No extension-owned input persistence.
+- `workbench/text-input.ts`: per-window native single-line input lifecycle. No extension-owned input persistence.
 - `application/library.ts`: lazy per-scope cache, serialized writes/reloads, validation problems, and notifications.
 - `application/search.ts`: cached raw/normalized fields, exact tag/category filters, shared exact/full-text/bounded-fuzzy matching, and relevance/name ordering. Cross-scope phase selection precedes Copilot candidate limits.
 - `platform/local-files.ts`: reads/scans, expected-source writes/deletes, locks, atomic replacement, and symlink protection.

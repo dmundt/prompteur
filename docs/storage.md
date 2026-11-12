@@ -60,4 +60,4 @@
 - Starters are editable copies. Skip every occupied destination, including invalid files.
 - Summarize added, matching, and differing saved files; skip unsaved editors without saved files. Differences do not identify their cause.
 - Each add is atomic; installation is not. Report partial progress.
-- Entered `text` is not written to library files or extension state. Native untitled input documents may be retained by VS Code hot exit; users close/discard them explicitly.
+- Entered `text` is not written to library files or extension state.
