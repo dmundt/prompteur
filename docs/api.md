@@ -47,5 +47,9 @@
 - Missing filename/workspace values do not block Copy Text; one completion notification lists missing context. Empty clipboard input requires confirmation. Empty selection is allowed; Preview retains missing-context details.
 - `prompteur.duplicate` remains callable for compatibility but is hidden from menus and the Command Palette. Use **Copy Text** for text handoff and **Copy Prompt** / **Paste Prompt** for library copies.
 - VS Code has no supported API to insert into the active Chat composer; users paste the clipboard result.
-- `prompteur_findPrompt` is read-only. It searches User and trusted Workspace libraries, renders one unique match, and returns candidate metadata for ambiguous matches. Workspace queries require Trust.
+- `prompteur_findPrompt` is read-only. Search with `{ query, scope? }` or select a returned candidate with `{ scope, path }`; do not combine query and path. Query length: 1–256 characters; blank queries/paths, invalid scopes, and incomplete/mixed modes error.
+- Query mode searches User and trusted Workspace libraries by default. Trimmed, case-insensitive exact names take priority; otherwise use existing full-text/filter search. Repeated exact names remain ambiguous.
+- Direct mode matches the exact library-relative path in validated library entries; no arbitrary filesystem reads, path normalization, or fallback search. Workspace search and direct lookup require Trust.
+- Results: `match` includes prompt identity (`name`, `category`, `scope`, `path`), rendered `content`, and `missing` variables; `ambiguous` includes up to 10 candidate metadata records and `truncated`, without content; `not_found` identifies the query or requested scope/path. All results include `workspaceOmittedForTrust`.
+- Prompt-row hover explains Copy Text and Copy Prompt; contributed command tooltips use native titles, not an unsupported manifest tooltip field.
 - VS Code confirms tool use before prompt data is returned to Copilot. The rendered prompt and any requested context variables become model context; direct model requests and prompt mutations are not performed.

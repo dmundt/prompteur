@@ -23,6 +23,23 @@ npm run package
 - Host smoke verifies Language Model Tool registration when supported; tool search/render is unit-tested with a VS Code API mock. Tests and extension code make no model-provider requests.
 - Runner restores clipboard and removes temp workspace data.
 
+## Copilot Selection Checks
+
+- Automated: exact names outrank broader content matches; case/whitespace normalization; duplicate names within/across scopes remain ambiguous; candidate scope/path selects only that prompt; stale paths never substitute another prompt.
+- Automated: invalid input modes, candidate limit/truncation, Workspace Trust, cancellation, and prompt-row action explanations.
+- Automated tool mocks and host registration checks do not certify real Copilot discovery, confirmation, or model follow-up.
+- Manual, in an extension-enabled Copilot window:
+  1. Enable **Find Prompteur Prompt** in Agent mode; reference `#prompteurPrompt`.
+  2. Search a unique exact name also mentioned in another prompt; verify only the named prompt is returned.
+  3. Search a repeated name across User/Workspace libraries; approve sharing when requested; verify metadata only until a candidate is chosen.
+  4. Choose one returned scope/path; verify Copilot invokes the tool without query and receives only that prompt's rendered content.
+  5. Remove or rename the candidate; refresh libraries; verify its old path reports not found without replacement.
+  6. In Restricted Mode, verify explicit Workspace lookup is rejected.
+- Use synthetic fixture prompts/context for manual checks. Do not send private prompt or clipboard content merely to validate the integration.
+- Record actual host/Copilot results and any blocked stages separately; never infer interactive success from unit tests.
+
+## Host and Release Configuration
+
 - `VSCODE_TEST_VERSION`: select host version; default `stable`.
 - CI: Windows/Linux/macOS; VS Code 1.96.0 and stable. Enforce 200 ms activation on stable Linux only.
 - `VSCODE_EXECUTABLE_PATH`: use installed host.
