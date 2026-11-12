@@ -167,37 +167,40 @@ export class PromptTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dis
         this.query,
         node.kind === 'category' ? node.category : undefined,
       );
-      const countByCategory = (source: readonly Entry[]) => {
-        const counts = new Map<string, number>();
-        for (const entry of source) {
-          const key = (entry.data.category.trim() || 'misc').toLowerCase();
-          counts.set(key, (counts.get(key) ?? 0) + 1);
-        }
-        return counts;
-      };
-      const filteredCounts = countByCategory(entries);
-      const totalCounts = countByCategory(snapshot.entries);
-      const categories: TreeNode[] = Array.from(
-        new Map(
-          entries
-            .map((entry) => entry.data.category.trim() || 'misc')
-            .map((category) => [category.toLowerCase(), category] as const),
-        ).values(),
-      )
-        .sort((left, right) => left.localeCompare(right))
-        .map((category): TreeNode => ({
-          kind: 'category',
+      let nodes: TreeNode[];
+      if (node.kind === 'scope' && this.groupByCategory()) {
+        const countByCategory = (source: readonly Entry[]) => {
+          const counts = new Map<string, number>();
+          for (const entry of source) {
+            const key = (entry.data.category.trim() || 'misc').toLowerCase();
+            counts.set(key, (counts.get(key) ?? 0) + 1);
+          }
+          return counts;
+        };
+        const filteredCounts = countByCategory(entries);
+        const totalCounts = countByCategory(snapshot.entries);
+        nodes = Array.from(
+          new Map(
+            entries
+              .map((entry) => entry.data.category.trim() || 'misc')
+              .map((category) => [category.toLowerCase(), category] as const),
+          ).values(),
+        )
+          .sort((left, right) => left.localeCompare(right))
+          .map((category): TreeNode => ({
+            kind: 'category',
+            scope: node.scope,
+            category,
+            filteredCount: filteredCounts.get(category.toLowerCase()) ?? 0,
+            totalCount: totalCounts.get(category.toLowerCase()) ?? 0,
+          }));
+      } else {
+        nodes = entries.map((entry): TreeNode => ({
+          kind: 'entry',
           scope: node.scope,
-          category,
-          filteredCount: filteredCounts.get(category.toLowerCase()) ?? 0,
-          totalCount: totalCounts.get(category.toLowerCase()) ?? 0,
+          entry,
         }));
-      const prompts: TreeNode[] = entries.map((entry): TreeNode => ({
-        kind: 'entry',
-        scope: node.scope,
-        entry,
-      }));
-      const nodes = node.kind === 'scope' && this.groupByCategory() ? categories : prompts;
+      }
       if (node.kind === 'scope')
         nodes.push(
           ...snapshot.problems.map((problem): TreeNode => ({
