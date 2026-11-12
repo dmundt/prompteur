@@ -25,6 +25,7 @@ Documentation index. Select the matching topic below.
 - [ADR 003: Explicit Local Safety Boundaries](./adr/003-local-safety-boundaries.md)
 - [ADR 004: Markdown Frontmatter Prompts Are Authoritative](./adr/004-markdown-frontmatter-prompts.md)
 - [ADR 005: Explicit Copilot Prompt Tool](./adr/005-copilot-prompt-tool.md)
+- [ADR 006: Configurable Prompt Matching](./adr/006-configurable-prompt-matching.md)
 
 ## Index Rules
 

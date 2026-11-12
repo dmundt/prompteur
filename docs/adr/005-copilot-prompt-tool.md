@@ -1,6 +1,6 @@
 # ADR 005: Explicit Copilot Prompt Tool
 
-Status: Accepted.
+Status: Partially superseded by [ADR 006](./006-configurable-prompt-matching.md) for unique-candidate selection.
 
 Expose saved prompts to Copilot Chat/Agents only through a read-only VS Code Language Model Tool. VS Code mediates invocation and confirmation; the extension does not make model requests or use a direct provider/network client. The tool searches local libraries, returns metadata for ambiguous matches, and renders only a unique match. It cannot modify prompts. Workspace prompt access requires Workspace Trust. Prompt text and any requested context variables become model context.
 

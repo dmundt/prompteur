@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { LibraryService } from '../src/application/library';
-import { appendExactFilter, SearchIndex } from '../src/application/search';
+import { appendExactFilter, defaultSearchOptions, SearchIndex } from '../src/application/search';
 import { encodeMarkdown, newPrompt, type Entry } from '../src/core/documents';
 import { generate, variableTokens } from '../src/core/render';
 import { memoryFiles } from './helpers';
@@ -285,5 +285,147 @@ describe('prompt search and rendering', () => {
     const start = performance.now();
     expect(index.query('tag:target')[0]?.key).toBe('123');
     expect(performance.now() - start).toBeLessThan(200);
+    const fuzzyStart = performance.now();
+    expect(
+      index
+        .query('Prampt 123', undefined, {
+          ...defaultSearchOptions,
+          matching: 'fuzzy',
+        })
+        .some((entry) => entry.key === '123'),
+    ).toBe(true);
+    expect(performance.now() - fuzzyStart).toBeLessThan(200);
+  });
+
+  it('shares exact-first modes, case handling and filter constraints', () => {
+    const index = new SearchIndex();
+    const exact: Entry = {
+      key: 'exact',
+      scope: 'user',
+      path: 'prompts/one.prompt.md',
+      source: '',
+      data: { ...newPrompt('Code  Review'), category: 'review', tags: ['Security'] },
+    };
+    const broader: Entry = {
+      ...exact,
+      key: 'broader',
+      path: 'prompts/two.prompt.md',
+      data: { ...newPrompt('Other'), content: 'Code Review', category: 'debug', tags: ['Quality'] },
+    };
+    index.update([broader, exact]);
+    expect(index.query('  CODE  REVIEW  ')).toEqual([exact]);
+    expect(
+      index.query('Code Review', undefined, { ...defaultSearchOptions, matching: 'exact' }),
+    ).toEqual([]);
+    expect(
+      index.query('Code  Review', undefined, { ...defaultSearchOptions, matching: 'exact' }),
+    ).toEqual([exact]);
+    expect(
+      index.query('code  review', undefined, { ...defaultSearchOptions, caseSensitive: true }),
+    ).toEqual([]);
+    expect(
+      index.query('Code Review', undefined, { ...defaultSearchOptions, caseSensitive: true }),
+    ).toEqual([exact, broader]);
+    expect(index.query('Code Review tag:QUALITY')).toEqual([broader]);
+    expect(index.query('Code Review', 'DEBUG')).toEqual([broader]);
+    expect(
+      index.query('TAG:SECURITY', undefined, { ...defaultSearchOptions, caseSensitive: true }),
+    ).toEqual([exact]);
+    expect(
+      index.query('tag:QUALITY', undefined, { ...defaultSearchOptions, matching: 'exact' }),
+    ).toEqual([broader]);
+    expect(index.query('', undefined, { ...defaultSearchOptions, matching: 'fuzzy' })).toEqual([
+      exact,
+      broader,
+    ]);
+  });
+
+  it('ranks full-text candidates by weakest matching field, with name ordering as presentation only', () => {
+    const index = new SearchIndex();
+    const make = (key: string, name: string, description = '', content = ''): Entry => ({
+      key,
+      scope: 'user',
+      path: `prompts/${key}.prompt.md`,
+      source: '',
+      data: { ...newPrompt(name), description, content },
+    });
+    const body = make('one', 'Alpha', '', 'inspect code');
+    const metadata = make('two', 'Bravo', 'inspect code');
+    const substring = make('three', 'Please inspect code');
+    const prefix = make('four', 'inspect code carefully');
+    index.update([body, metadata, substring, prefix]);
+    expect(index.query('inspect')).toEqual([prefix, substring, metadata, body]);
+    expect(index.query('inspect', undefined, { ...defaultSearchOptions, ranking: 'name' })).toEqual(
+      [body, metadata, prefix, substring],
+    );
+    expect(
+      index
+        .matches('inspect code', undefined, defaultSearchOptions)
+        .map((match) => match.relevance),
+    ).toEqual([1, 2, 3, 3]);
+    expect(index.query('inspect missing')).toEqual([]);
+    const duplicate = { ...prefix, key: 'five', path: 'prompts/five.prompt.md' };
+    index.update([prefix, duplicate]);
+    expect(index.query('inspect').map((entry) => entry.path)).toEqual([
+      duplicate.path,
+      prefix.path,
+    ]);
+  });
+
+  it.each([
+    ['cat', 'cot', false],
+    ['code', 'cide', true],
+    ['code', 'cde', true],
+    ['code', 'coxde', true],
+    ['code', 'cdoe', false],
+    ['reviewx', 'reviezz', false],
+    ['reviewxy', 'reviewzz', true],
+    ['reviewxy', 'reviezzz', false],
+    ['reviewxy', 'short', false],
+  ])('bounds fuzzy name edits for %s → %s', (query, name, matched) => {
+    const index = new SearchIndex();
+    const entry: Entry = {
+      key: 'one',
+      scope: 'user',
+      path: 'prompts/one.prompt.md',
+      source: '',
+      data: newPrompt(name),
+    };
+    index.update([entry]);
+    expect(index.query(query, undefined, { ...defaultSearchOptions, matching: 'fuzzy' })).toEqual(
+      matched ? [entry] : [],
+    );
+    expect(index.query(query)).toEqual([]);
+  });
+
+  it('runs fuzzy names only after full-text fails and retains case and exact filters', () => {
+    const index = new SearchIndex();
+    const first: Entry = {
+      key: 'one',
+      scope: 'user',
+      path: 'prompts/one.prompt.md',
+      source: '',
+      data: { ...newPrompt('reviewyy'), tags: ['Quality'] },
+    };
+    const closer = {
+      ...first,
+      key: 'two',
+      path: 'prompts/two.prompt.md',
+      data: { ...first.data, name: 'reviewxy' },
+    };
+    const fullText = {
+      ...first,
+      key: 'three',
+      path: 'prompts/three.prompt.md',
+      data: { ...newPrompt('Other'), content: 'reviewxx' },
+    };
+    const options = { ...defaultSearchOptions, matching: 'fuzzy' as const };
+    index.update([first, closer, fullText]);
+    expect(index.query('reviewxx', undefined, options)).toEqual([fullText]);
+    expect(index.query('reviewxx tag:QUALITY', undefined, options)).toEqual([closer, first]);
+    expect(
+      index.query('REVIEWXX tag:QUALITY', undefined, { ...options, caseSensitive: true }),
+    ).toEqual([]);
+    expect(index.query('reviewxx tag:missing', undefined, options)).toEqual([]);
   });
 });

@@ -5,7 +5,7 @@
 - `.prompt.md`: YAML frontmatter (`version`, `name`, `description`, `category`, `tags`) + raw Markdown body. Seven built-ins; approved profile-wide additions.
 - Fixed User and first-local-Workspace libraries.
 - Native tree groups by category by default; `prompteur.groupByCategory` can show a flat prompt list. Recursive discovery; no folder browser.
-- Case-insensitive full-text/exact-tag search; alphabetical results.
+- Shared tree/Copilot exact-first full-text matching; optional exact-only or fuzzy name fallback, case sensitivity, and relevance/name ranking. Defaults: case-insensitive, relevance order, unique-best Copilot selection; duplicate exact names and highest-score ties require a choice.
 - Create, edit, duplicate, confirm-delete, copy generated text; never edit source code.
 - **Copy Text** copies rendered text to the clipboard; Chat composer insertion is unavailable.
 - Read-only Copilot prompt search/render tool; Workspace results require Trust and tool invocation is confirmed by VS Code.
@@ -19,7 +19,7 @@
 
 ## Excluded
 
-- Excluded: custom ordering/sort, Favorites/MRU/usage, configurable library paths, import/export/bundles, live preview, autoformat, folder management.
+- Excluded: manual/custom ordering, Favorites/MRU/usage, configurable library paths, import/export/bundles, live preview, autoformat, folder management.
 
 - No UUIDs, rules, inheritance, databases, sync/cloud/accounts/roles, plugins, direct AI provider/model requests, analytics, custom editors, graph views, or speculative metadata.
 
