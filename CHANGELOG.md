@@ -4,6 +4,7 @@
 
 ## 1.1.0
 
+- Remove User and Workspace scope icons to reduce tree-view visual noise.
 - Copy Text no longer interrupts for missing filename/workspace context; reports missing context after copying. Empty clipboard input still requires confirmation. Review Code starter no longer requires filename/workspace variables; existing saved prompts remain unchanged.
 - Add a read-only Copilot prompt search/render tool.
 - Prefer exact prompt names in Copilot; keep duplicates explicit and retrieve chosen candidates by scope/path without substituting missing prompts.
