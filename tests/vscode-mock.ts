@@ -440,6 +440,7 @@ export const env = {
     },
   },
 };
+export const contextKeys = new Map<string, unknown>();
 export const commands = {
   registerCommand: (id: string, handler: (...args: unknown[]) => Promise<unknown>) => {
     handlers.set(id, handler);
@@ -447,6 +448,11 @@ export const commands = {
   },
   async executeCommand(id: string, ...args: unknown[]) {
     commandExecutions.push({ id, args });
+    if (id === 'setContext') {
+      if (typeof args[0] !== 'string') throw new Error('Invalid context key');
+      contextKeys.set(args[0], args[1]);
+      return;
+    }
     if (id === 'workbench.action.openSettings') return;
     if (id === 'markdown.showPreviewToSide') {
       messages.preview = providers.get('prompteur-preview')!.provideTextDocumentContent();
@@ -469,6 +475,7 @@ export function reset() {
   window.activeTextEditor = undefined;
   window.visibleTextEditors = [];
   handlers.clear();
+  contextKeys.clear();
   commandExecutions.splice(0);
   quickPicks.splice(0);
   views.clear();

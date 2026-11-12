@@ -11,7 +11,7 @@
 - Users may approve profile-wide categories; runtime validates them. Remove a custom category only when no valid prompt uses it.
 - JSON Schema covers frontmatter. Prompt body is raw Markdown after closing `---`.
 
-- `prompteur.defaultScope`: applies to untargeted New Prompt, Add Starter Library, and Paste Prompt. Explicit tree targets win. `ask` shows the picker when both libraries exist; otherwise it selects User. Missing configured Workspace library errors; never redirect to User.
+- `prompteur.defaultScope`: applies to untargeted New, Add Starter Library, and Paste Prompt. Explicit tree targets win. `ask` shows the picker when both libraries exist; otherwise it selects User. Missing configured Workspace library errors; never redirect to User.
 - `prompteur.preferredCategory`: preselects an approved category; user confirmation remains required.
 - `prompteur.showTags`: toggles row tag labels; defaults `true`. Search and tooltip links remain unchanged.
 - `prompteur.categoryCountMode`: `filtered` (default), `total`, or `hidden`. Search still determines which categories appear; counts use filtered matches or all valid prompts in each visible category.
@@ -41,8 +41,10 @@
 | `prompteur.openSettings`   | Open Prompteur settings                    |
 
 - Tree arguments are private. Palette invocations select scope/prompt as needed.
-- Prompt-record copy/paste is window-local, source-preserving, and separate from OS clipboard.
+- Prompt-record copy/paste is window-local, source-preserving, and separate from OS clipboard. Paste is enabled when the window-local buffer contains a copied prompt.
 - Category paste overrides category; scope/palette paste preserves it.
+- **Copy Text** (`prompteur.copy`) renders to the clipboard and shows paste guidance. It is the sole inline prompt action; a separate context-menu group places a separator after it.
+- `prompteur.duplicate` remains callable for compatibility but is hidden from menus and the Command Palette. Use **Copy Text** for text handoff and **Copy Prompt** / **Paste Prompt** for library copies.
 - VS Code has no supported API to insert into the active Chat composer; users paste the clipboard result.
 - `prompteur_findPrompt` is read-only. It searches User and trusted Workspace libraries, renders one unique match, and returns candidate metadata for ambiguous matches. Workspace queries require Trust.
 - VS Code confirms tool use before prompt data is returned to Copilot. The rendered prompt and any requested context variables become model context; direct model requests and prompt mutations are not performed.

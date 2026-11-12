@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Add a read-only Copilot prompt search/render tool.
+- Rename actions to **Copy Text** and **New**. Enable **Paste Prompt** only after copying a prompt. Hide **Duplicate**, retaining command compatibility.
 
 ## 1.0.0
 

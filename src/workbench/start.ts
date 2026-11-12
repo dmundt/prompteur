@@ -540,6 +540,7 @@ class Workbench implements vscode.Disposable {
       data: { ...entry.data, tags: [...entry.data.tags] },
       source: entry.source,
     };
+    await vscode.commands.executeCommand('setContext', 'prompteur.hasCopiedPrompt', true);
     void vscode.window.showInformationMessage(
       'Prompt copied. Paste Prompt to create a library copy.',
     );
@@ -603,6 +604,7 @@ class Workbench implements vscode.Disposable {
     )
       return;
     await vscode.env.clipboard.writeText(result.text);
+    void vscode.window.showInformationMessage('Text copied. Paste into Chat or editor.');
   }
 
   private async preview(node?: TreeNode): Promise<void> {
@@ -664,6 +666,7 @@ class Workbench implements vscode.Disposable {
 }
 
 export async function start(context: vscode.ExtensionContext): Promise<void> {
+  await vscode.commands.executeCommand('setContext', 'prompteur.hasCopiedPrompt', false);
   const workbench = new Workbench(context);
   context.subscriptions.push(workbench);
   await workbench.initialize();

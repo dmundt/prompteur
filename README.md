@@ -26,23 +26,24 @@ code --install-extension prompteur-1.0.0.vsix
 
 ## Daily Workflow
 
-1. Open **Prompteur** > **New Prompt**; choose User or Workspace.
+1. Open **Prompteur** > **New**; choose User or Workspace.
 2. Edit/save Markdown in VS Code's text editor.
 3. Browse categories or **Filter Prompts**; combine text and exact tags (for example, `tag:security review`).
-4. Select source text, then run **Copy** from the tree or Command Palette.
-5. Paste generated text into Chat or another app/window. Copy never edits source or inserts into Chat.
+4. Select source text, then run **Copy Text** from a prompt row or the Command Palette.
+5. Paste generated text into Chat. Direct insertion into the Chat composer is not available.
 
 - Generation reads selection from the current or last active non-library, non-preview editor in the same window.
 - Selecting a placeholder in a prompt body does not provide context.
 - VS Code windows do not share selections; copy in the source window, then paste in the target window.
+- **Copy Text** copies the rendered prompt for Chat or another editor.
 
-- Prompt menu: Edit, Duplicate, Delete, **Copy Prompt**, Preview.
-- **Copy Prompt** stores a window-local record; **Paste Prompt** creates a file on User/Workspace scope or category. Category target overrides category; source remains.
-- **Copy** generates text to the OS clipboard. Workspace source/destination requires Trust.
+- Prompt menu: **Copy Text**, separator, **Copy Prompt**, Preview, Edit, Delete.
+- **Copy Prompt** stores a window-local prompt record; **Paste Prompt** creates a file on User/Workspace scope or category. Paste is enabled after copying; category target overrides category; source remains.
+- **Copy Text** generates text to the OS clipboard. Workspace source/destination requires Trust.
 - Commands: Command Palette > **Prompteur**. **Clear Filter** resets search; **Reload Libraries** rescans.
 
 - View gear opens settings:
-  - **Default Scope**: User, Workspace, or Ask for untargeted New Prompt/Add Starter Library/Paste Prompt. Ask shows the picker when both libraries exist; otherwise it selects User. Explicit tree targets win.
+  - **Default Scope**: User, Workspace, or Ask for untargeted New/Add Starter Library/Paste Prompt. Ask shows the picker when both libraries exist; otherwise it selects User. Explicit tree targets win.
   - **Preferred Category**: preselect approved category; user confirmation remains required.
   - **Show Tags**: show/hide row labels; default On. Search and tooltips remain unchanged.
   - **Category Count Mode**: Filtered (default), Total, or Hidden. Search still controls which categories appear.
@@ -81,12 +82,12 @@ code --install-extension prompteur-1.0.0.vsix
 ### Manual Handoff: Any Chat
 
 1. Select source code if the prompt uses `{{selection}}`.
-2. Run **Copy** from the prompt row, context menu, or Command Palette.
+2. Run **Copy Text** from the prompt row, context menu, or Command Palette.
 3. Paste into Copilot Chat, an Agents window, or another chat client; submit.
 
-- No Copilot tool support required. **Copy** renders variables before copying.
+- No Copilot tool support required. **Copy Text** renders variables before copying.
 - Direct Chat composer insertion is unavailable. For another window, copy in the source window and paste in the target.
-- **Copy Prompt** / **Paste Prompt** copy library records; use **Copy** for chat handoff.
+- **Copy Prompt** / **Paste Prompt** copy library records; use **Copy Text** for chat handoff.
 
 ## Prompt Files
 

@@ -10,6 +10,7 @@ import {
   collections,
   commands,
   commandExecutions,
+  contextKeys,
   configurationChanged,
   CancellationError,
   Disposable,
@@ -178,6 +179,7 @@ describe('release commands', () => {
       'import',
       'export',
       'insert',
+      'sendToChat',
       'migrateCategories',
     ])
       expect(handlers.has(`prompteur.${command}`)).toBe(false);
@@ -185,7 +187,7 @@ describe('release commands', () => {
       activationEvents: string[];
       extensionDependencies?: string[];
       contributes: {
-        commands: { command: string; title: string }[];
+        commands: { command: string; title: string; enablement?: string }[];
         languageModelTools: {
           name: string;
           canBeReferencedInPrompt: boolean;
@@ -193,6 +195,7 @@ describe('release commands', () => {
         }[];
         configuration: { properties: Record<string, unknown> };
         menus: {
+          commandPalette: { command: string; when: string }[];
           'view/item/context': { command: string; when: string; group: string }[];
           'view/title': { command: string; when: string; group: string }[];
         };
@@ -252,18 +255,23 @@ describe('release commands', () => {
         item.when.includes('viewItem =~ /^(prompt|problem)$/'),
     );
     expect(
-      promptMenu.filter((item) => item.group !== 'inline@1').map((item) => item.command),
+      promptMenu.filter((item) => !item.group.startsWith('inline@')).map((item) => item.command),
     ).toEqual([
       'prompteur.copy',
       'prompteur.copyPrompt',
-      'prompteur.duplicate',
       'prompteur.preview',
       'prompteur.edit',
       'prompteur.delete',
     ]);
-    expect(promptMenu).toContainEqual(
+    expect(promptMenu.filter((item) => item.group.startsWith('inline@'))).toEqual([
       expect.objectContaining({ command: 'prompteur.copy', group: 'inline@1' }),
-    );
+    ]);
+    const contextItems = promptMenu.filter((item) => !item.group.startsWith('inline@'));
+    expect(contextItems[0]?.group).toBe('0_text@1');
+    expect(contextItems.slice(1).every((item) => item.group.split('@')[0] !== '0_text')).toBe(true);
+    expect(manifest.contributes.menus.commandPalette).toEqual([
+      { command: 'prompteur.duplicate', when: 'false' },
+    ]);
     expect(manifest.contributes.menus['view/item/context']).toContainEqual(
       expect.objectContaining({
         command: 'prompteur.pastePrompt',
@@ -284,12 +292,24 @@ describe('release commands', () => {
     ).toEqual([
       ['prompteur.edit', 'Edit'],
       ['prompteur.duplicate', 'Duplicate'],
-      ['prompteur.copy', 'Copy'],
+      ['prompteur.copy', 'Copy Text'],
       ['prompteur.preview', 'Preview'],
     ]);
+    expect(manifest.contributes.commands).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ command: 'prompteur.newPrompt', title: 'New' }),
+        expect.objectContaining({ command: 'prompteur.copyPrompt', title: 'Copy Prompt' }),
+        expect.objectContaining({
+          command: 'prompteur.pastePrompt',
+          title: 'Paste Prompt',
+          enablement: 'prompteur.hasCopiedPrompt',
+        }),
+      ]),
+    );
     const node = await addPrompt('plain', 'Plain');
     const before = new Map(context.globalState.values);
     await run('copy', node);
+    expect(messages.info.at(-1)).toBe('Text copied. Paste into Chat or editor.');
     await run('preview', node);
     expect(context.globalState.values).toEqual(before);
     expect(providers.size).toBe(0);
@@ -377,6 +397,19 @@ describe('release commands', () => {
     await run('copy', plain);
     expect(env.clipboard.value).toBe('{{selection}} project');
     expect(context.globalState.values).toEqual(before);
+  });
+  it('copies generated prompt text to the clipboard with paste guidance', async () => {
+    const node = await addPrompt('chat', 'Review {{selection}} in {{filename}}');
+    const target = await destination('selected code');
+    await run('copy', node);
+    expect(env.clipboard.value).toBe('Review selected code in main.ts');
+    expect(messages.info.at(-1)).toBe('Text copied. Paste into Chat or editor.');
+    expect(target.document.getText()).toBe('selected code');
+  });
+  it('lets the Command Palette copy selected prompt text', async () => {
+    await addPrompt('palette', 'Ask a useful question');
+    await run('copy');
+    expect(env.clipboard.value).toBe('Ask a useful question');
   });
   it('registers a read-only prompt tool and returns rendered prompt text with confirmation', async () => {
     const node = await addPrompt('review', 'Review {{selection}} in {{filename}}');
@@ -494,6 +527,7 @@ describe('release commands', () => {
     const sourceNode = (await entries('user')).find((node) => node.entry.data.name === data.name)!;
     env.clipboard.value = 'Leave OS clipboard unchanged';
     await run('copyPrompt', sourceNode);
+    expect(contextKeys.get('prompteur.hasCopiedPrompt')).toBe(true);
     expect(env.clipboard.value).toBe('Leave OS clipboard unchanged');
 
     const target: TreeNode = { kind: 'category', scope: 'workspace', category: 'plan' };
@@ -515,6 +549,7 @@ describe('release commands', () => {
     expect(window.activeTextEditor!.document.uri.fsPath).toBe(workspaceCopyPath);
 
     await run('pastePrompt', scopeNode('user'));
+    expect(contextKeys.get('prompteur.hasCopiedPrompt')).toBe(true);
     const userCopy = (await entries('user')).find(
       (node) =>
         node.entry.data.name === data.name && node.entry.path !== 'prompts/source.prompt.md',
@@ -522,6 +557,7 @@ describe('release commands', () => {
     expect(userCopy?.entry.data.category).toBe('review');
   });
   it('requires trusted Workspace source copy and reports paste without a buffer', async () => {
+    expect(contextKeys.get('prompteur.hasCopiedPrompt')).toBe(false);
     await run('pastePrompt', scopeNode('user'));
     expect(messages.info.at(-1)).toContain('Copy a prompt');
 
@@ -537,6 +573,7 @@ describe('release commands', () => {
     const source = (await entries('workspace')).find((node) => node.entry.data.name === data.name)!;
     workspace.isTrusted = false;
     await expect(run('copyPrompt', source)).rejects.toThrow('Trust');
+    expect(contextKeys.get('prompteur.hasCopiedPrompt')).toBe(false);
 
     workspace.isTrusted = true;
     await run('copyPrompt', source);
@@ -553,6 +590,9 @@ describe('release commands', () => {
         'prompts/workspace-source.prompt.md'
       ],
     ).toContain('name: Workspace Source');
+    for (const disposable of context.subscriptions.splice(0)) disposable.dispose();
+    await activate(context as unknown as vscode.ExtensionContext);
+    expect(contextKeys.get('prompteur.hasCopiedPrompt')).toBe(false);
   });
   it('allows empty selections for copy and preview without warnings', async () => {
     const node = await addPrompt('optional', 'Audit workspace: {{selection}}');

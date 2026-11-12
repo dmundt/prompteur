@@ -19,9 +19,9 @@
 - Enforce input budgets. Batch categories above 200 children.
 
 - Generation captures source editor before pickers, uses valid dirty prompts, and expands once.
-- **Copy** writes generated text to OS clipboard without editing source.
+- **Copy Text** writes generated text to OS clipboard without editing source; composer insertion is unavailable through a supported API.
 - Copilot prompt-tool results include matched prompt content and requested variable context; tool use is confirmed by VS Code.
-- **Copy Prompt/Paste Prompt** use a Workbench-local buffer to create copies; never move sources or persist transfer state.
+- **Copy Prompt/Paste Prompt** use a Workbench-local prompt buffer to create copies; never move sources or persist transfer state. Paste is enabled when the buffer is populated.
 - Preview opens an untitled plaintext snapshot. A weak set excludes previews as selection sources; no retained context/provider/timer.
 
 - Workbench checks Workspace Trust before Workspace prompt use. Filesystem adapter checks Workspace writes/deletes.

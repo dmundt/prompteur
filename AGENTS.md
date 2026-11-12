@@ -31,7 +31,7 @@ Run the smallest relevant check, then escalate if needed.
 - Keep README current; log only user-facing changes in CHANGELOG. Do not log internal refactors, tests, or tooling.
 - Update related docs with code. Keep [docs/index.md](./docs/index.md) synchronized.
 - No extension-owned network/provider calls, telemetry, databases, or shell execution. The user-approved read-only Copilot prompt tool may return requested prompt content/context to the configured model.
-- No direct Chat composer insertion; **Copy** uses clipboard handoff until VS Code provides a supported API.
+- No direct Chat composer insertion; **Copy Text** uses clipboard handoff until VS Code provides a supported API.
 - Require Workspace Trust for workspace mutations, generation, and preview.
 - Never contradict an accepted ADR; supersede it with a new ADR.
 - Add dependencies only when required; update manifest and lockfile together.
