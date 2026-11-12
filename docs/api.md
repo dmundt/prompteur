@@ -59,4 +59,5 @@
 - Direct mode matches the exact library-relative path in validated library entries; no arbitrary filesystem reads, path normalization, or fallback search. Workspace search and direct lookup require Trust.
 - Results: `match` includes prompt identity (`name`, `category`, `scope`, `path`), rendered `content`, and `missing` variables; `ambiguous` includes up to 10 candidate metadata records and `truncated`, without content; `not_found` identifies the query or requested scope/path. All results include `workspaceOmittedForTrust`.
 - Prompt-row hover contains description, category, tags, saved prompt context variables, and path. Invalid placeholders are reported there; context values are not read. Contributed command tooltips use native titles.
+- The prompt view toolbar switches from search to filter icon for a non-whitespace query; either opens the current live filter. **Clear Filter** resets it.
 - VS Code confirms tool use before prompt data is returned to Copilot. The rendered prompt and any requested context variables become model context; direct model requests and prompt mutations are not performed.
