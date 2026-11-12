@@ -58,5 +58,5 @@
 - Query mode searches User and trusted Workspace libraries by default using shared configured matching. After invocation approval, Best Match can return prompt/context without a separate choice among lower-ranked candidates. Require Choice retains conservative multiple-match handling.
 - Direct mode matches the exact library-relative path in validated library entries; no arbitrary filesystem reads, path normalization, or fallback search. Workspace search and direct lookup require Trust.
 - Results: `match` includes prompt identity (`name`, `category`, `scope`, `path`), rendered `content`, and `missing` variables; `ambiguous` includes up to 10 candidate metadata records and `truncated`, without content; `not_found` identifies the query or requested scope/path. All results include `workspaceOmittedForTrust`.
-- Prompt-row hover explains Copy Text and Copy Prompt; contributed command tooltips use native titles, not an unsupported manifest tooltip field.
+- Prompt-row hover contains prompt description, category, tags, and path only. Contributed command tooltips use native titles.
 - VS Code confirms tool use before prompt data is returned to Copilot. The rendered prompt and any requested context variables become model context; direct model requests and prompt mutations are not performed.
