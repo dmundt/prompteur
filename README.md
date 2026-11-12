@@ -152,7 +152,7 @@ Inspect {{filename}} in {{workspace}}.
 
 ## Starters
 
-**Add Starter Library** copies 16 editable prompts:
+**Add Starter Library** copies 18 editable prompts:
 
 - **Explain:** Explain Selected Code.
 - **Plan:** Clarify Requirements; Plan Smallest Useful Implementation; Plan Behavior-Preserving Refactor.
@@ -160,7 +160,7 @@ Inspect {{filename}} in {{workspace}}.
 - **Review:** Review Code; Review Complexity; Review Architecture; Review Security; Audit Release Readiness; Audit Implementation Completeness; Audit Accessibility.
 - **Test:** Generate Focused Unit Tests.
 - **Debug:** Triage Production Incident; Analyze Root Cause.
-- **Document:** Document Feature Usage.
+- **Document:** Document Feature Usage; Create Issue; Create Task.
 
 - Installation is opt-in. Rerun after updates to add missing starters.
 - Never replace existing files, including invalid ones. Writes are safe per-file, not transactional; failures report completed count.
