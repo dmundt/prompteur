@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add category and library hover help to the prompt tree, with clickable User and Workspace folder locations.
+
 ## 1.2.0
 
 - Improve prompt tree responsiveness for large libraries when opening categories or using flat view.

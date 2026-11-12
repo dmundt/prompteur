@@ -151,6 +151,33 @@ describe('release commands', () => {
     expect(messages.errors.at(-1)).toContain(userRoot());
     expect(commandExecutions.some((item) => item.id === 'revealFileInOS')).toBe(false);
   });
+  it('reveals each scope folder from its hover link without requiring Trust', async () => {
+    await addPrompt('user');
+    await addPrompt('workspace', 'Content', 'workspace');
+    workspace.isTrusted = false;
+    for (const scope of ['user', 'workspace'] as const) {
+      const tooltip = tree().getTreeItem(scopeNode(scope)).tooltip as MarkdownString;
+      const location = scope === 'user' ? userRoot() : workspaceRoot();
+      expect(tooltip.value).toContain(location.replace(/\\/g, '\\\\'));
+      expect(tooltip.isTrusted).toEqual({ enabledCommands: ['prompteur.openLibraryFolder'] });
+      const link = /command:prompteur.openLibraryFolder\?([^)]*)/.exec(tooltip.value);
+      expect(link).not.toBeNull();
+      const args: unknown[] = JSON.parse(decodeURIComponent(link![1]!));
+      await commands.executeCommand('prompteur.openLibraryFolder', ...args);
+      expect(commandExecutions.at(-1)).toEqual({
+        id: 'revealFileInOS',
+        args: [Uri.file(location)],
+      });
+    }
+  });
+  it('rejects invalid or missing library folder links without creating folders', async () => {
+    for (const scope of ['../outside', undefined, 'workspace']) {
+      await expect(commands.executeCommand('prompteur.openLibraryFolder', scope)).rejects.toThrow();
+    }
+    expect(messages.errors).toHaveLength(3);
+    expect(commandExecutions.some((item) => item.id === 'revealFileInOS')).toBe(false);
+    await expect(fs.stat(workspaceRoot())).rejects.toThrow();
+  });
   it('syncs User prompts through VS Code state and supports a flat tree', async () => {
     expect(context.globalState.syncedKeys).toEqual([
       'syncedUserPrompts',
@@ -225,6 +252,7 @@ describe('release commands', () => {
       [
         ...manifest.contributes.commands.map((item) => item.command),
         'prompteur.filterFromTooltip',
+        'prompteur.openLibraryFolder',
         'prompteur.openPromptPath',
       ].sort(),
     );
