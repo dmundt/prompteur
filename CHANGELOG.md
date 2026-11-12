@@ -2,12 +2,11 @@
 
 ## Unreleased
 
+## 1.2.0
+
 - Add custom category rename across both libraries and muted `custom` row labels.
 - Add direct category creation and an explicit approval action for prompts with unapproved categories; preserve prompt files.
 - Add optional custom category descriptions with native creation input and context-menu/Command Palette editing; sync them with approved categories.
-
-## 1.2.0
-
 - Add category and library hover help to the prompt tree, with clickable User and Workspace folder locations.
 
 - Improve prompt tree responsiveness for large libraries when opening categories or using flat view.
