@@ -30,6 +30,7 @@ class Workbench implements vscode.Disposable {
   private readonly tree: PromptTree;
   private target: vscode.TextEditor | undefined;
   private searchBox: vscode.InputBox | undefined;
+  private filterContextUpdate: Promise<void> = Promise.resolve();
   private copiedPrompt: { data: PromptData; source: string } | undefined;
   private readonly approvedCategories = new Set<string>();
 
@@ -133,6 +134,7 @@ class Workbench implements vscode.Disposable {
       pastePrompt: (node) => this.pastePrompt(node),
       preview: (node) => this.preview(node),
       search: () => this.search(),
+      searchActive: () => this.search(),
       openSettings: async () => {
         await vscode.commands.executeCommand(
           'workbench.action.openSettings',
@@ -140,9 +142,8 @@ class Workbench implements vscode.Disposable {
         );
       },
       clearSearch: async () => {
-        this.tree.query = '';
         if (this.searchBox) this.searchBox.value = '';
-        this.tree.refresh();
+        await this.setFilter('');
       },
       refresh: async () => {
         await this.userPromptSync.reconcile();
@@ -223,9 +224,19 @@ class Workbench implements vscode.Disposable {
   private async filterFromTooltip(kind: unknown, value: unknown): Promise<void> {
     if ((kind !== 'tag' && kind !== 'category') || typeof value !== 'string' || !value.trim())
       throw new Error('Invalid prompt filter link');
-    this.tree.query = appendExactFilter(this.tree.query, kind, value);
-    if (this.searchBox) this.searchBox.value = this.tree.query;
+    const query = appendExactFilter(this.tree.query, kind, value);
+    if (this.searchBox) this.searchBox.value = query;
+    await this.setFilter(query);
+  }
+
+  private setFilter(query: string): Promise<void> {
+    this.tree.query = query;
     this.tree.refresh();
+    const update = this.filterContextUpdate.then(async () => {
+      await vscode.commands.executeCommand('setContext', 'prompteur.filterActive', !!query.trim());
+    });
+    this.filterContextUpdate = update.catch(() => undefined);
+    return update;
   }
 
   private async openPromptPath(scope: unknown, path: unknown): Promise<void> {
@@ -667,8 +678,7 @@ class Workbench implements vscode.Disposable {
     box.value = this.tree.query;
     this.searchBox = box;
     const changed = box.onDidChangeValue((value) => {
-      this.tree.query = value;
-      this.tree.refresh();
+      void this.setFilter(value).catch((error) => this.report(error));
     });
     const accepted = box.onDidAccept(() => box.hide());
     box.onDidHide(() => {
@@ -709,6 +719,7 @@ class Workbench implements vscode.Disposable {
 
 export async function start(context: vscode.ExtensionContext): Promise<void> {
   await vscode.commands.executeCommand('setContext', 'prompteur.hasCopiedPrompt', false);
+  await vscode.commands.executeCommand('setContext', 'prompteur.filterActive', false);
   const workbench = new Workbench(context);
   context.subscriptions.push(workbench);
   await workbench.initialize();

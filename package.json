@@ -208,6 +208,12 @@
         "icon": "$(search)"
       },
       {
+        "command": "prompteur.searchActive",
+        "title": "Filter Prompts (active)",
+        "category": "Prompteur",
+        "icon": "$(filter)"
+      },
+      {
         "command": "prompteur.clearSearch",
         "title": "Clear Filter",
         "category": "Prompteur",
@@ -290,6 +296,10 @@
         {
           "command": "prompteur.duplicate",
           "when": "false"
+        },
+        {
+          "command": "prompteur.searchActive",
+          "when": "false"
         }
       ],
       "view/title": [
@@ -305,7 +315,12 @@
         },
         {
           "command": "prompteur.search",
-          "when": "view =~ /^prompteur\\./",
+          "when": "view == prompteur.prompts && !prompteur.filterActive",
+          "group": "navigation@3"
+        },
+        {
+          "command": "prompteur.searchActive",
+          "when": "view == prompteur.prompts && prompteur.filterActive",
           "group": "navigation@3"
         },
         {

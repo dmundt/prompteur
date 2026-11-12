@@ -186,7 +186,7 @@ describe('release commands', () => {
       activationEvents: string[];
       extensionDependencies?: string[];
       contributes: {
-        commands: { command: string; title: string; enablement?: string }[];
+        commands: { command: string; title: string; enablement?: string; icon?: string }[];
         languageModelTools: {
           name: string;
           canBeReferencedInPrompt: boolean;
@@ -286,7 +286,28 @@ describe('release commands', () => {
     expect(contextItems.slice(1).every((item) => item.group.split('@')[0] !== '0_text')).toBe(true);
     expect(manifest.contributes.menus.commandPalette).toEqual([
       { command: 'prompteur.duplicate', when: 'false' },
+      { command: 'prompteur.searchActive', when: 'false' },
     ]);
+    expect(manifest.contributes.menus['view/title']).toEqual(
+      expect.arrayContaining([
+        {
+          command: 'prompteur.search',
+          when: 'view == prompteur.prompts && !prompteur.filterActive',
+          group: 'navigation@3',
+        },
+        {
+          command: 'prompteur.searchActive',
+          when: 'view == prompteur.prompts && prompteur.filterActive',
+          group: 'navigation@3',
+        },
+      ]),
+    );
+    expect(manifest.contributes.commands).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ command: 'prompteur.search', icon: '$(search)' }),
+        expect.objectContaining({ command: 'prompteur.searchActive', icon: '$(filter)' }),
+      ]),
+    );
     expect(manifest.contributes.menus['view/item/context']).toContainEqual(
       expect.objectContaining({
         command: 'prompteur.pastePrompt',
@@ -1048,13 +1069,67 @@ describe('release commands', () => {
   });
   it('live filters exact tags and clears the main tree filter', async () => {
     await addPrompt('review', 'review');
+    expect(contextKeys.get('prompteur.filterActive')).toBe(false);
     await run('search');
     const box = inputBoxes[0]!;
     box.valueChanged.fire('nonexistent');
+    await vi.waitFor(() => expect(contextKeys.get('prompteur.filterActive')).toBe(true));
     expect(await entries()).toHaveLength(0);
+    box.valueChanged.fire('  ');
+    await vi.waitFor(() => expect(contextKeys.get('prompteur.filterActive')).toBe(false));
+    box.valueChanged.fire('nonexistent');
+    await vi.waitFor(() => expect(contextKeys.get('prompteur.filterActive')).toBe(true));
     box.accepted.fire();
+    await run('searchActive');
+    const reopened = inputBoxes.at(-1)!;
+    expect(reopened.value).toBe('nonexistent');
     await run('clearSearch');
+    expect(contextKeys.get('prompteur.filterActive')).toBe(false);
+    expect(reopened.value).toBe('');
     expect(await entries()).toHaveLength(1);
+  });
+  it('keeps the active indicator in order during rapid filter changes', async () => {
+    const execute = commands.executeCommand.bind(commands);
+    let release!: () => void;
+    let started!: () => void;
+    const activeUpdateStarted = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    const delayed = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const spy = vi.spyOn(commands, 'executeCommand').mockImplementation(async (id, ...args) => {
+      if (id === 'setContext' && args[0] === 'prompteur.filterActive' && args[1] === true) {
+        started();
+        await delayed;
+      }
+      return execute(id, ...args);
+    });
+    await run('search');
+    inputBoxes.at(-1)!.valueChanged.fire('review');
+    await activeUpdateStarted;
+    const clear = run('clearSearch');
+    release();
+    await clear;
+    expect(contextKeys.get('prompteur.filterActive')).toBe(false);
+    expect(tree().query).toBe('');
+    spy.mockRestore();
+  });
+  it('reports filter indicator errors and processes subsequent changes', async () => {
+    const execute = commands.executeCommand.bind(commands);
+    const spy = vi.spyOn(commands, 'executeCommand').mockImplementation(async (id, ...args) => {
+      if (id === 'setContext' && args[0] === 'prompteur.filterActive' && args[1] === true)
+        throw new Error('Filter indicator unavailable');
+      return execute(id, ...args);
+    });
+    await run('search');
+    inputBoxes.at(-1)!.valueChanged.fire('review');
+    await vi.waitFor(() =>
+      expect(messages.errors.at(-1)).toContain('Filter indicator unavailable'),
+    );
+    await run('clearSearch');
+    expect(contextKeys.get('prompteur.filterActive')).toBe(false);
+    spy.mockRestore();
   });
   it('appends tooltip filters to the open search and opens validated prompt paths', async () => {
     const userPrompt = await addPrompt('tooltip-user', 'needle');
@@ -1063,6 +1138,7 @@ describe('release commands', () => {
     const box = inputBoxes.at(-1)!;
     box.valueChanged.fire('needle');
     await commands.executeCommand('prompteur.filterFromTooltip', 'tag', 'security review');
+    expect(contextKeys.get('prompteur.filterActive')).toBe(true);
     expect(tree().query).toBe('needle tag:"security review"');
     expect(box.value).toBe(tree().query);
     await commands.executeCommand('prompteur.filterFromTooltip', 'category', 'explain');
@@ -1088,6 +1164,12 @@ describe('release commands', () => {
     ).rejects.toThrow('changed or became invalid');
     await commands.executeCommand('prompteur.clearSearch');
     expect(box.value).toBe('');
+    expect(contextKeys.get('prompteur.filterActive')).toBe(false);
+    box.hide();
+    await commands.executeCommand('prompteur.filterFromTooltip', 'tag', 'security');
+    expect(contextKeys.get('prompteur.filterActive')).toBe(true);
+    await run('searchActive');
+    expect(inputBoxes.at(-1)!.value).toBe('tag:"security"');
   });
   it('confirms deletion, blocks dirty editors and rejects stale nodes', async () => {
     const node = await addPrompt('delete', 'safe');
