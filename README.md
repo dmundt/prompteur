@@ -71,9 +71,12 @@ code --install-extension prompteur-1.1.0.vsix
 
 5. Approve sharing when VS Code requests confirmation. VS Code may offer **Always Allow**.
 
+- Exact prompt names take priority over full-text matches, ignoring case and surrounding whitespace.
 - One match: returns the rendered prompt and missing-context details to Copilot.
-- Multiple matches: returns candidate metadata only; narrow the search.
+- Multiple matches, including repeated exact names: returns names, User/Workspace scope, category, and path without prompt content. Choose a candidate; Copilot can retrieve its exact scope/path without another search.
+- Example follow-up: `Use the Workspace candidate at prompts/review-code.prompt.md.` Copilot supplies `scope: "workspace"` and that `path`, omitting `query`.
 - No match: reports not found.
+- Missing candidate path: reports not found; never substitutes another prompt. Refresh the search if a prompt was renamed or removed.
 - Tool output becomes model context, not text inserted into the Chat composer. Following the prompt depends on the model and your request.
 - The tool is read-only; it cannot create, edit, or delete prompts. Workspace prompt results require Trust.
 - Prompt text and requested selection, clipboard, filename, or workspace variables are shared with the configured model. Context comes from the same VS Code window.
@@ -88,6 +91,7 @@ code --install-extension prompteur-1.1.0.vsix
 - No Copilot tool support required. **Copy Text** renders variables before copying.
 - Direct Chat composer insertion is unavailable. For another window, copy in the source window and paste in the target.
 - **Copy Prompt** / **Paste Prompt** copy library records; use **Copy Text** for chat handoff.
+- Prompt-row hover explains both copy actions; menu labels remain short.
 
 ## Prompt Files
 

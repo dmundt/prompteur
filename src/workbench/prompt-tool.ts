@@ -3,10 +3,8 @@ import type { LibraryService } from '../application/library';
 import type { Entry, Scope } from '../core/documents';
 import type { VariableKey } from '../core/render';
 
-export interface PromptToolInput {
-  query: string;
-  scope?: Scope;
-}
+export type PromptToolInput =
+  { query: string; scope?: Scope; path?: never } | { query?: never; scope: Scope; path: string };
 
 interface RenderedPrompt {
   text: string;
@@ -39,8 +37,19 @@ export class PromptLibraryTool implements vscode.LanguageModelTool<PromptToolInp
     token: vscode.CancellationToken,
   ): Promise<vscode.LanguageModelToolResult> {
     if (token.isCancellationRequested) throw new vscode.CancellationError();
-    const query = input.query.trim();
-    if (!query) throw new Error('Enter text to search Prompteur prompts.');
+    if (!input || typeof input !== 'object')
+      throw new Error('Provide a search query or a prompt scope and path.');
+    if (input.scope !== undefined && input.scope !== 'user' && input.scope !== 'workspace')
+      throw new Error('Choose the User or Workspace prompt library.');
+    if ('path' in input) {
+      if ('query' in input || !input.scope || typeof input.path !== 'string' || !input.path.trim())
+        throw new Error('Select a prompt with scope and path only; omit query.');
+    } else if (typeof input.query !== 'string' || !input.query.trim()) {
+      throw new Error('Enter text to search Prompteur prompts.');
+    } else if (input.query.length > 256) {
+      throw new Error('Search Prompteur prompts with at most 256 characters.');
+    }
+    const query = input.query?.trim() ?? '';
     if (input.scope === 'workspace' && !this.hasWorkspace())
       throw new Error('Workspace prompt library is unavailable in this window.');
     if (input.scope === 'workspace' && !this.isTrusted())
@@ -50,9 +59,23 @@ export class PromptLibraryTool implements vscode.LanguageModelTool<PromptToolInp
     const scopes: Scope[] = input.scope
       ? [input.scope]
       : ['user', ...(this.hasWorkspace() && this.isTrusted() ? ['workspace' as const] : [])];
-    const matches = (
-      await Promise.all(scopes.map((scope) => this.service.search(scope, query)))
-    ).flat();
+    const entries = (await Promise.all(scopes.map((scope) => this.service.get(scope)))).flatMap(
+      (snapshot) => snapshot.entries,
+    );
+    let matches: Entry[];
+    if (input.path !== undefined) {
+      matches = entries.filter((entry) => entry.path === input.path);
+    } else {
+      const exact = entries
+        .filter((entry) => entry.data.name.trim().toLowerCase() === query.toLowerCase())
+        .sort(
+          (left, right) =>
+            left.data.name.localeCompare(right.data.name) || left.path.localeCompare(right.path),
+        );
+      matches = exact.length
+        ? exact
+        : (await Promise.all(scopes.map((scope) => this.service.search(scope, query)))).flat();
+    }
     if (token.isCancellationRequested) throw new vscode.CancellationError();
     if (scopes.includes('workspace') && !this.isTrusted())
       throw new Error('Trust this workspace before sharing its prompts with Copilot.');
@@ -61,7 +84,7 @@ export class PromptLibraryTool implements vscode.LanguageModelTool<PromptToolInp
         JSON.stringify(
           {
             status: 'not_found',
-            query,
+            ...(input.path === undefined ? { query } : { scope: input.scope, path: input.path }),
             workspaceOmittedForTrust: workspaceOmitted,
           },
           null,
