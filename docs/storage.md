@@ -58,4 +58,5 @@
 - Transfer between windows/apps by copying Markdown files.
 
 - Starters are editable copies. Skip every occupied destination, including invalid files.
+- Summarize added, matching, and differing saved files; skip unsaved editors without saved files. Differences do not identify their cause.
 - Each add is atomic; installation is not. Report partial progress.

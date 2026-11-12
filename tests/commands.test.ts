@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { activate } from '../src/extension';
 import type { PromptToolInput } from '../src/workbench/prompt-tool';
 import { decodeMarkdown, encodeMarkdown, newPrompt } from '../src/core/documents';
+import { LocalFiles } from '../src/platform/local-files';
 import type { PromptTree, TreeNode } from '../src/workbench/tree';
 import {
   collections,
@@ -397,6 +398,93 @@ describe('release commands', () => {
     await destination();
     await run('copy', node);
     expect(env.clipboard.value).toContain('Review the selected code or available diff:');
+  });
+  it('summarizes saved matches and differences while preserving dirty and invalid prompts', async () => {
+    const starterDir = resolve('resources/starter/prompts');
+    const paths = (await fs.readdir(starterDir))
+      .filter((path) => path.endsWith('.prompt.md'))
+      .sort();
+    const matching = paths[0]!;
+    const invalid = paths[1]!;
+    const unsaved = paths[2]!;
+    const target = join(userRoot(), 'prompts');
+    await fs.mkdir(target, { recursive: true });
+    const original = await fs.readFile(join(starterDir, matching), 'utf8');
+    await fs.writeFile(join(target, matching), original);
+    await fs.writeFile(join(target, invalid), 'invalid frontmatter');
+    const dirtyExisting = new FakeDocument(Uri.file(join(target, matching)), original);
+    dirtyExisting.change('Unsaved changes to an existing prompt');
+    const dirtyMissing = new FakeDocument(Uri.file(join(target, unsaved)), '');
+    dirtyMissing.change('Unsaved new prompt');
+    workspace.textDocuments.push(dirtyExisting, dirtyMissing);
+
+    await run('addStarters', scopeNode());
+    expect(messages.info.at(-1)).toBe(
+      'Added 13 starter prompts. Saved files matching bundled versions: 1; differing: 1. Unsaved editors without saved files skipped: 1. No existing files were overwritten.',
+    );
+    expect(await fs.readFile(join(target, matching), 'utf8')).toBe(original);
+    expect(await fs.readFile(join(target, invalid), 'utf8')).toBe('invalid frontmatter');
+    await expect(fs.stat(join(target, unsaved))).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(dirtyExisting.getText()).toBe('Unsaved changes to an existing prompt');
+    expect(dirtyMissing.getText()).toBe('Unsaved new prompt');
+    expect(dirtyExisting.isDirty && dirtyMissing.isDirty).toBe(true);
+  });
+  it('summarizes identical starters when rerun', async () => {
+    await run('addStarters', scopeNode());
+    await run('addStarters', scopeNode());
+    expect(messages.info.at(-1)).toContain(
+      'Saved files matching bundled versions: 16; differing: 0',
+    );
+  });
+  it('reports a concurrent starter creation without overwriting it', async () => {
+    const originalWrite = LocalFiles.prototype.write;
+    let racedPath = '';
+    vi.spyOn(LocalFiles.prototype, 'write').mockImplementation(async function (
+      this: LocalFiles,
+      scope,
+      path,
+      text,
+      expected,
+    ) {
+      if (!racedPath && scope === 'user' && expected === undefined) {
+        racedPath = join(userRoot(), path);
+        await fs.mkdir(join(userRoot(), 'prompts'), { recursive: true });
+        await fs.writeFile(racedPath, 'concurrent content');
+      }
+      return originalWrite.call(this, scope, path, text, expected);
+    });
+    await expect(run('addStarters', scopeNode())).rejects.toThrow(
+      'Starter installation stopped after 0 prompts: File changed on disk',
+    );
+    expect(await fs.readFile(racedPath, 'utf8')).toBe('concurrent content');
+    expect(messages.info).toHaveLength(0);
+  });
+  it('reports partial starter progress on failure and refuses untrusted workspace writes', async () => {
+    const originalWrite = LocalFiles.prototype.write;
+    let attempts = 0;
+    vi.spyOn(LocalFiles.prototype, 'write').mockImplementation(async function (
+      this: LocalFiles,
+      scope,
+      path,
+      text,
+      expected,
+    ) {
+      if (++attempts === 2) throw new Error('Disk unavailable');
+      return originalWrite.call(this, scope, path, text, expected);
+    });
+    await expect(run('addStarters', scopeNode())).rejects.toThrow(
+      'Starter installation stopped after 1 prompts: Disk unavailable',
+    );
+    expect(await fs.readdir(join(userRoot(), 'prompts'))).toHaveLength(1);
+    expect(messages.info).toHaveLength(0);
+    vi.restoreAllMocks();
+    workspace.isTrusted = false;
+    await expect(run('addStarters', scopeNode('workspace'))).rejects.toThrow(
+      'Trust this workspace',
+    );
+    await expect(fs.stat(join(workspaceRoot(), 'prompts'))).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
   });
   it('copies retained editor selections without changing source or persistent state', async () => {
     const node = await addPrompt();
