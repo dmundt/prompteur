@@ -18,13 +18,14 @@ Rules for API/command code and docs. Source: [api.md](./api.md).
 ## LibraryService
 
 - Filesystem port: `list`, `read`, expected-source `write`/`remove`.
-- Operations: lazy `get`, incremental/full `refresh`, case-insensitive `search`, validated `save`/`writeSource`, `delete`, subscriptions.
+- Operations: lazy `get`, incremental/full `refresh`, configurable `search`/internal `searchRanked`, validated `save`/`writeSource`, `delete`, subscriptions.
 - Snapshots contain entries/problems; treat as immutable.
 
 ## SearchIndex
 
 - Reuse normalized text for unchanged entries.
-- Filter full text and exact tags; sort alphabetically.
+- Share matching/case/ranking between library filtering and Copilot. Exact names precede full text; optional bounded fuzzy name fallback runs last. Tag/category filters remain exact and case-insensitive.
+- Rank by relevance or name; empty/filter-only queries stay alphabetical. Identity sorting never breaks semantic ties for Copilot selection.
 - `generate(content, context)` returns `{ text, missing }`; support exactly four variables.
 
 ## Commands
