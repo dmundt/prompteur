@@ -151,6 +151,40 @@ describe('native tree interactions', () => {
     expect(children.map((node) => tree.getTreeItem(node).label)).toEqual(['Plan', 'Review']);
     tree.dispose();
   });
+  it('does not traverse the whole snapshot for category or flat prompt rows', async () => {
+    const { port, files } = memoryFiles();
+    files.set(
+      'user:prompts/review.prompt.md',
+      encodeMarkdown({ ...newPrompt('Review'), category: 'review' }),
+    );
+    const service = new LibraryService(port);
+    const snapshot = await service.get('user');
+    vi.spyOn(service, 'get').mockResolvedValue({
+      ...snapshot,
+      get entries(): typeof snapshot.entries {
+        throw new Error('Unneeded whole-library traversal');
+      },
+    });
+    const report = vi.fn();
+    const tree = new PromptTree(
+      service,
+      () => false,
+      report,
+      undefined,
+      undefined,
+      () => false,
+    );
+    const category = await tree.getChildren({
+      kind: 'category',
+      scope: 'user',
+      category: 'review',
+    });
+    const flat = await tree.getChildren({ kind: 'scope', scope: 'user' });
+    expect(category.map((node) => tree.getTreeItem(node).label)).toEqual(['Review']);
+    expect(flat.map((node) => tree.getTreeItem(node).label)).toEqual(['Review']);
+    expect(report).not.toHaveBeenCalled();
+    tree.dispose();
+  });
   it('batches flat prompt rows without hiding repair problems', async () => {
     const { port, files } = memoryFiles();
     for (let index = 0; index < 201; index++)
