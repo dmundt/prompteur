@@ -49,6 +49,8 @@ describe('native tree interactions', () => {
     expect(tree.getTreeItem(prompts[0]!).description).toBe('#security');
     const tooltip = tree.getTreeItem(prompts[0]!).tooltip as MarkdownString;
     expect(tooltip.value).toContain('Review overview');
+    expect(tooltip.value).toContain('Copy Text: Render variables and copy to clipboard.');
+    expect(tooltip.value).toContain('Copy Prompt: Copy prompt for pasting into a library.');
     expect(tooltip.value).toContain('[review](command:prompteur.filterFromTooltip?');
     expect(tooltip.value).toContain('[#security](command:prompteur.filterFromTooltip?');
     expect(tooltip.value).toContain(

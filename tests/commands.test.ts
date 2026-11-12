@@ -4,6 +4,7 @@ import * as fs from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { activate } from '../src/extension';
+import type { PromptToolInput } from '../src/workbench/prompt-tool';
 import { decodeMarkdown, encodeMarkdown, newPrompt } from '../src/core/documents';
 import type { PromptTree, TreeNode } from '../src/workbench/tree';
 import {
@@ -49,11 +50,8 @@ const noCancellation: vscode.CancellationToken = {
   onCancellationRequested: () => new Disposable(),
 };
 const promptTool = () =>
-  languageModelTools.get('prompteur_findPrompt') as vscode.LanguageModelTool<{
-    query: string;
-    scope?: 'user' | 'workspace';
-  }>;
-const runPromptTool = async (input: { query: string; scope?: 'user' | 'workspace' }) => {
+  languageModelTools.get('prompteur_findPrompt') as vscode.LanguageModelTool<PromptToolInput>;
+const runPromptTool = async (input: PromptToolInput) => {
   const result = await promptTool().invoke(
     { input, toolInvocationToken: undefined },
     noCancellation,
@@ -191,7 +189,7 @@ describe('release commands', () => {
         languageModelTools: {
           name: string;
           canBeReferencedInPrompt: boolean;
-          inputSchema: { properties: Record<string, unknown> };
+          inputSchema: { properties: Record<string, unknown>; oneOf: unknown[] };
         }[];
         configuration: { properties: Record<string, unknown> };
         menus: {
@@ -218,7 +216,12 @@ describe('release commands', () => {
         properties: {
           query: { type: 'string', minLength: 1, maxLength: 256 },
           scope: { type: 'string', enum: ['user', 'workspace'] },
+          path: { type: 'string', minLength: 1 },
         },
+        oneOf: [
+          { required: ['query'], not: { required: ['path'] } },
+          { required: ['scope', 'path'], not: { required: ['query'] } },
+        ],
       },
     });
     expect(manifest.contributes).not.toHaveProperty('keybindings');
@@ -459,6 +462,118 @@ describe('release commands', () => {
     expect(result.truncated).toBe(false);
     expect(result).not.toHaveProperty('content');
   });
+  it('prefers a trimmed case-insensitive exact name over full-text matches', async () => {
+    await addPrompt('review', 'Exact prompt');
+    await addPrompt('other', 'Mention review in this broader match');
+    const result = JSON.parse(await runPromptTool({ query: '  REVIEW  ' }));
+    expect(result.status).toBe('match');
+    expect(result.prompt.path).toBe('prompts/review.prompt.md');
+    expect(result.content).toBe('Exact prompt');
+  });
+  it('keeps duplicate exact names ambiguous and renders only the explicitly selected candidate', async () => {
+    await addPrompt('review', 'Personal review');
+    const selected = await addPrompt('review', 'Workspace review {{selection}}', 'workspace');
+    await fs.writeFile(
+      join(workspaceRoot(), selected.entry.path),
+      encodeMarkdown({ ...selected.entry.data, category: 'review' }),
+    );
+    await addPrompt('broader', 'review appears here too');
+    const readClipboard = vi.spyOn(env.clipboard, 'readText');
+    const result = JSON.parse(await runPromptTool({ query: 'review' }));
+    expect(result.status).toBe('ambiguous');
+    expect(result.matches).toEqual([
+      expect.objectContaining({
+        name: 'review',
+        scope: 'user',
+        category: 'explain',
+        path: 'prompts/review.prompt.md',
+      }),
+      expect.objectContaining({
+        name: 'review',
+        scope: 'workspace',
+        category: 'review',
+        path: selected.entry.path,
+      }),
+    ]);
+    expect(result).not.toHaveProperty('content');
+    expect(readClipboard).not.toHaveBeenCalled();
+    await destination('selected code');
+    const candidate = result.matches[1];
+    const rendered = JSON.parse(
+      await runPromptTool({ scope: candidate.scope, path: candidate.path }),
+    );
+    expect(rendered.status).toBe('match');
+    expect(rendered.prompt.scope).toBe('workspace');
+    expect(rendered.content).toBe('Workspace review selected code');
+    expect(JSON.parse(await runPromptTool({ query: 'review', scope: 'user' })).content).toBe(
+      'Personal review',
+    );
+  });
+  it('does not silently select duplicate names within one library', async () => {
+    const first = await addPrompt('one', 'First');
+    const second = await addPrompt('two', 'Second');
+    for (const node of [first, second])
+      await fs.writeFile(
+        join(userRoot(), node.entry.path),
+        encodeMarkdown({ ...node.entry.data, name: 'Same Name' }),
+      );
+    await run('refresh');
+    const result = JSON.parse(await runPromptTool({ query: 'same name', scope: 'user' }));
+    expect(result.status).toBe('ambiguous');
+    expect(result.matches.map((match: { path: string }) => match.path)).toEqual([
+      first.entry.path,
+      second.entry.path,
+    ]);
+    expect(result).not.toHaveProperty('content');
+  });
+  it('reports stale candidate paths without substituting another matching name', async () => {
+    const node = await addPrompt('old', 'Original');
+    const replacement = await addPrompt('replacement', 'Different');
+    await fs.writeFile(
+      join(userRoot(), replacement.entry.path),
+      encodeMarkdown({ ...replacement.entry.data, name: 'old' }),
+    );
+    await fs.unlink(join(userRoot(), node.entry.path));
+    await run('refresh');
+    const result = JSON.parse(await runPromptTool({ scope: 'user', path: node.entry.path }));
+    expect(result).toEqual({
+      status: 'not_found',
+      scope: 'user',
+      path: node.entry.path,
+      workspaceOmittedForTrust: false,
+    });
+    expect(JSON.parse(await runPromptTool({ query: 'old' })).content).toBe('Different');
+    expect(
+      JSON.parse(await runPromptTool({ scope: 'user', path: '../replacement.prompt.md' })).status,
+    ).toBe('not_found');
+  });
+  it('limits ambiguous candidate metadata without rendering prompt content', async () => {
+    for (let index = 0; index < 11; index++) await addPrompt(`shared-${index}`, 'Private body');
+    const result = JSON.parse(await runPromptTool({ query: 'shared' }));
+    expect(result.status).toBe('ambiguous');
+    expect(result.matches).toHaveLength(10);
+    expect(result.truncated).toBe(true);
+    expect(JSON.stringify(result)).not.toContain('Private body');
+  });
+  it.each<unknown>([
+    null,
+    {},
+    { query: 42 },
+    { query: 'review', scope: 'other' },
+    { scope: 'user' },
+    { path: 'prompts/review.prompt.md' },
+    { scope: 'user', path: 42 },
+    { scope: 'user', path: 'prompts/review.prompt.md', query: 'review' },
+  ])('rejects invalid runtime tool input: %j', async (input) => {
+    await expect(
+      // @ts-expect-error Deliberately invoke the tool with an invalid runtime payload.
+      promptTool().invoke({ input, toolInvocationToken: undefined }, noCancellation),
+    ).rejects.toThrow();
+  });
+  it('rejects blank paths and oversized search queries explicitly', async () => {
+    await expect(runPromptTool({ scope: 'user', path: '  ' })).rejects.toThrow('scope and path');
+    await expect(runPromptTool({ query: 'x'.repeat(257) })).rejects.toThrow('256');
+  });
   it('reports an empty result and rejects an empty search query', async () => {
     const result = JSON.parse(await runPromptTool({ query: 'no-such-prompt' })) as {
       status: string;
@@ -478,6 +593,9 @@ describe('release commands', () => {
     await expect(runPromptTool({ query: 'workspace', scope: 'workspace' })).rejects.toThrow(
       'Trust this workspace',
     );
+    await expect(
+      runPromptTool({ scope: 'workspace', path: 'prompts/workspace-review.prompt.md' }),
+    ).rejects.toThrow('Trust this workspace');
   });
   it('reports unavailable Workspace libraries', async () => {
     for (const disposable of context.subscriptions) disposable.dispose();
@@ -487,11 +605,23 @@ describe('release commands', () => {
     await expect(runPromptTool({ query: 'review', scope: 'workspace' })).rejects.toThrow(
       'Workspace prompt library is unavailable',
     );
+    await expect(
+      runPromptTool({ scope: 'workspace', path: 'prompts/review.prompt.md' }),
+    ).rejects.toThrow('Workspace prompt library is unavailable');
   });
   it('cancels a Copilot prompt lookup when its invocation token is cancelled', async () => {
     const token = { ...noCancellation, isCancellationRequested: true };
     await expect(
       promptTool().invoke({ input: { query: 'review' }, toolInvocationToken: undefined }, token),
+    ).rejects.toBeInstanceOf(CancellationError);
+    await expect(
+      promptTool().invoke(
+        {
+          input: { scope: 'user', path: 'prompts/review.prompt.md' },
+          toolInvocationToken: undefined,
+        },
+        token,
+      ),
     ).rejects.toBeInstanceOf(CancellationError);
   });
   it('omits untrusted Workspace prompts and reports the restriction', async () => {

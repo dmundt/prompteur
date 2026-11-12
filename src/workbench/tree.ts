@@ -120,6 +120,9 @@ export class PromptTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dis
     tooltip.appendMarkdown(
       `\n\n[${escapeLinkLabel(entry.path)}](${commandUri('prompteur.openPromptPath', [entry.scope, entry.path])})`,
     );
+    tooltip.appendText(
+      '\n\nCopy Text: Render variables and copy to clipboard.\nCopy Prompt: Copy prompt for pasting into a library.',
+    );
     tooltip.isTrusted = {
       enabledCommands: ['prompteur.filterFromTooltip', 'prompteur.openPromptPath'],
     };
