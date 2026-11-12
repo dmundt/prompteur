@@ -506,9 +506,26 @@ class Workbench implements vscode.Disposable {
     const catalog = await new LibraryService(new LocalFiles(() => directory.fsPath)).get('user');
     if (catalog.problems.length) throw new Error('Bundled starter prompts are invalid');
     let added = 0;
+    let identical = 0;
+    let different = 0;
+    let unsaved = 0;
     for (const entry of catalog.entries) {
-      if ((await this.service.readFile(scope, entry.path)) !== undefined) continue;
       try {
+        const existing = await this.service.readFile(scope, entry.path);
+        if (existing !== undefined) {
+          if (existing === entry.source) identical++;
+          else different++;
+          continue;
+        }
+        const uri = this.uri({ scope, path: entry.path }).toString();
+        if (
+          vscode.workspace.textDocuments.some(
+            (document) => document.uri.toString() === uri && document.isDirty,
+          )
+        ) {
+          unsaved++;
+          continue;
+        }
         await this.service.writeSource(scope, entry.path, entry.source, undefined);
         added++;
       } catch (error) {
@@ -519,7 +536,7 @@ class Workbench implements vscode.Disposable {
       }
     }
     void vscode.window.showInformationMessage(
-      `Added ${added} starter prompts. Existing files were kept.`,
+      `Added ${added} starter prompts. Saved files matching bundled versions: ${identical}; differing: ${different}. Unsaved editors without saved files skipped: ${unsaved}. No existing files were overwritten.`,
     );
   }
 
