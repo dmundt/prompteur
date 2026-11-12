@@ -44,6 +44,7 @@
 - Prompt-record copy/paste is window-local, source-preserving, and separate from OS clipboard. Paste is enabled when the window-local buffer contains a copied prompt.
 - Category paste overrides category; scope/palette paste preserves it.
 - **Copy Text** (`prompteur.copy`) renders to the clipboard and shows paste guidance. It is the sole inline prompt action; a separate context-menu group places a separator after it.
+- Missing filename/workspace values do not block Copy Text; one completion notification lists missing context. Empty clipboard input requires confirmation. Empty selection is allowed; Preview retains missing-context details.
 - `prompteur.duplicate` remains callable for compatibility but is hidden from menus and the Command Palette. Use **Copy Text** for text handoff and **Copy Prompt** / **Paste Prompt** for library copies.
 - VS Code has no supported API to insert into the active Chat composer; users paste the clipboard result.
 - `prompteur_findPrompt` is read-only. It searches User and trusted Workspace libraries, renders one unique match, and returns candidate metadata for ambiguous matches. Workspace queries require Trust.

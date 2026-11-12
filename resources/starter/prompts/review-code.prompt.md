@@ -6,7 +6,7 @@ category: review
 tags: [review, quality, maintainability, security]
 ---
 
-Inspect this change from {{filename}} in {{workspace}}:
+Review the selected code or available diff:
 
 {{selection}}
 

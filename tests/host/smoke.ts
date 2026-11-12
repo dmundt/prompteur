@@ -66,7 +66,10 @@ export async function run(): Promise<void> {
         document.positionAt(document.getText().length),
       );
       await vscode.commands.executeCommand('prompteur.copy', starter);
-      assert.match(await vscode.env.clipboard.readText(), /^\r?\n?Inspect this change from /);
+      assert.match(
+        await vscode.env.clipboard.readText(),
+        /^\r?\n?Review the selected code or available diff:/,
+      );
       assert.equal(document.getText(), 'const answer = 42;');
     } finally {
       await vscode.env.clipboard.writeText(clipboard);
