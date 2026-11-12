@@ -138,6 +138,11 @@ class Workbench implements vscode.Disposable {
       preview: (node) => this.preview(node),
       search: () => this.search(),
       searchActive: () => this.search(),
+      openUserLibrary: async () => {
+        const root = this.roots.get('user')!;
+        await vscode.workspace.fs.stat(root);
+        await vscode.commands.executeCommand('revealFileInOS', root);
+      },
       useText: () => this.textInput.submit(),
       cancelText: () => this.textInput.cancel(),
       openSettings: async () => {
