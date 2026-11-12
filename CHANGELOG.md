@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Speed up User library synchronization for larger prompt collections.
+
 ## 1.2.0
 
 - Add 21 starters, including Create Issue and Create Task for concise headlines and descriptions, bringing the library to 37 prompts with at least five per category. Rerun Add Starter Library to add missing files without replacing installed prompts.
