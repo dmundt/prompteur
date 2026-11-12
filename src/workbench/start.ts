@@ -5,6 +5,7 @@ import { LibraryService, messageOf } from '../application/library';
 import { appendExactFilter, type SearchOptions } from '../application/search';
 import {
   newPrompt,
+  encodeMarkdown,
   promptFolder,
   promptCategories,
   type Entry,
@@ -15,12 +16,13 @@ import { generate, variableTokens, type Context } from '../core/render';
 import { NativeEditor } from './editor';
 import { PromptLibraryTool } from './prompt-tool';
 import { PromptTree, type TreeNode } from './tree';
-import { UserPromptSync } from './user-prompt-sync';
+import { categoryDescriptionsStateKey, UserPromptSync } from './user-prompt-sync';
 import { watchLibrary } from './watch';
 import { TextInput } from './text-input';
 
 const addCategoryValue = '__add_category__';
 const removeCategoryValue = '__remove_category__';
+const categoryDescriptionLimit = 240;
 
 class Workbench implements vscode.Disposable {
   private readonly disposables: vscode.Disposable[] = [];
@@ -35,6 +37,8 @@ class Workbench implements vscode.Disposable {
   private filterContextUpdate: Promise<void> = Promise.resolve();
   private copiedPrompt: { data: PromptData; source: string } | undefined;
   private readonly approvedCategories = new Set<string>();
+  private categoryDescriptions = new Map<string, string>();
+  private renamingCategory = false;
 
   constructor(private readonly context: vscode.ExtensionContext) {
     const savedCategories = context.globalState.get<unknown>('approvedPromptCategories', []);
@@ -45,6 +49,22 @@ class Workbench implements vscode.Disposable {
         if (category && !promptCategories.some((builtin) => builtin === category))
           this.approvedCategories.add(category);
       }
+    const descriptions = context.globalState.get<unknown>(categoryDescriptionsStateKey, {});
+    if (!descriptions || typeof descriptions !== 'object' || Array.isArray(descriptions))
+      throw new Error('Invalid custom category descriptions in profile state');
+    for (const [category, description] of Object.entries(descriptions)) {
+      if (
+        !category.trim() ||
+        category !== category.trim().toLowerCase() ||
+        category.length > 64 ||
+        typeof description !== 'string' ||
+        description.length > categoryDescriptionLimit ||
+        /[\r\n]/.test(description)
+      )
+        throw new Error('Invalid custom category descriptions in profile state');
+      if (this.approvedCategories.has(category) && description.trim())
+        this.categoryDescriptions.set(category, description.trim());
+    }
     const userStorage =
       context.globalStorageUri.scheme === 'file'
         ? context.globalStorageUri
@@ -97,6 +117,10 @@ class Workbench implements vscode.Disposable {
           .get<'filtered' | 'total' | 'hidden'>('categoryCountMode', 'filtered'),
       () => vscode.workspace.getConfiguration('prompteur').get<boolean>('groupByCategory', true),
       (scope) => this.roots.get(scope),
+      (category) =>
+        this.approvedCategories.has(category)
+          ? (this.categoryDescriptions.get(category) ?? '')
+          : undefined,
     );
     this.disposables.push(
       this.editor,
@@ -130,6 +154,17 @@ class Workbench implements vscode.Disposable {
       newPrompt: (node) => this.create(node),
       addStarters: (node) => this.addStarters(node),
       removeCategory: () => this.removeApprovedCategory(),
+      addCategory: () => this.addCategory(),
+      approveCategory: (node) => this.approveCategory(node),
+      editCategoryDescription: (node) => this.editCategoryDescription(node),
+      renameCategory: async (node) => {
+        this.renamingCategory = true;
+        try {
+          await this.renameCategory(node);
+        } finally {
+          this.renamingCategory = false;
+        }
+      },
       edit: (node) => this.edit(node),
       delete: (node) => this.remove(node),
       duplicate: (node) => this.duplicate(node),
@@ -159,6 +194,21 @@ class Workbench implements vscode.Disposable {
       this.disposables.push(
         vscode.commands.registerCommand(`prompteur.${name}`, async (node?: TreeNode) => {
           try {
+            if (
+              this.renamingCategory &&
+              [
+                'renameCategory',
+                'newPrompt',
+                'duplicate',
+                'copyPrompt',
+                'pastePrompt',
+                'addCategory',
+                'approveCategory',
+                'removeCategory',
+                'editCategoryDescription',
+              ].includes(name)
+            )
+              throw new Error('Finish the category rename before changing categories.');
             await action(node);
           } catch (error) {
             if (error instanceof vscode.CancellationError) return;
@@ -356,21 +406,34 @@ class Workbench implements vscode.Disposable {
     const value = await vscode.window.showInputBox({
       title: 'Add prompt category',
       prompt: 'Category name for this VS Code profile',
-      validateInput: (input) => {
-        const category = input.trim().toLowerCase();
-        if (!category) return 'Category name is required';
-        if (category.length > 64) return 'Category name must be 64 characters or fewer';
-        if (
-          this.categoryValue(category) ||
-          category === addCategoryValue ||
-          category === removeCategoryValue
-        )
-          return 'Category is already approved';
-        return undefined;
-      },
+      validateInput: (input) => this.validateNewCategory(input),
     });
     if (!value?.trim()) return undefined;
     const category = value.trim().toLowerCase();
+    return this.approveCategoryName(category);
+  }
+
+  private async approveCategory(node?: TreeNode): Promise<void> {
+    if (node?.kind !== 'problem' || !this.roots.has(node.scope))
+      throw new Error('Choose a prompt with an unapproved category');
+    const snapshot = await this.service.get(node.scope);
+    if (!snapshot.problems.some((problem) => problem.path === node.path))
+      throw new Error('Prompt problem changed. Reload the library.');
+    await this.service.refresh(node.scope, node.path);
+    const problem = (await this.service.get(node.scope)).problems.find(
+      (candidate) => candidate.path === node.path,
+    );
+    if (!problem?.unapprovedCategory)
+      throw new Error('Prompt no longer has an unapproved category. Reload or repair its YAML.');
+    const category = problem.unapprovedCategory;
+    if (category === addCategoryValue || category === removeCategoryValue)
+      throw new Error('Category name is reserved. Change the category in the prompt YAML.');
+    await this.approveCategoryName(category);
+  }
+
+  private async approveCategoryName(category: string): Promise<string | undefined> {
+    const description = await this.inputCategoryDescription(category);
+    if (description === undefined) return undefined;
     const answer = await vscode.window.showWarningMessage(
       `Add "${category}" to this VS Code profile's User and Workspace categories?`,
       { modal: true },
@@ -378,16 +441,10 @@ class Workbench implements vscode.Disposable {
     );
     if (answer !== 'Add Category') return undefined;
 
-    this.approvedCategories.add(category);
-    try {
-      await this.context.globalState.update(
-        'approvedPromptCategories',
-        [...this.approvedCategories].sort((left, right) => left.localeCompare(right)),
-      );
-    } catch (error) {
-      this.approvedCategories.delete(category);
-      throw error;
-    }
+    const categories = new Set(this.approvedCategories).add(category);
+    const descriptions = new Map(this.categoryDescriptions);
+    if (description) descriptions.set(category, description);
+    await this.saveCategories(categories, descriptions);
     for (const scope of this.roots.keys()) {
       try {
         await this.service.refresh(scope);
@@ -396,6 +453,230 @@ class Workbench implements vscode.Disposable {
       }
     }
     return category;
+  }
+
+  private async inputCategoryDescription(category: string): Promise<string | undefined> {
+    const value = await vscode.window.showInputBox({
+      title: `Description for ${category}`,
+      prompt: `Optional category help; leave blank for generic help (maximum ${categoryDescriptionLimit} characters)`,
+      value: this.categoryDescriptions.get(category) ?? '',
+      validateInput: (input) =>
+        /[\r\n]/.test(input)
+          ? 'Description must be a single line'
+          : input.trim().length > categoryDescriptionLimit
+            ? `Description must be ${categoryDescriptionLimit} characters or fewer`
+            : undefined,
+    });
+    return value?.trim();
+  }
+
+  private validateNewCategory(input: string): string | undefined {
+    const category = input.trim().toLowerCase();
+    if (!category) return 'Category name is required';
+    if (category.length > 64) return 'Category name must be 64 characters or fewer';
+    if (
+      this.categoryValue(category) ||
+      category === addCategoryValue ||
+      category === removeCategoryValue
+    )
+      return 'Category is already approved';
+    return undefined;
+  }
+
+  private async pickCustomCategory(node: TreeNode | undefined, title: string) {
+    if (node) {
+      if (node.kind !== 'category' || !this.approvedCategories.has(node.category.toLowerCase()))
+        throw new Error('Only approved custom categories can be edited');
+      return node.category.toLowerCase();
+    }
+    const categories = [...this.approvedCategories].sort((left, right) =>
+      left.localeCompare(right),
+    );
+    if (!categories.length) {
+      void vscode.window.showInformationMessage('No approved custom categories to edit.');
+      return undefined;
+    }
+    return (
+      await vscode.window.showQuickPick(
+        categories.map((value) => ({
+          label: value.charAt(0).toUpperCase() + value.slice(1),
+          value,
+          description: this.categoryDescriptions.get(value) ?? '',
+        })),
+        { title },
+      )
+    )?.value;
+  }
+
+  private async editCategoryDescription(node?: TreeNode): Promise<void> {
+    const category = await this.pickCustomCategory(node, 'Edit category description');
+    if (!category) return;
+    const description = await this.inputCategoryDescription(category);
+    if (description === undefined) return;
+    const descriptions = new Map(this.categoryDescriptions);
+    if (description) descriptions.set(category, description);
+    else descriptions.delete(category);
+    await this.context.globalState.update(
+      categoryDescriptionsStateKey,
+      Object.fromEntries(descriptions),
+    );
+    this.categoryDescriptions = descriptions;
+    this.tree.refresh();
+  }
+
+  private async renameCategory(node?: TreeNode): Promise<void> {
+    const category = await this.pickCustomCategory(node, 'Rename prompt category');
+    if (!category) return;
+    const input = await vscode.window.showInputBox({
+      title: 'Rename prompt category',
+      prompt: 'New category name for both libraries',
+      value: category,
+      validateInput: (value) => this.validateNewCategory(value),
+    });
+    if (input === undefined) return;
+    const next = input.trim().toLowerCase();
+    const invalid = this.validateNewCategory(next);
+    if (invalid) throw new Error(invalid);
+    const affected = await this.categoryEntries(category);
+    for (const entry of affected) this.assertCategoryWritable(entry);
+    if (
+      (await vscode.window.showWarningMessage(
+        `Rename "${category}" to "${next}" in this profile and ${affected.length} saved prompt(s) across User and Workspace? Prompt filenames and category description stay unchanged.`,
+        { modal: true },
+        'Rename Category',
+      )) !== 'Rename Category'
+    )
+      return;
+    if (!this.approvedCategories.has(category) || this.validateNewCategory(next))
+      throw new Error('Categories changed. Retry the rename.');
+    const current = await this.categoryEntries(category);
+    const previousSources = new Map(affected.map((entry) => [entry.key, entry.source]));
+    if (
+      current.length !== affected.length ||
+      current.some((entry) => previousSources.get(entry.key) !== entry.source)
+    )
+      throw new Error('Prompts changed. Retry the rename.');
+    for (const entry of current) this.assertCategoryWritable(entry);
+    const previousCategories = new Set(this.approvedCategories);
+    const previousDescriptions = new Map(this.categoryDescriptions);
+    const categories = new Set(previousCategories).add(next);
+    const descriptions = new Map(previousDescriptions);
+    const description = descriptions.get(category);
+    if (description) descriptions.set(next, description);
+    const changes = current.map((entry) => ({
+      entry,
+      source: encodeMarkdown({ ...entry.data, category: next }, entry.source, [...categories]),
+    }));
+    await this.saveCategories(categories, descriptions);
+    const attempted: typeof changes = [];
+    try {
+      for (const change of changes) {
+        this.assertCategoryWritable(change.entry);
+        attempted.push(change);
+        await this.service.writeSource(
+          change.entry.scope,
+          change.entry.path,
+          change.source,
+          change.entry.source,
+        );
+      }
+      if ((await this.categoryEntries(category)).length)
+        throw new Error('Prompts changed during rename. Retry the rename.');
+      categories.delete(category);
+      descriptions.delete(category);
+      await this.saveCategories(categories, descriptions);
+    } catch (error) {
+      const failures: string[] = [];
+      for (const { entry, source } of attempted.reverse()) {
+        try {
+          const saved = await this.service.readFile(entry.scope, entry.path);
+          if (saved === entry.source) continue;
+          if (saved !== source) throw new Error('File changed during rename');
+          this.assertCategoryWritable(entry);
+          await this.service.writeSource(entry.scope, entry.path, entry.source, source);
+        } catch (rollbackError) {
+          failures.push(`${entry.scope}/${entry.path}: ${messageOf(rollbackError)}`);
+        }
+      }
+      if (!failures.length) {
+        try {
+          await this.saveCategories(previousCategories, previousDescriptions);
+        } catch (rollbackError) {
+          failures.push(`Profile metadata: ${messageOf(rollbackError)}`);
+        }
+      }
+      throw new Error(
+        `Category rename failed: ${messageOf(error)}. ${
+          failures.length
+            ? `Recovery incomplete; both categories remain approved. Check affected prompts: ${failures.join('; ')}`
+            : 'Original prompts and category metadata restored.'
+        }`,
+      );
+    }
+    if (this.copiedPrompt?.data.category === category)
+      this.copiedPrompt = {
+        ...this.copiedPrompt,
+        data: { ...this.copiedPrompt.data, category: next },
+      };
+    void vscode.window.showInformationMessage(
+      `Renamed "${category}" to "${next}" in ${changes.length} prompt(s).`,
+    );
+  }
+
+  private async categoryEntries(category: string): Promise<Entry[]> {
+    const entries: Entry[] = [];
+    for (const scope of this.roots.keys()) {
+      await this.service.refresh(scope);
+      const snapshot = await this.service.get(scope);
+      if (snapshot.problems.length)
+        throw new Error('Repair invalid prompts in both libraries before renaming a category.');
+      entries.push(...snapshot.entries.filter((entry) => entry.data.category === category));
+    }
+    return entries;
+  }
+
+  private assertCategoryWritable(entry: Entry): void {
+    this.assertTrusted(entry);
+    const uri = this.uri(entry).toString();
+    if (
+      vscode.workspace.textDocuments.some(
+        (document) => document.uri.toString() === uri && document.isDirty,
+      )
+    )
+      throw new Error(`Save or discard unsaved changes before renaming: ${entry.path}`);
+  }
+
+  private async saveCategories(
+    categories: Set<string>,
+    descriptions: Map<string, string>,
+  ): Promise<void> {
+    const previousDescriptions = this.context.globalState.get<unknown>(
+      categoryDescriptionsStateKey,
+    );
+    await this.context.globalState.update(
+      categoryDescriptionsStateKey,
+      Object.fromEntries(descriptions),
+    );
+    try {
+      await this.context.globalState.update(
+        'approvedPromptCategories',
+        [...categories].sort((left, right) => left.localeCompare(right)),
+      );
+    } catch (error) {
+      try {
+        await this.context.globalState.update(categoryDescriptionsStateKey, previousDescriptions);
+      } catch (rollbackError) {
+        throw new AggregateError(
+          [error, rollbackError],
+          `Category save failed: ${messageOf(error)}. Description rollback failed: ${messageOf(rollbackError)}`,
+        );
+      }
+      throw error;
+    }
+    this.approvedCategories.clear();
+    for (const category of categories) this.approvedCategories.add(category);
+    this.categoryDescriptions = new Map(descriptions);
+    this.tree.refresh();
   }
 
   private async removeApprovedCategory(): Promise<void> {
@@ -437,16 +718,11 @@ class Workbench implements vscode.Disposable {
     );
     if (answer !== 'Remove Category') return;
 
-    this.approvedCategories.delete(choice.value);
-    try {
-      await this.context.globalState.update(
-        'approvedPromptCategories',
-        [...this.approvedCategories].sort((left, right) => left.localeCompare(right)),
-      );
-    } catch (error) {
-      this.approvedCategories.add(choice.value);
-      throw error;
-    }
+    const categoriesAfterRemoval = new Set(this.approvedCategories);
+    categoriesAfterRemoval.delete(choice.value);
+    const descriptions = new Map(this.categoryDescriptions);
+    descriptions.delete(choice.value);
+    await this.saveCategories(categoriesAfterRemoval, descriptions);
     for (const scope of this.roots.keys()) {
       try {
         await this.service.refresh(scope);

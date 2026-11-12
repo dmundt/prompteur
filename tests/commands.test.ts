@@ -92,6 +92,26 @@ async function addPrompt(
   await run('refresh');
   return (await entries(scope)).find((node) => node.entry.path === `prompts/${name}.prompt.md`)!;
 }
+async function customCategoryPrompts() {
+  responses.input.push('Research', 'Explore options.');
+  await run('addCategory');
+  const source =
+    '---\n# Authored note\nversion: 1\nname: Research\ncategory: research # Keep note\n---\nResearch {{selection}}\n';
+  const paths = [
+    join(userRoot(), 'prompts', 'research.prompt.md'),
+    join(workspaceRoot(), 'prompts', 'research.prompt.md'),
+  ];
+  for (const path of paths) {
+    await fs.mkdir(join(path, '..'), { recursive: true });
+    await fs.writeFile(path, source);
+  }
+  await run('refresh');
+  return {
+    source,
+    paths,
+    node: { kind: 'category', scope: 'user', category: 'research' } satisfies TreeNode,
+  };
+}
 async function destination(source = 'code') {
   const document = new FakeDocument(Uri.file(join(root, 'project', 'main.ts')), source);
   const editor = new FakeEditor(document);
@@ -182,6 +202,7 @@ describe('release commands', () => {
     expect(context.globalState.syncedKeys).toEqual([
       'syncedUserPrompts',
       'approvedPromptCategories',
+      'promptCategoryDescriptions',
     ]);
     const remotePrompt = encodeMarkdown(newPrompt('Remote Sync'));
     await context.globalState.update('syncedUserPrompts', {
@@ -316,7 +337,7 @@ describe('release commands', () => {
     const promptMenu = manifest.contributes.menus['view/item/context'].filter(
       (item) =>
         item.when.includes('viewItem == prompt') ||
-        item.when.includes('viewItem =~ /^(prompt|problem)$/'),
+        item.when.includes('viewItem =~ /^(prompt|problem|categoryProblem)$/'),
     );
     expect(
       promptMenu.filter((item) => !item.group.startsWith('inline@')).map((item) => item.command),
@@ -334,6 +355,7 @@ describe('release commands', () => {
     expect(contextItems[0]?.group).toBe('0_text@1');
     expect(contextItems.slice(1).every((item) => item.group.split('@')[0] !== '0_text')).toBe(true);
     expect(manifest.contributes.menus.commandPalette).toEqual([
+      { command: 'prompteur.approveCategory', when: 'false' },
       { command: 'prompteur.duplicate', when: 'false' },
       { command: 'prompteur.searchActive', when: 'false' },
     ]);
@@ -360,8 +382,26 @@ describe('release commands', () => {
     expect(manifest.contributes.menus['view/item/context']).toContainEqual(
       expect.objectContaining({
         command: 'prompteur.pastePrompt',
-        when: expect.stringContaining('viewItem =~ /^(scope|category)$/'),
+        when: expect.stringContaining('viewItem =~ /^(scope|category|customCategory)$/'),
       }),
+    );
+    expect(manifest.contributes.menus['view/item/context']).toEqual(
+      expect.arrayContaining([
+        {
+          command: 'prompteur.editCategoryDescription',
+          when: 'view == prompteur.prompts && viewItem == customCategory',
+          group: '2_edit@1',
+        },
+        {
+          command: 'prompteur.renameCategory',
+          when: 'view == prompteur.prompts && viewItem == customCategory',
+          group: '2_edit@2',
+        },
+        expect.objectContaining({
+          command: 'prompteur.newPrompt',
+          when: 'view == prompteur.prompts && viewItem =~ /^(scope|category|customCategory)$/',
+        }),
+      ]),
     );
     expect(manifest.contributes.commands.map((item) => item.command)).not.toContain(
       'prompteur.migrateCategories',
@@ -1481,11 +1521,25 @@ describe('release commands', () => {
   });
   it('requires confirmation to add a profile category and shares it across libraries', async () => {
     responses.quick.push('$(add) Add Category...');
-    responses.input.push('Research', 'User Research Prompt');
+    responses.input.push(
+      'Research',
+      'Explore options and collect evidence.',
+      'User Research Prompt',
+    );
     responses.warning.push('Add Category');
     await run('newPrompt', scopeNode('user'));
     expect(context.globalState.values.get('approvedPromptCategories')).toEqual(['research']);
+    expect(context.globalState.values.get('promptCategoryDescriptions')).toEqual({
+      research: 'Explore options and collect evidence.',
+    });
     expect((await entries('user'))[0]?.entry.data.category).toBe('research');
+    expect(
+      tree().getTreeItem({ kind: 'category', scope: 'user', category: 'research' }),
+    ).toMatchObject({
+      contextValue: 'customCategory',
+      description: 'custom',
+      tooltip: 'Explore options and collect evidence.',
+    });
 
     for (const disposable of context.subscriptions.splice(0)) disposable.dispose();
     await activate(context as unknown as vscode.ExtensionContext);
@@ -1493,6 +1547,265 @@ describe('release commands', () => {
     responses.input.push('Workspace Research Prompt');
     await run('newPrompt', scopeNode('workspace'));
     expect((await entries('workspace'))[0]?.entry.data.category).toBe('research');
+    expect(
+      tree().getTreeItem({ kind: 'category', scope: 'workspace', category: 'research' }).tooltip,
+    ).toBe('Explore options and collect evidence.');
+  });
+  it('creates a category directly without creating a dummy prompt', async () => {
+    responses.input.push('Custom', 'Custom tasks');
+    await run('addCategory');
+    expect(context.globalState.values.get('approvedPromptCategories')).toEqual(['custom']);
+    expect(context.globalState.values.get('promptCategoryDescriptions')).toEqual({
+      custom: 'Custom tasks',
+    });
+    expect(await entries()).toEqual([]);
+    responses.quick.push('Custom');
+    responses.input.push('Custom prompt');
+    await run('newPrompt', scopeNode());
+    expect((await entries())[0]?.entry.data.category).toBe('custom');
+  });
+  it('renames custom categories across both libraries while preserving formatting and help', async () => {
+    const { source, paths, node } = await customCategoryPrompts();
+    await run('copyPrompt', (await entries())[0]);
+    responses.input.push('  Discovery  ');
+    await run('renameCategory', node);
+    for (const path of paths)
+      expect(await fs.readFile(path, 'utf8')).toBe(
+        source.replace('category: research', 'category: discovery'),
+      );
+    for (const scope of ['user', 'workspace'] as const) {
+      expect((await entries(scope))[0]?.entry.data.category).toBe('discovery');
+      expect(tree().getTreeItem({ kind: 'category', scope, category: 'discovery' })).toMatchObject({
+        tooltip: 'Explore options.',
+        contextValue: 'customCategory',
+        description: 'custom',
+      });
+    }
+    expect(context.globalState.values.get('approvedPromptCategories')).toEqual(['discovery']);
+    expect(context.globalState.values.get('promptCategoryDescriptions')).toEqual({
+      discovery: 'Explore options.',
+    });
+    expect(messages.info.at(-1)).toContain('2 prompt(s)');
+    await run('pastePrompt', scopeNode());
+    const pasted = await entries();
+    expect(pasted).toHaveLength(2);
+    expect(pasted.every((entry) => entry.entry.data.category === 'discovery')).toBe(true);
+  });
+  it('renames an unused category from the palette and validates new names', async () => {
+    responses.input.push('Research', '');
+    await run('addCategory');
+    const input = vi.spyOn(window, 'showInputBox');
+    responses.quick.push('Research');
+    responses.input.push('Discovery');
+    await run('renameCategory');
+    const options = input.mock.calls[0]?.[0];
+    expect(options).toMatchObject({ value: 'research' });
+    expect(options?.validateInput?.('Review')).toBe('Category is already approved');
+    expect(options?.validateInput?.('  ')).toBe('Category name is required');
+    expect(options?.validateInput?.('x'.repeat(65))).toContain('64 characters');
+    expect(options?.validateInput?.('__add_category__')).toBe('Category is already approved');
+    expect(options?.validateInput?.('__remove_category__')).toBe('Category is already approved');
+    expect(context.globalState.values.get('approvedPromptCategories')).toEqual(['discovery']);
+    expect(await entries()).toEqual([]);
+  });
+  it('cancels rename before writing and refuses built-in category targets', async () => {
+    const { source, paths, node } = await customCategoryPrompts();
+    responses.input.push(null);
+    await run('renameCategory', node);
+    responses.input.push('Discovery');
+    responses.warning.push(null);
+    await run('renameCategory', node);
+    for (const path of paths) expect(await fs.readFile(path, 'utf8')).toBe(source);
+    expect(context.globalState.values.get('approvedPromptCategories')).toEqual(['research']);
+    await expect(
+      run('renameCategory', { kind: 'category', scope: 'user', category: 'review' }),
+    ).rejects.toThrow('Only approved custom');
+  });
+  it('blocks rename for untrusted workspace writes and dirty prompt editors', async () => {
+    const { source, paths, node } = await customCategoryPrompts();
+    workspace.isTrusted = false;
+    responses.input.push('Discovery');
+    await expect(run('renameCategory', node)).rejects.toThrow('Trust this workspace');
+    workspace.isTrusted = true;
+    const document = new FakeDocument(Uri.file(paths[0]!), source);
+    document.isDirty = true;
+    workspace.textDocuments.push(document);
+    responses.input.push('Discovery');
+    await expect(run('renameCategory', node)).rejects.toThrow('Save or discard unsaved changes');
+    for (const path of paths) expect(await fs.readFile(path, 'utf8')).toBe(source);
+    expect(context.globalState.values.get('approvedPromptCategories')).toEqual(['research']);
+  });
+  it('requires invalid prompts to be repaired before category rename', async () => {
+    const { node } = await customCategoryPrompts();
+    await fs.writeFile(join(userRoot(), 'prompts', 'bad.prompt.md'), 'Invalid YAML');
+    responses.input.push('Discovery');
+    await expect(run('renameCategory', node)).rejects.toThrow('Repair invalid prompts');
+    expect(context.globalState.values.get('approvedPromptCategories')).toEqual(['research']);
+  });
+  it('rolls back earlier files and metadata when a later rename write fails', async () => {
+    const { source, paths, node } = await customCategoryPrompts();
+    const write = LocalFiles.prototype.write;
+    vi.spyOn(LocalFiles.prototype, 'write').mockImplementation(async function (
+      this: LocalFiles,
+      scope,
+      path,
+      text,
+      expected,
+    ) {
+      if (scope === 'workspace' && text.includes('category: discovery'))
+        throw new Error('Workspace write failed');
+      await write.call(this, scope, path, text, expected);
+    });
+    responses.input.push('Discovery');
+    await expect(run('renameCategory', node)).rejects.toThrow(
+      'Original prompts and category metadata restored',
+    );
+    for (const path of paths) expect(await fs.readFile(path, 'utf8')).toBe(source);
+    expect(context.globalState.values.get('approvedPromptCategories')).toEqual(['research']);
+    expect(context.globalState.values.get('promptCategoryDescriptions')).toEqual({
+      research: 'Explore options.',
+    });
+  });
+  it('restores renamed files if final metadata persistence fails', async () => {
+    const { source, paths, node } = await customCategoryPrompts();
+    const update = context.globalState.update.bind(context.globalState);
+    vi.spyOn(context.globalState, 'update').mockImplementation(async (key, value) => {
+      if (
+        key === 'approvedPromptCategories' &&
+        Array.isArray(value) &&
+        value.length === 1 &&
+        value[0] === 'discovery'
+      )
+        throw new Error('Final metadata save failed');
+      await update(key, value);
+    });
+    responses.input.push('Discovery');
+    await expect(run('renameCategory', node)).rejects.toThrow(
+      'Original prompts and category metadata restored',
+    );
+    for (const path of paths) expect(await fs.readFile(path, 'utf8')).toBe(source);
+    expect(context.globalState.values.get('approvedPromptCategories')).toEqual(['research']);
+  });
+  it('preserves both categories and reports partial recovery when rollback is blocked', async () => {
+    const { node } = await customCategoryPrompts();
+    const write = LocalFiles.prototype.write;
+    vi.spyOn(LocalFiles.prototype, 'write').mockImplementation(async function (
+      this: LocalFiles,
+      scope,
+      path,
+      text,
+      expected,
+    ) {
+      if (scope === 'workspace') throw new Error('Workspace unavailable');
+      if (text.includes('category: research')) throw new Error('Rollback unavailable');
+      await write.call(this, scope, path, text, expected);
+    });
+    responses.input.push('Discovery');
+    await expect(run('renameCategory', node)).rejects.toThrow(
+      'Recovery incomplete; both categories remain approved',
+    );
+    expect(context.globalState.values.get('approvedPromptCategories')).toEqual([
+      'discovery',
+      'research',
+    ]);
+    expect((await entries())[0]?.entry.data.category).toBe('discovery');
+    expect((await entries('workspace'))[0]?.entry.data.category).toBe('research');
+    expect(messages.errors.at(-1)).toContain('Rollback unavailable');
+  });
+  it('does not overwrite concurrent file edits during rename recovery', async () => {
+    const { paths, node } = await customCategoryPrompts();
+    const write = LocalFiles.prototype.write;
+    let newer = '';
+    vi.spyOn(LocalFiles.prototype, 'write').mockImplementation(async function (
+      this: LocalFiles,
+      scope,
+      path,
+      text,
+      expected,
+    ) {
+      if (scope === 'workspace') throw new Error('Workspace unavailable');
+      await write.call(this, scope, path, text, expected);
+      newer = `${text}\nNew external edit\n`;
+      await fs.writeFile(paths[0]!, newer);
+    });
+    responses.input.push('Discovery');
+    await expect(run('renameCategory', node)).rejects.toThrow('File changed during rename');
+    expect(await fs.readFile(paths[0]!, 'utf8')).toBe(newer);
+    expect(context.globalState.values.get('approvedPromptCategories')).toEqual([
+      'discovery',
+      'research',
+    ]);
+  });
+  it('blocks overlapping category changes while rename is pending', async () => {
+    const { node } = await customCategoryPrompts();
+    vi.spyOn(window, 'showWarningMessage').mockImplementationOnce(async () => {
+      await expect(run('editCategoryDescription', node)).rejects.toThrow(
+        'Finish the category rename',
+      );
+      return 'Rename Category';
+    });
+    responses.input.push('Discovery');
+    await run('renameCategory', node);
+    expect(context.globalState.values.get('approvedPromptCategories')).toEqual(['discovery']);
+  });
+  it('repairs unapproved categories with explicit approval without rewriting the prompt', async () => {
+    const source =
+      '---\nversion: 1\nname: Custom Category Tester\ndescription: Help\ncategory: custom\ntags: []\n---\nText for testing custom categories.';
+    const path = join(userRoot(), 'prompts', 'custom-category-tester.prompt.md');
+    await fs.mkdir(join(userRoot(), 'prompts'), { recursive: true });
+    await fs.writeFile(path, source);
+    await run('refresh');
+    const problem = (await tree().getChildren(scopeNode())).find(
+      (node) => node.kind === 'problem',
+    )!;
+    expect(tree().getTreeItem(problem).contextValue).toBe('categoryProblem');
+    expect(tree().getTreeItem(problem).tooltip).toContain('Approve Prompt Category');
+    expect(await entries()).toEqual([]);
+    const document = new FakeDocument(Uri.file(path), source);
+    workspace.textDocuments.push(document);
+    await window.showTextDocument(document);
+    responses.input.push('Custom category help');
+    await run('approveCategory', problem);
+    expect(messages.warnings.at(-1)).toContain('Add "custom"');
+    expect(await fs.readFile(path, 'utf8')).toBe(source);
+    expect((await entries())[0]?.entry.data.category).toBe('custom');
+    expect((await tree().getChildren(scopeNode())).some((node) => node.kind === 'problem')).toBe(
+      false,
+    );
+    expect(
+      tree().getTreeItem({ kind: 'category', scope: 'user', category: 'custom' }).tooltip,
+    ).toBe('Custom category help');
+  });
+  it('does not approve when repair is cancelled or the file category changed', async () => {
+    const path = join(userRoot(), 'prompts', 'custom.prompt.md');
+    const source = '---\nversion: 1\nname: Custom\ncategory: custom\n---\nBody';
+    await fs.mkdir(join(userRoot(), 'prompts'), { recursive: true });
+    await fs.writeFile(path, source);
+    await run('refresh');
+    const problem = (await tree().getChildren(scopeNode())).find(
+      (node) => node.kind === 'problem',
+    )!;
+    responses.input.push('');
+    responses.warning.push(null);
+    await run('approveCategory', problem);
+    expect(context.globalState.values.has('approvedPromptCategories')).toBe(false);
+    await fs.writeFile(path, source.replace('category: custom', 'category: review'));
+    await expect(run('approveCategory', problem)).rejects.toThrow(
+      'Prompt no longer has an unapproved category',
+    );
+    expect(context.globalState.values.has('approvedPromptCategories')).toBe(false);
+  });
+  it('rejects forged repair paths without reading arbitrary files', async () => {
+    await expect(
+      run('approveCategory', {
+        kind: 'problem',
+        scope: 'user',
+        path: '../outside.prompt.md',
+        message: 'unapproved',
+        unapprovedCategory: 'custom',
+      }),
+    ).rejects.toThrow('Prompt problem changed');
+    expect(context.globalState.values.has('approvedPromptCategories')).toBe(false);
   });
   it('loads only valid non-built-in categories from profile state', async () => {
     for (const disposable of context.subscriptions.splice(0)) disposable.dispose();
@@ -1514,9 +1827,164 @@ describe('release commands', () => {
     expect(quickPicks.at(-1)?.activeItems.map((item) => item.value)).toEqual(['research']);
     expect((await entries('user'))[0]?.entry.data.category).toBe('research');
   });
+  it('edits descriptions through a category or picker, supports clearing, and leaves files unchanged', async () => {
+    for (const disposable of context.subscriptions.splice(0)) disposable.dispose();
+    context.globalState.values.set('approvedPromptCategories', ['research']);
+    context.globalState.values.set('promptCategoryDescriptions', { research: 'Old help' });
+    await activate(context as unknown as vscode.ExtensionContext);
+    const category: TreeNode = { kind: 'category', scope: 'workspace', category: 'Research' };
+    const showInputBox = vi.spyOn(window, 'showInputBox');
+    const refresh = vi.spyOn(tree(), 'refresh');
+    workspace.isTrusted = false;
+    responses.input.push('  [Plain text](command:evil.run)  ');
+    await run('editCategoryDescription', category);
+    expect(showInputBox.mock.calls[0]?.[0]).toMatchObject({ value: 'Old help' });
+    for (const scope of ['user', 'workspace'] as const)
+      expect(tree().getTreeItem({ ...category, scope }).tooltip).toBe(
+        '[Plain text](command:evil.run)',
+      );
+    expect(refresh).toHaveBeenCalled();
+    await expect(fs.stat(workspaceRoot())).rejects.toThrow();
+    responses.quick.push('Research');
+    responses.input.push('');
+    await run('editCategoryDescription');
+    expect(context.globalState.values.get('promptCategoryDescriptions')).toEqual({});
+    expect(tree().getTreeItem(category).tooltip).toBe(
+      'User-defined category for organizing prompts.',
+    );
+    expect(context.globalState.values.get('approvedPromptCategories')).toEqual(['research']);
+  });
+  it('cancels description creation and editing without changing metadata', async () => {
+    responses.quick.push('$(add) Add Category...');
+    responses.input.push('Research', null);
+    const warning = vi.spyOn(window, 'showWarningMessage');
+    await run('newPrompt', scopeNode());
+    expect(warning).not.toHaveBeenCalled();
+    expect(context.globalState.values.has('approvedPromptCategories')).toBe(false);
+    expect(context.globalState.values.has('promptCategoryDescriptions')).toBe(false);
+    for (const disposable of context.subscriptions.splice(0)) disposable.dispose();
+    context.globalState.values.set('approvedPromptCategories', ['research']);
+    context.globalState.values.set('promptCategoryDescriptions', { research: 'Keep' });
+    await activate(context as unknown as vscode.ExtensionContext);
+    responses.quick.push(null);
+    await run('editCategoryDescription');
+    responses.input.push(null);
+    await run('editCategoryDescription', { kind: 'category', scope: 'user', category: 'research' });
+    expect(context.globalState.values.get('promptCategoryDescriptions')).toEqual({
+      research: 'Keep',
+    });
+  });
+  it('validates short single-line descriptions and protects built-ins', async () => {
+    responses.quick.push('$(add) Add Category...');
+    responses.input.push('Research', 'x'.repeat(240), 'Research prompt');
+    const showInputBox = vi.spyOn(window, 'showInputBox');
+    await run('newPrompt', scopeNode());
+    const validate = showInputBox.mock.calls[1]?.[0]?.validateInput;
+    expect(validate?.('x'.repeat(240))).toBeUndefined();
+    expect(validate?.(` ${'x'.repeat(240)} `)).toBeUndefined();
+    expect(validate?.('x'.repeat(241))).toContain('240 characters');
+    expect(validate?.('First\nSecond')).toContain('single line');
+    expect(validate?.('   ')).toBeUndefined();
+    await expect(
+      run('editCategoryDescription', { kind: 'category', scope: 'user', category: 'review' }),
+    ).rejects.toThrow('Only approved custom');
+    expect(context.globalState.values.get('promptCategoryDescriptions')).toEqual({
+      research: 'x'.repeat(240),
+    });
+  });
+  it('reports no custom categories when editing from the palette', async () => {
+    const picker = vi.spyOn(window, 'showQuickPick');
+    await run('editCategoryDescription');
+    expect(messages.info.at(-1)).toBe('No approved custom categories to edit.');
+    expect(picker).not.toHaveBeenCalled();
+  });
+  it('keeps prior descriptions when saving an edit fails', async () => {
+    for (const disposable of context.subscriptions.splice(0)) disposable.dispose();
+    context.globalState.values.set('approvedPromptCategories', ['research']);
+    context.globalState.values.set('promptCategoryDescriptions', { research: 'Keep' });
+    await activate(context as unknown as vscode.ExtensionContext);
+    const update = vi.spyOn(context.globalState, 'update');
+    update.mockRejectedValueOnce(new Error('State unavailable'));
+    responses.input.push('Changed');
+    const node: TreeNode = { kind: 'category', scope: 'user', category: 'research' };
+    await expect(run('editCategoryDescription', node)).rejects.toThrow('State unavailable');
+    expect(tree().getTreeItem(node).tooltip).toBe('Keep');
+    expect(messages.errors.at(-1)).toContain('State unavailable');
+  });
+  it('rolls back description metadata when category approval cannot be saved', async () => {
+    const update = context.globalState.update.bind(context.globalState);
+    vi.spyOn(context.globalState, 'update').mockImplementation(async (key, value) => {
+      if (key === 'approvedPromptCategories') throw new Error('Approval save failed');
+      await update(key, value);
+    });
+    responses.quick.push('$(add) Add Category...');
+    responses.input.push('Research', 'New help');
+    await expect(run('newPrompt', scopeNode())).rejects.toThrow('Approval save failed');
+    expect(context.globalState.values.get('promptCategoryDescriptions')).toBeUndefined();
+    expect(context.globalState.values.has('approvedPromptCategories')).toBe(false);
+    expect(await entries()).toEqual([]);
+    await run('editCategoryDescription');
+    expect(messages.info.at(-1)).toContain('No approved custom categories');
+  });
+  it('rejects malformed saved descriptions instead of silently replacing metadata', async () => {
+    for (const disposable of context.subscriptions.splice(0)) disposable.dispose();
+    context.globalState.values.set('promptCategoryDescriptions', { research: 42 });
+    await expect(activate(context as unknown as vscode.ExtensionContext)).rejects.toThrow(
+      'Invalid custom category descriptions',
+    );
+    expect(context.globalState.values.get('promptCategoryDescriptions')).toEqual({ research: 42 });
+  });
+  it('keeps unused category and description when removal cannot be saved', async () => {
+    for (const disposable of context.subscriptions.splice(0)) disposable.dispose();
+    context.globalState.values.set('approvedPromptCategories', ['research']);
+    context.globalState.values.set('promptCategoryDescriptions', { research: 'Keep' });
+    await activate(context as unknown as vscode.ExtensionContext);
+    const update = context.globalState.update.bind(context.globalState);
+    vi.spyOn(context.globalState, 'update').mockImplementation(async (key, value) => {
+      if (key === 'approvedPromptCategories') throw new Error('Removal save failed');
+      await update(key, value);
+    });
+    responses.quick.push('Research');
+    await expect(run('removeCategory')).rejects.toThrow('Removal save failed');
+    expect(context.globalState.values.get('promptCategoryDescriptions')).toEqual({
+      research: 'Keep',
+    });
+    expect(context.globalState.values.get('approvedPromptCategories')).toEqual(['research']);
+    expect(
+      tree().getTreeItem({ kind: 'category', scope: 'user', category: 'research' }).tooltip,
+    ).toBe('Keep');
+  });
+  it('reports both category save and metadata rollback failures', async () => {
+    const update = context.globalState.update.bind(context.globalState);
+    let descriptionWrites = 0;
+    vi.spyOn(context.globalState, 'update').mockImplementation(async (key, value) => {
+      if (key === 'approvedPromptCategories') throw new Error('Approval save failed');
+      if (key === 'promptCategoryDescriptions' && ++descriptionWrites > 1)
+        throw new Error('Rollback unavailable');
+      await update(key, value);
+    });
+    responses.quick.push('$(add) Add Category...');
+    responses.input.push('Research', 'Help');
+    await expect(run('newPrompt', scopeNode())).rejects.toThrow(
+      'Category save failed: Approval save failed. Description rollback failed: Rollback unavailable',
+    );
+    expect(messages.errors.at(-1)).toContain('Rollback unavailable');
+    expect(context.globalState.values.has('approvedPromptCategories')).toBe(false);
+  });
+  it('persists prototype-like custom category names safely', async () => {
+    responses.quick.push('$(add) Add Category...');
+    responses.input.push('__proto__', 'Prototype research', 'Research prompt');
+    await run('newPrompt', scopeNode());
+    for (const disposable of context.subscriptions.splice(0)) disposable.dispose();
+    await activate(context as unknown as vscode.ExtensionContext);
+    expect(
+      tree().getTreeItem({ kind: 'category', scope: 'user', category: '__proto__' }),
+    ).toMatchObject({ contextValue: 'customCategory', tooltip: 'Prototype research' });
+  });
   it('removes an unused approved category from the picker without creating a prompt', async () => {
     for (const disposable of context.subscriptions.splice(0)) disposable.dispose();
     context.globalState.values.set('approvedPromptCategories', ['research']);
+    context.globalState.values.set('promptCategoryDescriptions', { research: 'Research help' });
     await activate(context as unknown as vscode.ExtensionContext);
     responses.quick.push('$(remove) Remove Category...', 'Research');
     responses.warning.push('Remove Category');
@@ -1525,6 +1993,7 @@ describe('release commands', () => {
 
     expect(quickPicks[0]?.items.map((item) => item.value)).toContain('__remove_category__');
     expect(context.globalState.values.get('approvedPromptCategories')).toEqual([]);
+    expect(context.globalState.values.get('promptCategoryDescriptions')).toEqual({});
     expect(await entries('user')).toEqual([]);
   });
   it('reports an empty state when no custom categories are approved', async () => {
@@ -1573,7 +2042,7 @@ describe('release commands', () => {
   });
   it('does not add or create a category when approval is cancelled', async () => {
     responses.quick.push('$(add) Add Category...');
-    responses.input.push('Temporary');
+    responses.input.push('Temporary', '');
     responses.warning.push(null);
     await run('newPrompt', scopeNode('user'));
     expect(context.globalState.values.has('approvedPromptCategories')).toBe(false);
@@ -1581,7 +2050,7 @@ describe('release commands', () => {
   });
   it('validates added category names for emptiness, length, reserved values, and duplicates', async () => {
     responses.quick.push('$(add) Add Category...');
-    responses.input.push('Research', 'Research Prompt');
+    responses.input.push('Research', '', 'Research Prompt');
     responses.warning.push('Add Category');
     const showInputBox = vi.spyOn(window, 'showInputBox');
     await run('newPrompt', scopeNode('user'));
@@ -1596,7 +2065,7 @@ describe('release commands', () => {
     responses.input.push('research');
     responses.warning.push(null);
     await run('newPrompt', scopeNode('user'));
-    expect(showInputBox.mock.calls[2]?.[0]?.validateInput?.('research')).toBe(
+    expect(showInputBox.mock.calls[3]?.[0]?.validateInput?.('research')).toBe(
       'Category is already approved',
     );
     expect(context.globalState.values.get('approvedPromptCategories')).toEqual(['research']);

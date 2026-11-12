@@ -60,6 +60,7 @@ export class PromptDocumentError extends Error {
   constructor(
     message: string,
     readonly offset: number,
+    readonly unapprovedCategory?: string,
   ) {
     super(message);
   }
@@ -74,6 +75,7 @@ export interface Entry {
 export interface Problem {
   path: string;
   message: string;
+  unapprovedCategory?: string;
 }
 export interface Snapshot {
   entries: Entry[];
@@ -184,6 +186,7 @@ export function decodeMarkdown(
     throw new PromptDocumentError(
       error instanceof Error ? error.message : String(error),
       parts.frontmatterOffset,
+      result.data.category.trim().toLowerCase(),
     );
   }
   return {

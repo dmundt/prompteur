@@ -148,6 +148,26 @@
         "icon": "$(library)"
       },
       {
+        "command": "prompteur.addCategory",
+        "title": "Add Prompt Category",
+        "category": "Prompteur"
+      },
+      {
+        "command": "prompteur.approveCategory",
+        "title": "Approve Prompt Category",
+        "category": "Prompteur"
+      },
+      {
+        "command": "prompteur.renameCategory",
+        "title": "Rename Category...",
+        "category": "Prompteur"
+      },
+      {
+        "command": "prompteur.editCategoryDescription",
+        "title": "Edit Category Description",
+        "category": "Prompteur"
+      },
+      {
         "command": "prompteur.removeCategory",
         "title": "Remove Prompt Category",
         "category": "Prompteur"
@@ -300,6 +320,10 @@
     "menus": {
       "commandPalette": [
         {
+          "command": "prompteur.approveCategory",
+          "when": "false"
+        },
+        {
           "command": "prompteur.duplicate",
           "when": "false"
         },
@@ -337,6 +361,21 @@
       ],
       "view/item/context": [
         {
+          "command": "prompteur.renameCategory",
+          "when": "view == prompteur.prompts && viewItem == customCategory",
+          "group": "2_edit@2"
+        },
+        {
+          "command": "prompteur.approveCategory",
+          "when": "view == prompteur.prompts && viewItem == categoryProblem",
+          "group": "2_edit@2"
+        },
+        {
+          "command": "prompteur.editCategoryDescription",
+          "when": "view == prompteur.prompts && viewItem == customCategory",
+          "group": "2_edit@1"
+        },
+        {
           "command": "prompteur.copy",
           "when": "view =~ /^prompteur\\./ && viewItem == prompt",
           "group": "inline@1"
@@ -358,7 +397,7 @@
         },
         {
           "command": "prompteur.edit",
-          "when": "view =~ /^prompteur\\./ && viewItem =~ /^(prompt|problem)$/",
+          "when": "view =~ /^prompteur\\./ && viewItem =~ /^(prompt|problem|categoryProblem)$/",
           "group": "2_edit@1"
         },
         {
@@ -368,12 +407,12 @@
         },
         {
           "command": "prompteur.pastePrompt",
-          "when": "view == prompteur.prompts && viewItem =~ /^(scope|category)$/",
+          "when": "view == prompteur.prompts && viewItem =~ /^(scope|category|customCategory)$/",
           "group": "create@2"
         },
         {
           "command": "prompteur.newPrompt",
-          "when": "view == prompteur.prompts && viewItem =~ /^(scope|category)$/",
+          "when": "view == prompteur.prompts && viewItem =~ /^(scope|category|customCategory)$/",
           "group": "create@1"
         }
       ]
