@@ -9,7 +9,8 @@ ADR index. Agent rules: [AGENTS.md](./AGENTS.md).
 | Review the superseded individual-YAML decision            | [001-yaml-source-of-truth.md](./001-yaml-source-of-truth.md)                 |
 | Understand why prompts use Markdown with YAML frontmatter | [004-markdown-frontmatter-prompts.md](./004-markdown-frontmatter-prompts.md) |
 | Understand why the UI uses native editors and views       | [002-native-workbench.md](./002-native-workbench.md)                         |
-| Understand the filesystem, trust, and safety boundaries   | [003-local-safety-boundaries.md](./003-local-safety-boundaries.md)           |
+| Understand the original filesystem and trust boundaries   | [003-local-safety-boundaries.md](./003-local-safety-boundaries.md)           |
+| Understand the Copilot prompt tool and data-sharing rules | [005-copilot-prompt-tool.md](./005-copilot-prompt-tool.md)                   |
 
 ## All ADRs
 
@@ -17,8 +18,9 @@ ADR index. Agent rules: [AGENTS.md](./AGENTS.md).
 | ------ | ---------------------------------------------- | ---------- | ---------------------------------------------------------------------------- |
 | 001    | Individual YAML Files Are Authoritative        | Superseded | [001-yaml-source-of-truth.md](./001-yaml-source-of-truth.md)                 |
 | 002    | Use Native Editors and Views                   | Accepted   | [002-native-workbench.md](./002-native-workbench.md)                         |
-| 003    | Explicit Local Safety Boundaries               | Accepted   | [003-local-safety-boundaries.md](./003-local-safety-boundaries.md)           |
+| 003    | Explicit Local Safety Boundaries               | Superseded | [003-local-safety-boundaries.md](./003-local-safety-boundaries.md)           |
 | 004    | Markdown Frontmatter Prompts Are Authoritative | Accepted   | [004-markdown-frontmatter-prompts.md](./004-markdown-frontmatter-prompts.md) |
+| 005    | Explicit Copilot Prompt Tool                   | Accepted   | [005-copilot-prompt-tool.md](./005-copilot-prompt-tool.md)                   |
 
 ## Index Rules
 

@@ -1,6 +1,6 @@
 # ADR 003: Explicit Local Safety Boundaries
 
-Status: Accepted.
+Status: Superseded by [ADR 005](./005-copilot-prompt-tool.md).
 
 Keep core/application independent of VS Code through a small filesystem port. Serialize mutations; use expected-source writes, locks, and atomic replacement. Reject traversal/symlinks; never overwrite occupied paths. Require Workspace Trust for Workspace mutations, generation, and preview.
 

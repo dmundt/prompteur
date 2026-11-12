@@ -43,6 +43,13 @@ export class MarkdownString {
     return this;
   }
 }
+export class LanguageModelTextPart {
+  constructor(public value: string) {}
+}
+export class LanguageModelToolResult {
+  constructor(public content: LanguageModelTextPart[]) {}
+}
+export class CancellationError extends Error {}
 export const TreeItemCollapsibleState = { None: 0, Collapsed: 1, Expanded: 2 };
 export class DataTransferItem {
   constructor(public value: unknown) {}
@@ -231,6 +238,13 @@ export const views = new Map<
 >();
 export const handlers = new Map<string, (...args: unknown[]) => Promise<unknown>>();
 export const providers = new Map<string, { provideTextDocumentContent: () => string }>();
+export const languageModelTools = new Map<string, unknown>();
+export const lm = {
+  registerTool(name: string, tool: unknown) {
+    languageModelTools.set(name, tool);
+    return new Disposable(() => languageModelTools.delete(name));
+  },
+};
 export class FakeInputBox {
   title = '';
   value = '';
@@ -459,6 +473,7 @@ export function reset() {
   quickPicks.splice(0);
   views.clear();
   providers.clear();
+  languageModelTools.clear();
   collections.splice(0);
   inputBoxes.splice(0);
   watchers.splice(0);

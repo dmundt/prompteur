@@ -17,6 +17,9 @@
   "engines": {
     "vscode": "^1.96.0"
   },
+  "activationEvents": [
+    "onLanguageModelTool:prompteur_findPrompt"
+  ],
   "categories": [
     "Other"
   ],
@@ -183,6 +186,40 @@
         "title": "Prompteur Settings",
         "category": "Prompteur",
         "icon": "$(gear)"
+      }
+    ],
+    "languageModelTools": [
+      {
+        "name": "prompteur_findPrompt",
+        "toolReferenceName": "prompteurPrompt",
+        "displayName": "Find Prompteur Prompt",
+        "modelDescription": "Search local Prompteur prompt libraries and return one matching prompt with its existing variables rendered. Use only when the user asks to find or use a saved prompt. If multiple prompts match, return candidate metadata and ask for a more specific query. Never modify prompts or libraries.",
+        "userDescription": "Find and return a matching saved prompt. Returned prompt text and requested context variables are shared with Copilot Chat.",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(library)",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "description": "Text to search in prompt names, descriptions, categories, tags, paths, and content."
+            },
+            "scope": {
+              "type": "string",
+              "enum": [
+                "user",
+                "workspace"
+              ],
+              "description": "Optional library to search. Workspace prompts require Workspace Trust."
+            }
+          },
+          "required": [
+            "query"
+          ],
+          "additionalProperties": false
+        }
       }
     ],
     "menus": {
