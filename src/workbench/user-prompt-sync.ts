@@ -104,12 +104,20 @@ export class UserPromptSync {
 
   configure(enabled: boolean): Promise<void> {
     this.enabled = enabled;
-    this.state.setKeysForSync(
-      enabled
-        ? [userPromptSyncStateKey, approvedCategoriesStateKey, categoryDescriptionsStateKey]
-        : [],
-    );
-    return enabled ? this.reconcile() : Promise.resolve();
+    if (enabled) {
+      this.state.setKeysForSync([
+        userPromptSyncStateKey,
+        approvedCategoriesStateKey,
+        categoryDescriptionsStateKey,
+      ]);
+      return this.reconcile();
+    }
+
+    const operation = this.queue.then(() => {
+      if (!this.enabled) this.state.setKeysForSync([]);
+    });
+    this.queue = operation.catch(() => undefined);
+    return operation;
   }
 
   reconcile(): Promise<void> {
