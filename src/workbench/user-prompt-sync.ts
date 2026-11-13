@@ -66,6 +66,17 @@ function snapshot(files: Record<string, string>, deleted: Iterable<string>): Pro
   return { version: 1, files: orderedFiles, deleted: orderedDeleted };
 }
 
+function sameSnapshot(left: unknown, right: unknown): boolean {
+  if (left === right) return true;
+  const leftSnapshot = parseSnapshot(left);
+  const rightSnapshot = parseSnapshot(right);
+  return (
+    leftSnapshot !== undefined &&
+    rightSnapshot !== undefined &&
+    JSON.stringify(leftSnapshot) === JSON.stringify(rightSnapshot)
+  );
+}
+
 export class UserPromptSync {
   private enabled = false;
   private queue: Promise<unknown> = Promise.resolve();
@@ -88,37 +99,51 @@ export class UserPromptSync {
   reconcile(): Promise<void> {
     return this.enqueue(async () => {
       if (!this.enabled) return;
-      const local = await this.readLocal();
-      const remote = parseSnapshot(this.state.get<unknown>(userPromptSyncStateKey));
-      if (!remote) {
-        if (this.state.get(userPromptSyncStateKey) !== undefined)
-          throw new Error(
-            'Synced User prompts have invalid data; local prompts were left unchanged',
-          );
-        const initial = snapshot(local, []);
-        await this.writeState(initial);
-        return;
-      }
-      const baseline = parseSnapshot(this.state.get<unknown>(baselineKey));
-      const merged = this.merge(local, remote, baseline);
-      await this.apply(local, merged);
-      await this.writeState(merged);
+      await this.synchronize();
     });
   }
 
   persist(): Promise<void> {
     return this.enqueue(async () => {
       if (!this.enabled) return;
-      const local = await this.readLocal();
-      const currentValue = this.state.get<unknown>(userPromptSyncStateKey);
-      const remote = parseSnapshot(currentValue);
-      if (!remote && currentValue !== undefined)
-        throw new Error('Synced User prompts have invalid data; local prompts were left unchanged');
-      const baseline = parseSnapshot(this.state.get<unknown>(baselineKey));
-      const merged = remote ? this.merge(local, remote, baseline) : snapshot(local, []);
-      await this.apply(local, merged);
-      await this.writeState(merged);
+      await this.synchronize();
     });
+  }
+
+  private async synchronize(): Promise<void> {
+    let local = await this.readLocal();
+    let applyLocal = local;
+    let remoteValue = this.state.get<unknown>(userPromptSyncStateKey);
+    const baseline = parseSnapshot(this.state.get<unknown>(baselineKey));
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const remote = parseSnapshot(remoteValue);
+      if (!remote && remoteValue !== undefined)
+        throw new Error('Synced User prompts have invalid data; local prompts were left unchanged');
+      if (remote) remoteValue = remote;
+
+      const currentValue = this.state.get<unknown>(userPromptSyncStateKey);
+      if (!sameSnapshot(currentValue, remoteValue)) {
+        remoteValue = currentValue;
+        continue;
+      }
+
+      const merged = remote ? this.merge(local, remote, baseline) : snapshot(local, []);
+      await this.apply(applyLocal, merged);
+      if (await this.writeState(merged, remoteValue)) return;
+
+      const latestValue = this.state.get<unknown>(userPromptSyncStateKey);
+      const latestRemote = parseSnapshot(latestValue);
+      if (!latestRemote && latestValue !== undefined)
+        throw new Error('Synced User prompts have invalid data; local prompts were left unchanged');
+      remoteValue = latestRemote ?? latestValue;
+      const latestLocal = await this.readLocal();
+      local = this.preserveLocalChanges(local, merged, latestLocal);
+      applyLocal = latestLocal;
+    }
+
+    await this.apply(applyLocal, snapshot(local, []));
+    throw new Error('Synced User prompts changed repeatedly during reconciliation; retry later');
   }
 
   private async readLocal(): Promise<Record<string, string>> {
@@ -187,11 +212,33 @@ export class UserPromptSync {
       if (local[path] !== source) await this.files.write('user', path, source, local[path]);
   }
 
-  private async writeState(value: PromptSnapshot): Promise<void> {
+  private preserveLocalChanges(
+    local: Record<string, string>,
+    applied: PromptSnapshot,
+    current: Record<string, string>,
+  ): Record<string, string> {
+    const result = { ...local };
+    const paths = new Set([
+      ...Object.keys(applied.files),
+      ...applied.deleted,
+      ...Object.keys(current),
+    ]);
+    for (const path of paths) {
+      if (current[path] === applied.files[path]) continue;
+      if (current[path] === undefined) delete result[path];
+      else result[path] = current[path]!;
+    }
+    return result;
+  }
+
+  private async writeState(value: PromptSnapshot, expected: unknown): Promise<boolean> {
     const current = this.state.get<unknown>(userPromptSyncStateKey);
-    if (JSON.stringify(current) !== JSON.stringify(value))
-      await this.state.update(userPromptSyncStateKey, value);
-    await this.state.update(baselineKey, value);
+    if (!sameSnapshot(current, expected)) return false;
+    if (!sameSnapshot(current, value))
+      await this.state.update(userPromptSyncStateKey, snapshot(value.files, value.deleted));
+    if (!sameSnapshot(this.state.get<unknown>(userPromptSyncStateKey), value)) return false;
+    await this.state.update(baselineKey, snapshot(value.files, value.deleted));
+    return true;
   }
 
   private enqueue<T>(action: () => Promise<T>): Promise<T> {
