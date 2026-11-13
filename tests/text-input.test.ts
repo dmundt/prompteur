@@ -41,6 +41,40 @@ describe('single-line prompt input', () => {
     input.dispose();
   });
 
+  it('enforces input limits in UTF-8 bytes at the boundary', async () => {
+    const input = new TextInput();
+    const result = input.request();
+    const box = inputBoxes.at(-1)!;
+    const boundary = 'é'.repeat(documentByteLimit / 2);
+    box.value = `${boundary}a`;
+    box.accepted.fire();
+    expect(box.validationMessage).toContain('byte limit');
+    box.value = boundary;
+    box.accepted.fire();
+    expect(await result).toBe(boundary);
+    input.dispose();
+  });
+
+  it('cancels if the token changes during listener registration', async () => {
+    const input = new TextInput();
+    const cancellation = new EventEmitter<void>();
+    let cancelled = false;
+    const result = input.request({
+      get isCancellationRequested() {
+        return cancelled;
+      },
+      onCancellationRequested: (listener) => {
+        cancelled = true;
+        return cancellation.event(listener);
+      },
+    });
+    await expect(result).rejects.toBeInstanceOf(CancellationError);
+    const next = input.request();
+    const rejected = expect(next).rejects.toBeInstanceOf(CancellationError);
+    input.dispose();
+    await rejected;
+  });
+
   it('cancels through invocation token and disposal', async () => {
     const input = new TextInput();
     const cancellation = new EventEmitter<void>();

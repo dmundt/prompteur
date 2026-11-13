@@ -12,12 +12,15 @@ npm run package
 - Coverage gate: 91% for lines, statements, functions, branches across `src/`, including VS Code adapters.
 - Remove tests for removed features; do not retain compatibility scaffolding.
 
-- Unit/integration coverage: metadata-only frontmatter; category approval/removal guards/count modes; settings defaults/overrides and gear command; comments/unknown fields; malformed delimiters/YAML/aliases/depth; exact body preservation; ignored YAML; path identity; conflicts/recovery; resource/path safety; search/filters/tooltips; 10k search; groups/batches/watchers; variables; CRUD/previews/Copy Text/prompt copy/paste and buffer enablement; isolated clipboard menu group and hidden legacy actions; legacy command compatibility; read-only Copilot prompt search/render, confirmation, and Workspace Trust; cancellation.
+- Unit/integration coverage: metadata-only frontmatter; custom category creation, approval, persisted metadata validation, rename recovery, and User/Workspace removal guards; category count modes; settings defaults/overrides and gear command; comments/unknown fields; malformed delimiters/YAML/aliases/depth; exact body preservation; ignored YAML; path identity; conflicts/recovery; resource/path safety; search/filters/tooltips; 10k search; groups/batches/watchers; variables; CRUD/previews/Copy Text/prompt copy/paste and buffer enablement; isolated clipboard menu group and hidden legacy actions; legacy command compatibility; read-only Copilot prompt search/render, confirmation, and Workspace Trust; cancellation.
 
 - Filesystem tests: conflicts, stale writes/deletes, path confinement, oversized input.
 - Release-boundary tests: sole view, contributed commands and one read-only tool; no import/export or extension dependency; old state preserved.
 - Native-save tests: preserve user formatting.
 - Text-input tests: single-line/repeated substitution, blank/size validation, cancel/disposal, concurrency, source context preservation, Trust recheck, and Copilot selection/cancellation.
+- Async boundary tests: cancellation or Trust loss during Copilot lookup, cancellation during rendering, input cancellation during listener registration, UTF-8 input byte limits, and sync retry after concurrent file edits.
+- Boundary tests cover category/tag counts and lengths, Markdown/file UTF-8 bytes, YAML depth/node counts, generated output, mocked cache entry/byte ceilings, filesystem file/directory enumeration, sync snapshot file size, Copilot query length and candidate truncation, custom-description lengths, portable path segments, and fuzzy thresholds/edit costs.
+- Workflow integration tests use real isolated library files with mocked VS Code APIs/state: startup reconciliation and invalid reload recovery; create/save/copy/delete with dirty-edit protection and sync tombstones; Workspace Trust and Copilot rendering without prompt mutation.
 
 - Host smoke: isolated workspace/profile; Trust enabled; startup prompts disabled.
 - Checks Restricted Mode blocking, User prompt use, clipboard handoff, source preservation, removed Insert command, starters, and plaintext preview. Single-line input interaction is not covered by this smoke test.
@@ -28,7 +31,7 @@ npm run package
 
 - Automated: exact names outrank broader content matches; case/whitespace normalization; duplicate names within/across scopes remain ambiguous; candidate scope/path selects only that prompt; stale paths never substitute another prompt.
 - Automated: invalid input modes, candidate limit/truncation, Workspace Trust, cancellation, and prompt-row metadata without copy-action explanations.
-- Automated: exact/full-text/fuzzy modes, case-sensitive free text with case-insensitive filters, relevance/name ordering, live settings, unique-best versus require-choice selection, score ties, cross-scope phase precedence, and no context reads for losing candidates. Cached 10k-entry full-text and fuzzy fallback each have a 200 ms budget.
+- Automated: exact/full-text/fuzzy modes, case-sensitive free text with case-insensitive filters, relevance/name ordering, live settings, unique-best versus require-choice selection, score ties, cross-scope phase precedence, and no context reads for losing candidates. Cached 10k-entry tag, full-text, and fuzzy searches each have a local 200 ms budget.
 - Automated tool mocks and host registration checks do not certify real Copilot discovery, confirmation, or model follow-up.
 - Manual, in an extension-enabled Copilot window:
   1. Enable **Find Prompteur Prompt** in Agent mode; reference `#prompteurPrompt`.
@@ -46,7 +49,8 @@ npm run package
 ## Host and Release Configuration
 
 - `VSCODE_TEST_VERSION`: select host version; default `stable`.
-- CI: Windows/Linux/macOS; VS Code 1.96.0 and stable. Enforce 200 ms activation on stable Linux only.
+- CI: Windows/Linux/macOS; VS Code 1.96.0 and stable. Functional assertions run in CI and locally; machine-dependent timing budgets run locally only when `CI` is unset or empty.
+- Local budgets: activation under 200 ms, each cached 10k-entry search under 200 ms, and malformed delimiter scanning under 250 ms. Measurements depend on local load and instrumentation; rerun without coverage to assess timing.
 - `VSCODE_EXECUTABLE_PATH`: use installed host.
 - `PROMPTEUR_TEST_SKIP_CLIPBOARD=1`: skip failed native clipboard precondition. This does not certify clipboard behavior; unit tests cover copy logic.
 

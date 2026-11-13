@@ -33,12 +33,10 @@ jobs:
         if: runner.os == 'Linux'
         env:
           VSCODE_TEST_VERSION: ${{ matrix.vscode-version }}
-          PROMPTEUR_TEST_ENFORCE_ACTIVATION: ${{ matrix.os == 'ubuntu-latest' && matrix.vscode-version == 'stable' }}
       - run: npm run test:host
         if: runner.os != 'Linux'
         env:
           VSCODE_TEST_VERSION: ${{ matrix.vscode-version }}
-          PROMPTEUR_TEST_ENFORCE_ACTIVATION: ${{ matrix.os == 'ubuntu-latest' && matrix.vscode-version == 'stable' }}
       - run: npm run package
         if: matrix.os == 'ubuntu-latest' && matrix.vscode-version == 'stable' && !github.event.release.prerelease
       - run: npm run package -- --pre-release
