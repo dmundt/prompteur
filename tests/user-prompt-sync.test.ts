@@ -168,6 +168,92 @@ describe('User prompt Settings Sync', () => {
     await sync.persist();
   });
 
+  it('waits for in-flight reconciliation before completing opt-out', async () => {
+    const { port, files } = memoryFiles();
+    const path = 'prompts/remote.prompt.md';
+    const baseline = { version: 1, files: { [path]: 'base' }, deleted: [] };
+    const remote = { version: 1, files: { [path]: 'remote' }, deleted: [] };
+    files.set(`user:${path}`, 'base');
+    const state = new SyncState();
+    state.values.set('userPromptSyncBaseline', baseline);
+    state.values.set(userPromptSyncStateKey, remote);
+    const list = vi.mocked(port.list);
+    const original = list.getMockImplementation()!;
+    let startList!: () => void;
+    let releaseList!: () => void;
+    const listStarted = new Promise<void>((resolve) => {
+      startList = resolve;
+    });
+    const listGate = new Promise<void>((resolve) => {
+      releaseList = resolve;
+    });
+    list.mockImplementationOnce(async (scope) => {
+      startList();
+      await listGate;
+      return original(scope);
+    });
+    const sync = new UserPromptSync(state, port);
+    const reconciliation = sync.configure(true);
+    await listStarted;
+
+    let disabled = false;
+    const optOut = sync.configure(false).then(() => {
+      disabled = true;
+    });
+    await Promise.resolve();
+    expect(disabled).toBe(false);
+    expect(state.syncedKeys).toContain(userPromptSyncStateKey);
+
+    releaseList();
+    await Promise.all([reconciliation, optOut]);
+
+    expect(disabled).toBe(true);
+    expect(state.syncedKeys).toEqual([]);
+    expect(files.get(`user:${path}`)).toBe('remote');
+    expect(state.get(userPromptSyncStateKey)).toEqual(remote);
+  });
+
+  it('keeps sync registered when re-enabled while opt-out is waiting', async () => {
+    const { port, files } = memoryFiles();
+    const path = 'prompts/remote.prompt.md';
+    const baseline = { version: 1, files: { [path]: 'base' }, deleted: [] };
+    const remote = { version: 1, files: { [path]: 'remote' }, deleted: [] };
+    files.set(`user:${path}`, 'base');
+    const state = new SyncState();
+    state.values.set('userPromptSyncBaseline', baseline);
+    state.values.set(userPromptSyncStateKey, remote);
+    const list = vi.mocked(port.list);
+    const original = list.getMockImplementation()!;
+    let startList!: () => void;
+    let releaseList!: () => void;
+    const listStarted = new Promise<void>((resolve) => {
+      startList = resolve;
+    });
+    const listGate = new Promise<void>((resolve) => {
+      releaseList = resolve;
+    });
+    list.mockImplementationOnce(async (scope) => {
+      startList();
+      await listGate;
+      return original(scope);
+    });
+    const sync = new UserPromptSync(state, port);
+    const reconciliation = sync.configure(true);
+    await listStarted;
+
+    const optOut = sync.configure(false);
+    const reenabled = sync.configure(true);
+    releaseList();
+    await Promise.all([reconciliation, optOut, reenabled]);
+
+    expect(state.syncedKeys).toEqual([
+      userPromptSyncStateKey,
+      'approvedPromptCategories',
+      'promptCategoryDescriptions',
+    ]);
+    expect(files.get(`user:${path}`)).toBe('remote');
+  });
+
   it('rejects unsafe synced paths without changing local files', async () => {
     const { port, files } = memoryFiles();
     files.set('user:prompts/local.prompt.md', 'local prompt');
