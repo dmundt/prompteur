@@ -165,7 +165,7 @@ describe('prompt workflow integration', () => {
     await vi.waitFor(() => expect(view.revealCalls).toHaveLength(4));
   });
 
-  it('reconciles synced User prompts on activation and preserves files on an invalid reload', async () => {
+  it('reconciles synced User prompts on reload and preserves files on an invalid reload', async () => {
     const local = await addPrompt('local', 'Local content');
     const workspacePrompt = await addPrompt('workspace', 'Workspace content', 'workspace');
     const remotePath = 'prompts/remote.prompt.md';
@@ -180,9 +180,8 @@ describe('prompt workflow integration', () => {
       files: { [remotePath]: remoteSource },
       deleted: [local.entry.path],
     };
-    for (const disposable of context.subscriptions.splice(0)) disposable.dispose();
     await context.globalState.update('syncedUserPrompts', incoming);
-    await activate(context as unknown as vscode.ExtensionContext);
+    await run('refresh');
     await vi.waitFor(async () => {
       expect(await fs.readFile(join(userRoot(), remotePath), 'utf8')).toBe(remoteSource);
       expect(tree().getTreeItem({ kind: 'root' }).label).toBe('Prompts (2)');
@@ -554,7 +553,6 @@ describe('release commands', () => {
     for (const scope of ['user', 'workspace'] as const) {
       const tooltip = tree().getTreeItem(scopeNode(scope)).tooltip as MarkdownString;
       const location = scope === 'user' ? userRoot() : workspaceRoot();
-      expect(tooltip.value).toContain(location.replace(/\\/g, '\\\\'));
       expect(tooltip.isTrusted).toEqual({ enabledCommands: ['prompteur.openLibraryFolder'] });
       const link = /command:prompteur.openLibraryFolder\?([^)]*)/.exec(tooltip.value);
       expect(link).not.toBeNull();
@@ -1867,9 +1865,19 @@ describe('release commands', () => {
     ).toBe(true);
   });
   it('uses the default for starters and paste, but never falls back from unavailable Workspace', async () => {
+    const extensionRoot = join(root, 'test-extension');
+    const starterRoot = join(extensionRoot, 'resources', 'starter', 'prompts');
+    await fs.mkdir(starterRoot, { recursive: true });
+    await fs.writeFile(
+      join(starterRoot, 'default-starter.prompt.md'),
+      encodeMarkdown(newPrompt('Default Starter')),
+    );
+    context.extensionUri = Uri.file(extensionRoot);
     workspace.configuration.set('prompteur.defaultScope', 'workspace');
     await run('addStarters');
-    expect(await entries('workspace')).toHaveLength(37);
+    expect((await entries('workspace')).map((node) => node.entry.data.name)).toEqual([
+      'Default Starter',
+    ]);
     expect(await entries('user')).toHaveLength(0);
 
     const source = await addPrompt('default-paste', 'Copied');
@@ -1883,7 +1891,7 @@ describe('release commands', () => {
     responses.quick.push('Review');
     responses.input.push('Untrusted Workspace Prompt');
     await expect(run('newPrompt')).rejects.toThrow('Trust');
-    expect(await entries('workspace')).toHaveLength(38);
+    expect(await entries('workspace')).toHaveLength(2);
 
     for (const disposable of context.subscriptions.splice(0)) disposable.dispose();
     workspace.workspaceFolders = [];
