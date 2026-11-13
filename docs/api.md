@@ -70,6 +70,7 @@
 - Prompt-row hover contains description, category, tags, saved prompt context variables, and path. Invalid placeholders are reported there; context values are not read. Contributed command tooltips use native titles.
 - Category hover describes built-in purposes or identifies a custom category. Scope hover summarizes storage, optional User sync, and Workspace Trust; its folder path links to the system file manager. Links resolve only the current library root, require no Trust, and report missing folders without creating them.
 - The prompt view toolbar switches from search to filter icon for a non-whitespace query; either opens the current live filter. **Clear Filter** resets it.
+- When a live filter has no valid prompt matches, the tree shows a row that clears the filter when selected. Library errors remain reported errors.
 - `text` uses a native single-line input box per invocation. Enter submits nonblank text; Escape, disposal, or tool cancellation aborts pending generation. Limit: 1 MiB. Concurrent requests error. Recheck Trust before output.
 - No extension-owned input persistence or history.
 - VS Code confirms tool use before prompt data is returned to Copilot. The rendered prompt and any requested context variables become model context; direct model requests and prompt mutations are not performed.
