@@ -1,4 +1,9 @@
-import { isPromptMarkdown, promptFolder, relativePath } from '../core/documents';
+import {
+  hasWindowsControlCharacters,
+  isPromptMarkdown,
+  promptFolder,
+  relativePath,
+} from '../core/documents';
 import { assertTextBudget, libraryByteLimit, libraryEntryLimit } from '../core/limits';
 import type { FilePort } from '../application/library';
 
@@ -43,6 +48,7 @@ function parseSnapshot(value: unknown): PromptSnapshot | undefined {
   const paths = Object.keys(candidate.files as object).sort();
   if (paths.length > libraryEntryLimit) return undefined;
   for (const path of paths) {
+    rejectWindowsControlPath(path);
     const source = (candidate.files as Record<string, unknown>)[path];
     if (!safePromptPath(path) || typeof source !== 'string') return undefined;
     assertTextBudget(source);
@@ -51,6 +57,9 @@ function parseSnapshot(value: unknown): PromptSnapshot | undefined {
     files[path] = source;
   }
   const deleted = [...new Set(candidate.deleted)];
+  for (const path of deleted) {
+    if (typeof path === 'string') rejectWindowsControlPath(path);
+  }
   if (deleted.some((path) => typeof path !== 'string' || !safePromptPath(path))) return undefined;
   return {
     version: 1,
@@ -59,11 +68,29 @@ function parseSnapshot(value: unknown): PromptSnapshot | undefined {
   };
 }
 
+function rejectWindowsControlPath(path: string): void {
+  if (hasWindowsControlCharacters(path))
+    throw new Error(
+      `Synced User prompts have invalid data: path ${JSON.stringify(path)} contains Windows control characters (U+0000-U+001F). Rename it on a filesystem that supports it; local prompts were left unchanged.`,
+    );
+}
+
 function snapshot(files: Record<string, string>, deleted: Iterable<string>): PromptSnapshot {
   const orderedFiles: Record<string, string> = Object.create(null);
   for (const path of Object.keys(files).sort()) orderedFiles[path] = files[path]!;
   const orderedDeleted = [...new Set(deleted)].filter((path) => !(path in orderedFiles)).sort();
   return { version: 1, files: orderedFiles, deleted: orderedDeleted };
+}
+
+function sameSnapshot(left: unknown, right: unknown): boolean {
+  if (left === right) return true;
+  const leftSnapshot = parseSnapshot(left);
+  const rightSnapshot = parseSnapshot(right);
+  return (
+    leftSnapshot !== undefined &&
+    rightSnapshot !== undefined &&
+    JSON.stringify(leftSnapshot) === JSON.stringify(rightSnapshot)
+  );
 }
 
 export class UserPromptSync {
@@ -77,48 +104,70 @@ export class UserPromptSync {
 
   configure(enabled: boolean): Promise<void> {
     this.enabled = enabled;
-    this.state.setKeysForSync(
-      enabled
-        ? [userPromptSyncStateKey, approvedCategoriesStateKey, categoryDescriptionsStateKey]
-        : [],
-    );
-    return enabled ? this.reconcile() : Promise.resolve();
+    if (enabled) {
+      this.state.setKeysForSync([
+        userPromptSyncStateKey,
+        approvedCategoriesStateKey,
+        categoryDescriptionsStateKey,
+      ]);
+      return this.reconcile();
+    }
+
+    const operation = this.queue.then(() => {
+      if (!this.enabled) this.state.setKeysForSync([]);
+    });
+    this.queue = operation.catch(() => undefined);
+    return operation;
   }
 
   reconcile(): Promise<void> {
     return this.enqueue(async () => {
       if (!this.enabled) return;
-      const local = await this.readLocal();
-      const remote = parseSnapshot(this.state.get<unknown>(userPromptSyncStateKey));
-      if (!remote) {
-        if (this.state.get(userPromptSyncStateKey) !== undefined)
-          throw new Error(
-            'Synced User prompts have invalid data; local prompts were left unchanged',
-          );
-        const initial = snapshot(local, []);
-        await this.writeState(initial);
-        return;
-      }
-      const baseline = parseSnapshot(this.state.get<unknown>(baselineKey));
-      const merged = this.merge(local, remote, baseline);
-      await this.apply(local, merged);
-      await this.writeState(merged);
+      await this.synchronize();
     });
   }
 
   persist(): Promise<void> {
     return this.enqueue(async () => {
       if (!this.enabled) return;
-      const local = await this.readLocal();
-      const currentValue = this.state.get<unknown>(userPromptSyncStateKey);
-      const remote = parseSnapshot(currentValue);
-      if (!remote && currentValue !== undefined)
-        throw new Error('Synced User prompts have invalid data; local prompts were left unchanged');
-      const baseline = parseSnapshot(this.state.get<unknown>(baselineKey));
-      const merged = remote ? this.merge(local, remote, baseline) : snapshot(local, []);
-      await this.apply(local, merged);
-      await this.writeState(merged);
+      await this.synchronize();
     });
+  }
+
+  private async synchronize(): Promise<void> {
+    let local = await this.readLocal();
+    let applyLocal = local;
+    let remoteValue = this.state.get<unknown>(userPromptSyncStateKey);
+    const baseline = parseSnapshot(this.state.get<unknown>(baselineKey));
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const remote = parseSnapshot(remoteValue);
+      if (!remote && remoteValue !== undefined)
+        throw new Error('Synced User prompts have invalid data; local prompts were left unchanged');
+      if (remote) remoteValue = remote;
+
+      const currentValue = this.state.get<unknown>(userPromptSyncStateKey);
+      if (!sameSnapshot(currentValue, remoteValue)) {
+        remoteValue = currentValue;
+        continue;
+      }
+
+      const merged = remote ? this.merge(local, remote, baseline) : snapshot(local, []);
+      await this.apply(applyLocal, merged);
+      if (await this.writeState(merged, remoteValue)) return;
+
+      const latestValue = this.state.get<unknown>(userPromptSyncStateKey);
+      const latestRemote = parseSnapshot(latestValue);
+      if (!latestRemote && latestValue !== undefined)
+        throw new Error('Synced User prompts have invalid data; local prompts were left unchanged');
+      remoteValue = latestRemote ?? latestValue;
+      const latestLocal = await this.readLocal();
+      local = this.preserveLocalChanges(local, merged, latestLocal);
+      applyLocal = latestLocal;
+    }
+
+    await this.apply(applyLocal, snapshot(local, []));
+    throw new Error('Synced User prompts changed repeatedly during reconciliation; retry later');
   }
 
   private async readLocal(): Promise<Record<string, string>> {
@@ -187,11 +236,33 @@ export class UserPromptSync {
       if (local[path] !== source) await this.files.write('user', path, source, local[path]);
   }
 
-  private async writeState(value: PromptSnapshot): Promise<void> {
+  private preserveLocalChanges(
+    local: Record<string, string>,
+    applied: PromptSnapshot,
+    current: Record<string, string>,
+  ): Record<string, string> {
+    const result = { ...local };
+    const paths = new Set([
+      ...Object.keys(applied.files),
+      ...applied.deleted,
+      ...Object.keys(current),
+    ]);
+    for (const path of paths) {
+      if (current[path] === applied.files[path]) continue;
+      if (current[path] === undefined) delete result[path];
+      else result[path] = current[path]!;
+    }
+    return result;
+  }
+
+  private async writeState(value: PromptSnapshot, expected: unknown): Promise<boolean> {
     const current = this.state.get<unknown>(userPromptSyncStateKey);
-    if (JSON.stringify(current) !== JSON.stringify(value))
-      await this.state.update(userPromptSyncStateKey, value);
-    await this.state.update(baselineKey, value);
+    if (!sameSnapshot(current, expected)) return false;
+    if (!sameSnapshot(current, value))
+      await this.state.update(userPromptSyncStateKey, snapshot(value.files, value.deleted));
+    if (!sameSnapshot(this.state.get<unknown>(userPromptSyncStateKey), value)) return false;
+    await this.state.update(baselineKey, snapshot(value.files, value.deleted));
+    return true;
   }
 
   private enqueue<T>(action: () => Promise<T>): Promise<T> {

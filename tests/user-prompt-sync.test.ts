@@ -1,4 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
+import * as fs from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { LocalFiles } from '../src/platform/local-files';
 import { UserPromptSync, userPromptSyncStateKey } from '../src/workbench/user-prompt-sync';
 import { documentByteLimit } from '../src/core/limits';
 import { memoryFiles } from './helpers';
@@ -148,6 +152,95 @@ describe('User prompt Settings Sync', () => {
     expect(synced.deleted).toContain('prompts/remote.prompt.md');
   });
 
+  it('reconciles against the latest snapshot when sync state changes during file application', async () => {
+    const { port, files } = memoryFiles();
+    const path = 'prompts/concurrent.prompt.md';
+    const base = { version: 1 as const, files: { [path]: 'base' }, deleted: [] };
+    const remote1 = { version: 1 as const, files: { [path]: 'remote1' }, deleted: [] };
+    const remote2 = { version: 1 as const, files: { [path]: 'remote2' }, deleted: [] };
+    files.set(`user:${path}`, 'base');
+    const state = new SyncState();
+    state.values.set('userPromptSyncBaseline', base);
+    state.values.set(userPromptSyncStateKey, remote1);
+    const write = vi.mocked(port.write);
+    const original = write.getMockImplementation()!;
+    write.mockImplementationOnce(async (scope, destination, content, expected) => {
+      state.values.set(userPromptSyncStateKey, remote2);
+      await original(scope, destination, content, expected);
+    });
+
+    await new UserPromptSync(state, port).configure(true);
+
+    expect(files.get(`user:${path}`)).toBe('remote2');
+    expect(state.get(userPromptSyncStateKey)).toEqual(remote2);
+    expect(state.get('userPromptSyncBaseline')).toEqual(remote2);
+  });
+
+  it('preserves a concurrent snapshot update during persist', async () => {
+    const { port, files } = memoryFiles();
+    const path = 'prompts/concurrent.prompt.md';
+    const base = { version: 1 as const, files: { [path]: 'base' }, deleted: [] };
+    const remote1 = { version: 1 as const, files: { [path]: 'remote1' }, deleted: [] };
+    const remote2 = { version: 1 as const, files: { [path]: 'remote2' }, deleted: [] };
+    files.set(`user:${path}`, 'base');
+    const state = new SyncState();
+    const sync = new UserPromptSync(state, port);
+    await sync.configure(true);
+    state.values.set('userPromptSyncBaseline', base);
+    state.values.set(userPromptSyncStateKey, remote1);
+    files.set(`user:${path}`, 'base');
+    const write = vi.mocked(port.write);
+    const original = write.getMockImplementation()!;
+    write.mockImplementationOnce(async (scope, destination, content, expected) => {
+      state.values.set(userPromptSyncStateKey, remote2);
+      await original(scope, destination, content, expected);
+    });
+
+    await sync.persist();
+
+    expect(files.get(`user:${path}`)).toBe('remote2');
+    expect(state.get(userPromptSyncStateKey)).toEqual(remote2);
+    expect(state.get('userPromptSyncBaseline')).toEqual(remote2);
+  });
+
+  it('restores local files when repeated snapshot changes exhaust retries', async () => {
+    const { port, files } = memoryFiles();
+    const path = 'prompts/concurrent.prompt.md';
+    const key = `user:${path}`;
+    const base = { version: 1 as const, files: { [path]: 'base' }, deleted: [] };
+    const snapshots = ['remote2', 'remote3', 'remote4'].map((source) => ({
+      version: 1 as const,
+      files: { [path]: source },
+      deleted: [],
+    }));
+    files.set(key, 'base');
+    const state = new SyncState();
+    state.values.set('userPromptSyncBaseline', base);
+    state.values.set(userPromptSyncStateKey, {
+      version: 1,
+      files: { [path]: 'remote1' },
+      deleted: [],
+    });
+    const write = vi.mocked(port.write);
+    const original = write.getMockImplementation()!;
+    for (const snapshot of snapshots)
+      write.mockImplementationOnce(async (scope, destination, content, expected) => {
+        state.values.set(userPromptSyncStateKey, snapshot);
+        await original(scope, destination, content, expected);
+      });
+    const sync = new UserPromptSync(state, port);
+
+    await expect(sync.configure(true)).rejects.toThrow('changed repeatedly');
+    expect(files.get(key)).toBe('base');
+    expect(state.get(userPromptSyncStateKey)).toEqual(snapshots[2]);
+    expect(state.get('userPromptSyncBaseline')).toEqual(base);
+
+    await sync.persist();
+    expect(files.get(key)).toBe('remote4');
+    expect(state.get(userPromptSyncStateKey)).toEqual(snapshots[2]);
+    expect(state.get('userPromptSyncBaseline')).toEqual(snapshots[2]);
+  });
+
   it('seeds missing sync state from existing local prompts and supports opt-out', async () => {
     const { port, files } = memoryFiles();
     files.set('user:prompts/local.prompt.md', 'local prompt');
@@ -168,21 +261,155 @@ describe('User prompt Settings Sync', () => {
     await sync.persist();
   });
 
-  it('rejects unsafe synced paths without changing local files', async () => {
+  it('waits for in-flight reconciliation before completing opt-out', async () => {
     const { port, files } = memoryFiles();
-    files.set('user:prompts/local.prompt.md', 'local prompt');
+    const path = 'prompts/remote.prompt.md';
+    const baseline = { version: 1, files: { [path]: 'base' }, deleted: [] };
+    const remote = { version: 1, files: { [path]: 'remote' }, deleted: [] };
+    files.set(`user:${path}`, 'base');
     const state = new SyncState();
-    state.values.set(userPromptSyncStateKey, {
-      version: 1,
-      files: { '../outside.prompt.md': 'unsafe' },
-      deleted: [],
+    state.values.set('userPromptSyncBaseline', baseline);
+    state.values.set(userPromptSyncStateKey, remote);
+    const list = vi.mocked(port.list);
+    const original = list.getMockImplementation()!;
+    let startList!: () => void;
+    let releaseList!: () => void;
+    const listStarted = new Promise<void>((resolve) => {
+      startList = resolve;
+    });
+    const listGate = new Promise<void>((resolve) => {
+      releaseList = resolve;
+    });
+    list.mockImplementationOnce(async (scope) => {
+      startList();
+      await listGate;
+      return original(scope);
     });
     const sync = new UserPromptSync(state, port);
+    const reconciliation = sync.configure(true);
+    await listStarted;
 
-    await expect(sync.configure(true)).rejects.toThrow('invalid data');
-    expect(files.get('user:prompts/local.prompt.md')).toBe('local prompt');
-    await expect(sync.persist()).rejects.toThrow('invalid data');
+    let disabled = false;
+    const optOut = sync.configure(false).then(() => {
+      disabled = true;
+    });
+    await Promise.resolve();
+    expect(disabled).toBe(false);
+    expect(state.syncedKeys).toContain(userPromptSyncStateKey);
+
+    releaseList();
+    await Promise.all([reconciliation, optOut]);
+
+    expect(disabled).toBe(true);
+    expect(state.syncedKeys).toEqual([]);
+    expect(files.get(`user:${path}`)).toBe('remote');
+    expect(state.get(userPromptSyncStateKey)).toEqual(remote);
   });
+
+  it('keeps sync registered when re-enabled while opt-out is waiting', async () => {
+    const { port, files } = memoryFiles();
+    const path = 'prompts/remote.prompt.md';
+    const baseline = { version: 1, files: { [path]: 'base' }, deleted: [] };
+    const remote = { version: 1, files: { [path]: 'remote' }, deleted: [] };
+    files.set(`user:${path}`, 'base');
+    const state = new SyncState();
+    state.values.set('userPromptSyncBaseline', baseline);
+    state.values.set(userPromptSyncStateKey, remote);
+    const list = vi.mocked(port.list);
+    const original = list.getMockImplementation()!;
+    let startList!: () => void;
+    let releaseList!: () => void;
+    const listStarted = new Promise<void>((resolve) => {
+      startList = resolve;
+    });
+    const listGate = new Promise<void>((resolve) => {
+      releaseList = resolve;
+    });
+    list.mockImplementationOnce(async (scope) => {
+      startList();
+      await listGate;
+      return original(scope);
+    });
+    const sync = new UserPromptSync(state, port);
+    const reconciliation = sync.configure(true);
+    await listStarted;
+
+    const optOut = sync.configure(false);
+    const reenabled = sync.configure(true);
+    releaseList();
+    await Promise.all([reconciliation, optOut, reenabled]);
+
+    expect(state.syncedKeys).toEqual([
+      userPromptSyncStateKey,
+      'approvedPromptCategories',
+      'promptCategoryDescriptions',
+    ]);
+    expect(files.get(`user:${path}`)).toBe('remote');
+  });
+
+  it('rejects unsafe synced paths without changing local files', async () => {
+    for (const path of [
+      '../outside.prompt.md',
+      'prompts/a\u0001b.prompt.md',
+      'prompts/a\nb.prompt.md',
+      'prompts/a\tb.prompt.md',
+      'prompts/a\rb.prompt.md',
+      'prompts/a\u001fb.prompt.md',
+    ]) {
+      const { port, files } = memoryFiles();
+      files.set('user:prompts/local.prompt.md', 'local prompt');
+      const state = new SyncState();
+      const incoming = {
+        version: 1,
+        files: { [path]: '---\nversion: 1\nname: Incoming\ncategory: review\n---\nBody\n' },
+        deleted: [],
+      };
+      state.values.set(userPromptSyncStateKey, incoming);
+      const sync = new UserPromptSync(state, port);
+
+      const error = path.startsWith('prompts/')
+        ? 'Windows control characters (U+0000-U+001F). Rename it'
+        : 'invalid data';
+      await expect(sync.configure(true)).rejects.toThrow(error);
+      expect(files.get('user:prompts/local.prompt.md')).toBe('local prompt');
+      expect(port.write).not.toHaveBeenCalled();
+      expect(port.remove).not.toHaveBeenCalled();
+      expect(state.get(userPromptSyncStateKey)).toEqual(incoming);
+      expect(state.get('userPromptSyncBaseline')).toBeUndefined();
+      await expect(sync.persist()).rejects.toThrow(error);
+    }
+  });
+
+  it.skipIf(process.platform !== 'win32')(
+    'rejects Windows control-character snapshots before real filesystem writes',
+    async () => {
+      const root = await fs.mkdtemp(join(tmpdir(), 'prompteur-sync-path-'));
+      try {
+        const files = new LocalFiles((scope) => join(root, scope));
+        const paths = ['prompts/a\nb.prompt.md', 'prompts/a\u0001b.prompt.md'];
+        for (const path of paths) {
+          const state = new SyncState();
+          const incoming = {
+            version: 1,
+            files: {
+              [path]: '---\nversion: 1\nname: Incoming\ncategory: review\n---\nBody\n',
+            },
+            deleted: [],
+          };
+          state.values.set(userPromptSyncStateKey, incoming);
+
+          await expect(new UserPromptSync(state, files).configure(true)).rejects.toThrow(
+            'Rename it on a filesystem that supports it',
+          );
+          expect(state.get(userPromptSyncStateKey)).toEqual(incoming);
+          expect(state.get('userPromptSyncBaseline')).toBeUndefined();
+        }
+        expect(await fs.readdir(root)).toEqual([]);
+      } finally {
+        await fs.rm(root, { force: true, recursive: true });
+      }
+    },
+  );
 
   it('preserves a concurrent edit on conflict and retries without losing it', async () => {
     const { port, files } = memoryFiles();
