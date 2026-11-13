@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Show prompt scope and metadata in a compact hover with a bold title, normal-weight labels, theme-muted text values, and file/invalid-context warning icons.
+- Reject Windows control characters in prompt paths; invalid synced snapshots remain untouched.
 
 ## 1.2.0
 
