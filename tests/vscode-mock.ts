@@ -34,11 +34,14 @@ export class ThemeIcon {
 export class MarkdownString {
   value = '';
   isTrusted?: boolean | { enabledCommands?: readonly string[] };
+  supportThemeIcons?: boolean;
+  supportHtml?: boolean;
   appendMarkdown(value: string) {
     this.value += value;
     return this;
   }
   appendText(value: string) {
+    if (this.supportThemeIcons) value = value.replace(/\$\(/g, '\\$(');
     this.value += value.replace(/[\\`*_{}[\]<>|]/g, '\\$&');
     return this;
   }
