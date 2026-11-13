@@ -89,7 +89,19 @@ export async function run(): Promise<void> {
       });
   const scopeLabels = async (): Promise<(string | vscode.TreeItemLabel | undefined)[]> =>
     (await tree.getChildren({ kind: 'root' })).map((node) => tree.getTreeItem(node).label);
-  const initialScopeLabels = await scopeLabels();
+  const assertHeaderLabels = async (root: string, scopes: string[]): Promise<void> => {
+    const deadline = Date.now() + 3000;
+    while (Date.now() < deadline) {
+      if (
+        tree.getTreeItem({ kind: 'root' }).label === root &&
+        JSON.stringify(await scopeLabels()) === JSON.stringify(scopes)
+      )
+        return;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    assert.equal(tree.getTreeItem({ kind: 'root' }).label, root);
+    assert.deepEqual(await scopeLabels(), scopes);
+  };
   const setCountMode = async (mode: 'filtered' | 'total' | 'hidden'): Promise<void> => {
     const refresh = waitForTreeRefresh(tree);
     try {
@@ -103,19 +115,25 @@ export async function run(): Promise<void> {
   };
   assert.deepEqual(await categoriesFor('user'), ['Plan (1)', 'Research (1)', 'Review (2)']);
   assert.deepEqual(await categoriesFor('workspace'), ['Plan (1)', 'Research (1)', 'Review (2)']);
+  await assertHeaderLabels('Prompts (8)', ['User (4)', 'Workspace (4)']);
   await setCountMode('total');
   assert.deepEqual(await categoriesFor('user'), ['Plan (1)', 'Research (1)', 'Review (2)']);
+  await assertHeaderLabels('Prompts (8)', ['User (4)', 'Workspace (4)']);
   await setCountMode('hidden');
   assert.deepEqual(await categoriesFor('workspace'), ['Plan', 'Research', 'Review']);
+  await assertHeaderLabels('Prompts', ['User', 'Workspace']);
   tree.query = 'needle';
-  tree.refresh();
+  await vscode.commands.executeCommand('prompteur.refresh');
   await setCountMode('filtered');
   assert.deepEqual(await categoriesFor('user'), ['Research (1)', 'Review (1)']);
   assert.deepEqual(await categoriesFor('workspace'), ['Research (1)', 'Review (1)']);
+  await assertHeaderLabels('Prompts (4)', ['User (2)', 'Workspace (2)']);
   await setCountMode('total');
   assert.deepEqual(await categoriesFor('user'), ['Research (1)', 'Review (2)']);
+  await assertHeaderLabels('Prompts (8)', ['User (4)', 'Workspace (4)']);
   await setCountMode('hidden');
   assert.deepEqual(await categoriesFor('workspace'), ['Research', 'Review']);
+  await assertHeaderLabels('Prompts', ['User', 'Workspace']);
   for (const scope of ['user', 'workspace'] as const) {
     const nodes = await tree.getChildren({ kind: 'scope', scope });
     assert.equal(nodes.filter((node) => node.kind === 'problem').length, 1);
@@ -135,13 +153,16 @@ export async function run(): Promise<void> {
     assert.equal(nodes.filter((node) => node.kind === 'category').length, 0);
     assert.equal(nodes.filter((node) => node.kind === 'entry').length, 2);
   }
-  assert.deepEqual(await scopeLabels(), initialScopeLabels);
-  tree.query = '';
-  tree.refresh();
+  await assertHeaderLabels('Prompts', ['User', 'Workspace']);
+  await setCountMode('total');
+  await assertHeaderLabels('Prompts (8)', ['User (4)', 'Workspace (4)']);
+  await setCountMode('filtered');
+  await assertHeaderLabels('Prompts (4)', ['User (2)', 'Workspace (2)']);
+  await vscode.commands.executeCommand('prompteur.clearSearch');
   await vscode.workspace
     .getConfiguration('prompteur')
     .update('groupByCategory', true, vscode.ConfigurationTarget.Global);
-  await setCountMode('filtered');
+  await assertHeaderLabels('Prompts (8)', ['User (4)', 'Workspace (4)']);
   process.stdout.write(
     '[host] Category counts passed for live filtered/total/hidden modes, both scopes, custom and invalid categories, and flat view\n',
   );

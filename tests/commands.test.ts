@@ -293,7 +293,67 @@ describe('prompt workflow integration', () => {
 });
 
 describe('release commands', () => {
-  it('sums filtered scope counts and updates them after filter and library changes without a badge', async () => {
+  it.each([true, false])(
+    'applies count modes to root, scopes, and categories (grouped: %s)',
+    async (grouped) => {
+      await addPrompt('user-hit', 'needle');
+      await addPrompt('user-other', 'other');
+      await addPrompt('workspace-hit', 'needle', 'workspace');
+      await fs.writeFile(join(workspaceRoot(), 'prompts', 'invalid.prompt.md'), 'Invalid YAML');
+      await run('refresh');
+      workspace.configuration.set('prompteur.groupByCategory', grouped);
+      const labels = () =>
+        [{ kind: 'root' } as const, scopeNode('user'), scopeNode('workspace')].map(
+          (node) => tree().getTreeItem(node).label,
+        );
+      await vi.waitFor(() =>
+        expect(labels()).toEqual(['Prompts (3)', 'User (2)', 'Workspace (1)']),
+      );
+      await run('search');
+      for (const query of ['needle', 'no matches', '']) {
+        inputBoxes.at(-1)!.valueChanged.fire(query);
+        const filteredUser = query === 'needle' ? 1 : query === '' ? 2 : 0;
+        const filteredWorkspace = query === 'no matches' ? 0 : 1;
+        await vi.waitFor(() =>
+          expect(labels()).toEqual([
+            `Prompts (${filteredUser + filteredWorkspace})`,
+            `User (${filteredUser})`,
+            `Workspace (${filteredWorkspace})`,
+          ]),
+        );
+        for (const mode of ['total', 'hidden', 'filtered'] as const) {
+          workspace.configuration.set('prompteur.categoryCountMode', mode);
+          configurationChanged.fire({
+            affectsConfiguration: (section) => section === 'prompteur.categoryCountMode',
+          });
+          expect(labels()).toEqual(
+            mode === 'hidden'
+              ? ['Prompts', 'User', 'Workspace']
+              : mode === 'total'
+                ? ['Prompts (3)', 'User (2)', 'Workspace (1)']
+                : [
+                    `Prompts (${filteredUser + filteredWorkspace})`,
+                    `User (${filteredUser})`,
+                    `Workspace (${filteredWorkspace})`,
+                  ],
+          );
+          for (const scope of ['user', 'workspace'] as const) {
+            const nodes = await tree().getChildren(scopeNode(scope));
+            const categories = nodes.filter((node) => node.kind === 'category');
+            const filtered = scope === 'user' ? filteredUser : filteredWorkspace;
+            expect(categories).toHaveLength(grouped && filtered > 0 ? 1 : 0);
+            if (categories.length) {
+              const total = scope === 'user' ? 2 : 1;
+              expect(tree().getTreeItem(categories[0]!).label).toBe(
+                mode === 'hidden' ? 'Explain' : `Explain (${mode === 'total' ? total : filtered})`,
+              );
+            }
+          }
+        }
+      }
+    },
+  );
+  it('sums scope counts by mode and updates after filter and library changes without a badge', async () => {
     await addPrompt('user-one', 'needle');
     await addPrompt('user-two', 'other');
     await addPrompt('workspace-one', 'needle', 'workspace');
@@ -318,10 +378,19 @@ describe('release commands', () => {
       });
       expect(await entries('user')).toHaveLength(1);
       expect(await entries('workspace')).toHaveLength(1);
-      await vi.waitFor(() => expect(counts()).toEqual(['User (1)', 'Workspace (1)']));
-      expect(tree().getTreeItem({ kind: 'root' }).label).toBe('Prompts (2)');
+      const expected =
+        mode === 'hidden'
+          ? ['User', 'Workspace']
+          : mode === 'total'
+            ? ['User (2)', 'Workspace (1)']
+            : ['User (1)', 'Workspace (1)'];
+      await vi.waitFor(() => expect(counts()).toEqual(expected));
+      expect(tree().getTreeItem({ kind: 'root' }).label).toBe(
+        mode === 'hidden' ? 'Prompts' : mode === 'total' ? 'Prompts (3)' : 'Prompts (2)',
+      );
       expect(view.badge).toBeUndefined();
     }
+    workspace.configuration.set('prompteur.categoryCountMode', 'filtered');
     workspace.configuration.set('prompteur.groupByCategory', false);
     inputBoxes.at(-1)!.valueChanged.fire('no matches');
     expect((await tree().getChildren(scopeNode()))[0]?.kind).toBe('empty');
