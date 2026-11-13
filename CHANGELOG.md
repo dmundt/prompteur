@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Expand Prompts and available User/Workspace scopes when the Prompteur view becomes visible.
 - Show local prompts and counts without waiting for startup User prompt synchronization; refresh after reconciliation.
 - Add an expanded Prompts root and parenthesized root/per-library counts that follow the active filter, without an Activity Bar count badge. Rename the view to Prompteur.
 - Show the active filter above the prompt tree and reuse the open filter input.
