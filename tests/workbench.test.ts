@@ -12,6 +12,22 @@ afterEach(() => {
   watchers.splice(0);
 });
 describe('native tree interactions', () => {
+  it('tracks parent paths for native TreeView reveal', async () => {
+    const { port, files } = memoryFiles();
+    files.set('user:prompts/one.prompt.md', encodeMarkdown(newPrompt('One')));
+    const tree = new PromptTree(new LibraryService(port), () => false, vi.fn());
+    const root = (await tree.getChildren())[0]!;
+    const scope = (await tree.getChildren(root))[0]!;
+    const category = (await tree.getChildren(scope))[0]!;
+    const entry = (await tree.getChildren(category))[0]!;
+
+    expect(tree.getParent(root)).toBeUndefined();
+    expect(tree.getParent(scope)).toEqual(root);
+    expect(tree.getParent(category)).toEqual(scope);
+    expect(tree.getParent(entry)).toEqual(category);
+    tree.dispose();
+  });
+
   it('escapes scope folder labels and passes only scope to the reveal command', () => {
     const { port } = memoryFiles();
     const root = Uri.file('C:\\Library [shared]\\prompts');

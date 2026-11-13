@@ -145,6 +145,26 @@ afterEach(async () => {
 });
 
 describe('prompt workflow integration', () => {
+  it('expands Prompts and available library scopes when the view becomes visible', async () => {
+    const view = views.get('prompteur.prompts')!;
+    view.setVisible(false);
+    expect(view.revealCalls).toEqual([]);
+    view.setVisible(true);
+
+    await vi.waitFor(() =>
+      expect(view.revealCalls.map(({ element }) => element)).toEqual([
+        { kind: 'scope', scope: 'user' },
+        { kind: 'scope', scope: 'workspace' },
+      ]),
+    );
+    expect(view.revealCalls.map(({ options }) => options)).toEqual(
+      Array.from({ length: 2 }, () => ({ expand: true, select: false })),
+    );
+    view.setVisible(false);
+    view.setVisible(true);
+    await vi.waitFor(() => expect(view.revealCalls).toHaveLength(4));
+  });
+
   it('reconciles synced User prompts on activation and preserves files on an invalid reload', async () => {
     const local = await addPrompt('local', 'Local content');
     const workspacePrompt = await addPrompt('workspace', 'Workspace content', 'workspace');
@@ -171,10 +191,12 @@ describe('prompt workflow integration', () => {
     await expect(fs.stat(join(userRoot(), local.entry.path))).rejects.toMatchObject({
       code: 'ENOENT',
     });
+    await vi.waitFor(async () =>
+      expect((await entries()).map((node) => node.entry.path)).toEqual([remotePath]),
+    );
     expect(await fs.readFile(join(workspaceRoot(), workspacePrompt.entry.path), 'utf8')).toBe(
       workspacePrompt.entry.source,
     );
-    expect((await entries()).map((node) => node.entry.path)).toEqual([remotePath]);
     expect(context.globalState.get('syncedUserPrompts')).toEqual(incoming);
 
     const invalid = { version: 1, files: { '../outside.prompt.md': 'unsafe' }, deleted: [] };
