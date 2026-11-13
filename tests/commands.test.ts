@@ -1631,6 +1631,63 @@ describe('release commands', () => {
     await expect(run('copy', node)).rejects.toThrow();
     expect(collections[0]!.get(document.uri.toString())?.length).toBe(1);
   });
+  it('reports body-variable diagnostics, recovers, and clears diagnostics on close', async () => {
+    const node = await addPrompt('body-diagnostics', 'Saved body');
+    await run('edit', node);
+    const document = window.activeTextEditor!.document;
+    const prefix = '---\nversion: 1\nname: Body diagnostics\ncategory: review\n---\n';
+    const diagnostics = collections[0]!;
+    document.change(`${prefix}{{unsupported}}`);
+    await vi.waitFor(() =>
+      expect(diagnostics.get(document.uri.toString())).toEqual([
+        expect.objectContaining({
+          message: 'Unsupported variable: unsupported',
+          range: expect.objectContaining({ start: expect.objectContaining({ line: 5 }) }),
+        }),
+      ]),
+    );
+
+    document.change(`${prefix}{{selection}}`);
+    await vi.waitFor(() => expect(diagnostics.get(document.uri.toString())).toEqual([]));
+    expect(window.activeTextEditor!.decorations).toHaveLength(1);
+    expect(document.isDirty).toBe(true);
+    expect(await fs.readFile(document.uri.fsPath, 'utf8')).toBe(node.entry.source);
+
+    document.change(`${prefix}{{unsupported}}`);
+    await vi.waitFor(() => expect(diagnostics.get(document.uri.toString())).toHaveLength(1));
+    document.close();
+    expect(diagnostics.has(document.uri.toString())).toBe(false);
+    expect(await fs.readFile(document.uri.fsPath, 'utf8')).toBe(node.entry.source);
+  });
+  it('cleans up a failed filter display and permits a retry without stale listeners', async () => {
+    await commands.executeCommand('prompteur.filterFromTooltip', 'tag', 'review');
+    const query = tree().query;
+    const failed = window.createInputBox();
+    const dispose = vi.spyOn(failed, 'dispose');
+    vi.spyOn(failed, 'show').mockImplementationOnce(() => {
+      throw new Error('Filter display unavailable');
+    });
+    vi.spyOn(window, 'createInputBox').mockReturnValueOnce(failed);
+
+    await expect(run('search')).rejects.toThrow('Filter display unavailable');
+    expect(messages.errors.at(-1)).toContain('Filter display unavailable');
+    expect(dispose).toHaveBeenCalledOnce();
+    expect(tree().query).toBe(query);
+
+    await run('search');
+    const box = inputBoxes.at(-1)!;
+    expect(box).not.toBe(failed);
+    expect(box.value).toBe(query);
+    box.valueChanged.fire('recovered');
+    failed.valueChanged.fire('stale');
+    failed.hidden.fire();
+    expect(tree().query).toBe('recovered');
+    await run('searchActive');
+    expect(inputBoxes.at(-1)).toBe(box);
+    expect(inputBoxes).toHaveLength(2);
+    box.hide();
+    expect(dispose).toHaveBeenCalledOnce();
+  });
   it('reuses the open search input and releases listeners when it hides', async () => {
     await run('search');
     const box = inputBoxes.at(-1)!;
