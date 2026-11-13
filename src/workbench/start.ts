@@ -32,6 +32,9 @@ class Workbench implements vscode.Disposable {
   private readonly editor: NativeEditor;
   private readonly tree: PromptTree;
   private readonly treeView: vscode.TreeView<TreeNode>;
+  private readonly scopeCounts = new Map<Scope, number>();
+  private countUpdate = 0;
+  private disposed = false;
   private readonly textInput = new TextInput();
   private target: vscode.TextEditor | undefined;
   private searchBox: vscode.InputBox | undefined;
@@ -123,6 +126,7 @@ class Workbench implements vscode.Disposable {
         this.approvedCategories.has(category)
           ? (this.categoryDescriptions.get(category) ?? '')
           : undefined,
+      (scope) => this.scopeCounts.get(scope),
     );
     this.treeView = vscode.window.createTreeView('prompteur.prompts', {
       treeDataProvider: this.tree,
@@ -138,6 +142,8 @@ class Workbench implements vscode.Disposable {
           event.affectsConfiguration('prompteur.search')
         )
           this.tree.refresh();
+        if (event.affectsConfiguration('prompteur.search'))
+          void this.updatePromptCounts().catch((error) => this.report(error));
         if (event.affectsConfiguration('prompteur.syncUserPrompts'))
           void this.configurePromptSync().catch((error) => this.report(error));
       }),
@@ -299,7 +305,7 @@ class Workbench implements vscode.Disposable {
       await vscode.commands.executeCommand('setContext', 'prompteur.filterActive', !!query.trim());
     });
     this.filterContextUpdate = update.catch(() => undefined);
-    return update;
+    return Promise.all([update, this.updatePromptCounts()]).then(() => undefined);
   }
 
   private async openPromptPath(scope: unknown, path: unknown): Promise<void> {
@@ -339,7 +345,7 @@ class Workbench implements vscode.Disposable {
   }
 
   private async scope(node?: TreeNode): Promise<Scope | undefined> {
-    if (node) return node.scope;
+    if (node && node.kind !== 'root') return node.scope;
     const defaultScope = vscode.workspace
       .getConfiguration('prompteur')
       .get<unknown>('defaultScope', 'ask');
@@ -1012,15 +1018,43 @@ class Workbench implements vscode.Disposable {
   async initialize(): Promise<void> {
     // Initial sync runs in the background so activation stays within its time budget.
     // Operations are serialized by UserPromptSync's queue, so later persist calls remain ordered.
-    void this.configurePromptSync().catch((error) => this.report(error));
+    void this.configurePromptSync()
+      .catch((error) => this.report(error))
+      .then(() => this.updatePromptCounts())
+      .catch((error) => this.report(error));
     this.disposables.push({
       dispose: this.service.subscribe((scope) => {
+        void this.updatePromptCounts().catch((error) => this.report(error));
         if (scope === 'user')
           void this.userPromptSync.persist().catch((error) => this.report(error));
       }),
     });
     for (const [scope, root] of this.roots)
       this.disposables.push(watchLibrary(root, scope, this.service, (error) => this.report(error)));
+  }
+
+  private async updatePromptCounts(): Promise<void> {
+    if (this.disposed) return;
+    const update = ++this.countUpdate;
+    try {
+      const counts = await Promise.all(
+        [...this.roots.keys()].map(async (scope) => {
+          const entries = await this.service.search(scope, this.tree.query);
+          return [scope, entries.length] as const;
+        }),
+      );
+      if (update !== this.countUpdate) return;
+      for (const [scope, count] of counts) {
+        this.scopeCounts.set(scope, count);
+      }
+      this.tree.refresh();
+    } catch (error) {
+      if (update === this.countUpdate) {
+        this.scopeCounts.clear();
+        this.tree.refresh();
+      }
+      throw error;
+    }
   }
 
   private async configurePromptSync(): Promise<void> {
@@ -1032,6 +1066,8 @@ class Workbench implements vscode.Disposable {
   }
 
   dispose(): void {
+    this.disposed = true;
+    ++this.countUpdate;
     this.disposeSearch?.();
     for (const disposable of this.disposables.reverse()) disposable.dispose();
   }

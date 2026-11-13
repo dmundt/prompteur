@@ -136,6 +136,7 @@ beforeEach(async () => {
     subscriptions: [],
   };
   await activate(context as unknown as vscode.ExtensionContext);
+  await vi.waitFor(() => expect(tree().getTreeItem({ kind: 'root' }).label).toBe('Prompts (0)'));
 });
 afterEach(async () => {
   for (const disposable of context.subscriptions) disposable.dispose();
@@ -144,6 +145,166 @@ afterEach(async () => {
 });
 
 describe('release commands', () => {
+  it('sums filtered scope counts and updates them after filter and library changes without a badge', async () => {
+    await addPrompt('user-one', 'needle');
+    await addPrompt('user-two', 'other');
+    await addPrompt('workspace-one', 'needle', 'workspace');
+    const invalid = join(workspaceRoot(), 'prompts', 'invalid.prompt.md');
+    await fs.writeFile(invalid, '---\nversion: [\n---\n');
+    await run('refresh');
+    const view = views.get('prompteur.prompts')!;
+    const counts = () =>
+      (['user', 'workspace'] as const).map((scope) => tree().getTreeItem(scopeNode(scope)).label);
+    await vi.waitFor(() => {
+      expect(counts()).toEqual(['User (2)', 'Workspace (1)']);
+      expect(tree().getTreeItem({ kind: 'root' }).label).toBe('Prompts (3)');
+      expect(view.badge).toBeUndefined();
+    });
+
+    await run('search');
+    inputBoxes.at(-1)!.valueChanged.fire('needle');
+    for (const mode of ['filtered', 'total', 'hidden']) {
+      workspace.configuration.set('prompteur.categoryCountMode', mode);
+      configurationChanged.fire({
+        affectsConfiguration: (section) => section === 'prompteur.categoryCountMode',
+      });
+      expect(await entries('user')).toHaveLength(1);
+      expect(await entries('workspace')).toHaveLength(1);
+      await vi.waitFor(() => expect(counts()).toEqual(['User (1)', 'Workspace (1)']));
+      expect(tree().getTreeItem({ kind: 'root' }).label).toBe('Prompts (2)');
+      expect(view.badge).toBeUndefined();
+    }
+    workspace.configuration.set('prompteur.groupByCategory', false);
+    inputBoxes.at(-1)!.valueChanged.fire('no matches');
+    expect((await tree().getChildren(scopeNode()))[0]?.kind).toBe('empty');
+    await vi.waitFor(() => expect(counts()).toEqual(['User (0)', 'Workspace (0)']));
+    expect(tree().getTreeItem({ kind: 'root' }).label).toBe('Prompts (0)');
+    expect(view.badge).toBeUndefined();
+
+    await run('clearSearch');
+    await fs.writeFile(invalid, encodeMarkdown(newPrompt('Repaired')));
+    await run('refresh');
+    await vi.waitFor(() => {
+      expect(counts()).toEqual(['User (2)', 'Workspace (2)']);
+      expect(tree().getTreeItem({ kind: 'root' }).label).toBe('Prompts (4)');
+      expect(view.badge).toBeUndefined();
+    });
+    await fs.unlink(invalid);
+    await run('refresh');
+    await vi.waitFor(() => expect(tree().getTreeItem({ kind: 'root' }).label).toBe('Prompts (3)'));
+    expect(counts()).toEqual(['User (2)', 'Workspace (1)']);
+
+    workspace.configuration.set('prompteur.defaultScope', 'user');
+    responses.input.push('Created');
+    await run('newPrompt', { kind: 'root' });
+    await vi.waitFor(() => {
+      expect(counts()).toEqual(['User (3)', 'Workspace (1)']);
+      expect(tree().getTreeItem({ kind: 'root' }).label).toBe('Prompts (4)');
+    });
+    workspace.configuration.set('prompteur.groupByCategory', true);
+    await run('clearSearch');
+    const created = (await entries()).find((node) => node.entry.data.name === 'Created')!;
+    responses.warning.push('Delete');
+    await run('delete', created);
+    await vi.waitFor(() => expect(tree().getTreeItem({ kind: 'root' }).label).toBe('Prompts (3)'));
+    expect(counts()).toEqual(['User (2)', 'Workspace (1)']);
+
+    await run('search');
+    inputBoxes.at(-1)!.valueChanged.fire('user');
+    await vi.waitFor(() => expect(counts()).toEqual(['User (2)', 'Workspace (0)']));
+    workspace.configuration.set('prompteur.search.matching', 'exact');
+    configurationChanged.fire({
+      affectsConfiguration: (section) => section === 'prompteur.search',
+    });
+    await vi.waitFor(() => expect(counts()).toEqual(['User (0)', 'Workspace (0)']));
+    inputBoxes.at(-1)!.valueChanged.fire('workspace-one');
+    inputBoxes.at(-1)!.valueChanged.fire('user-one');
+    await vi.waitFor(() => expect(counts()).toEqual(['User (1)', 'Workspace (0)']));
+    expect(tree().getTreeItem({ kind: 'root' }).label).toBe('Prompts (1)');
+    await run('clearSearch');
+    expect(counts()).toEqual(['User (2)', 'Workspace (1)']);
+  });
+  it('eagerly loads both scopes without tree expansion or blocking activation', async () => {
+    for (const disposable of context.subscriptions.splice(0)) disposable.dispose();
+    workspace.configuration.set('prompteur.syncUserPrompts', false);
+    await fs.mkdir(join(workspaceRoot(), 'prompts'), { recursive: true });
+    await fs.writeFile(
+      join(workspaceRoot(), 'prompts', 'eager.prompt.md'),
+      encodeMarkdown(newPrompt('Eager')),
+    );
+    let release!: (paths: string[]) => void;
+    const pending = new Promise<string[]>((resolve) => {
+      release = resolve;
+    });
+    const original = LocalFiles.prototype.list;
+    const list = vi.spyOn(LocalFiles.prototype, 'list').mockImplementation(function (
+      this: LocalFiles,
+      scope,
+    ) {
+      return scope === 'workspace' ? pending : original.call(this, scope);
+    });
+    await activate(context as unknown as vscode.ExtensionContext);
+    const view = views.get('prompteur.prompts')!;
+    expect(list).toHaveBeenCalledWith('user');
+    expect(list).toHaveBeenCalledWith('workspace');
+    expect(view.badge).toBeUndefined();
+    expect(tree().getTreeItem({ kind: 'root' }).label).toBe('Prompts');
+    release(['prompts/eager.prompt.md']);
+    await vi.waitFor(() => expect(tree().getTreeItem({ kind: 'root' }).label).toBe('Prompts (1)'));
+    expect(tree().getTreeItem(scopeNode('user')).label).toBe('User (0)');
+    expect(tree().getTreeItem(scopeNode('workspace')).label).toBe('Workspace (1)');
+    expect(tree().getTreeItem({ kind: 'root' }).label).toBe('Prompts (1)');
+  });
+  it('reports count loading failures without showing a partial total and recovers on reload', async () => {
+    for (const disposable of context.subscriptions.splice(0)) disposable.dispose();
+    workspace.configuration.set('prompteur.syncUserPrompts', false);
+    const original = LocalFiles.prototype.list;
+    const list = vi.spyOn(LocalFiles.prototype, 'list').mockImplementation(function (
+      this: LocalFiles,
+      scope,
+    ) {
+      if (scope === 'workspace') return Promise.reject(new Error('Count read failed'));
+      return original.call(this, scope);
+    });
+    await activate(context as unknown as vscode.ExtensionContext);
+    await vi.waitFor(() => expect(messages.errors).toContain('Prompteur: Count read failed'));
+    expect(views.get('prompteur.prompts')!.badge).toBeUndefined();
+    expect(tree().getTreeItem(scopeNode('user')).label).toBe('User');
+    expect(tree().getTreeItem({ kind: 'root' }).label).toBe('Prompts');
+    list.mockRestore();
+    await run('refresh');
+    await vi.waitFor(() => expect(tree().getTreeItem({ kind: 'root' }).label).toBe('Prompts (0)'));
+  });
+  it('does not publish pending counts after disposal', async () => {
+    for (const disposable of context.subscriptions.splice(0)) disposable.dispose();
+    workspace.configuration.set('prompteur.syncUserPrompts', false);
+    let release!: (paths: string[]) => void;
+    const pending = new Promise<string[]>((resolve) => {
+      release = resolve;
+    });
+    vi.spyOn(LocalFiles.prototype, 'list').mockImplementation((scope) =>
+      scope === 'workspace' ? pending : Promise.resolve([]),
+    );
+    await activate(context as unknown as vscode.ExtensionContext);
+    const view = views.get('prompteur.prompts')!;
+    const refresh = vi.spyOn(tree(), 'refresh');
+    for (const disposable of context.subscriptions.splice(0)) disposable.dispose();
+    release([]);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(view.badge).toBeUndefined();
+    expect(refresh).not.toHaveBeenCalled();
+  });
+  it('counts only User prompts when no Workspace library is available', async () => {
+    await addPrompt('personal', 'safe');
+    for (const disposable of context.subscriptions.splice(0)) disposable.dispose();
+    workspace.workspaceFolders = [];
+    await activate(context as unknown as vscode.ExtensionContext);
+    await vi.waitFor(() => expect(tree().getTreeItem({ kind: 'root' }).label).toBe('Prompts (1)'));
+    const [root] = await tree().getChildren();
+    expect(await tree().getChildren(root)).toEqual([{ kind: 'scope', scope: 'user' }]);
+    expect(tree().getTreeItem(scopeNode()).label).toBe('User (1)');
+    expect(tree().getTreeItem({ kind: 'root' }).label).toBe('Prompts (1)');
+  });
   it('uses the local profile path when VS Code exposes a non-file storage URI', async () => {
     for (const disposable of context.subscriptions) disposable.dispose();
     context.subscriptions = [];
@@ -217,7 +378,9 @@ describe('release commands', () => {
       expect(await fs.readFile(join(userRoot(), 'prompts', 'remote-sync.prompt.md'), 'utf8')).toBe(
         remotePrompt,
       );
+      expect(messages.errors).toEqual([]);
       expect((await entries()).some((node) => node.entry.data.name === 'Remote Sync')).toBe(true);
+      expect(tree().getTreeItem({ kind: 'root' }).label).toBe('Prompts (1)');
     });
 
     await addPrompt('local-sync', 'local content');
