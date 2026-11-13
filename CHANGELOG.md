@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Show prompt scope and labeled metadata in a compact prompt hover.
+
 ## 1.2.0
 
 - Expand Prompts and available User/Workspace scopes when the Prompteur view becomes visible.
