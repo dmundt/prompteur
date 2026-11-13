@@ -4,6 +4,7 @@ import type { Entry, Problem, PromptCategory, Scope } from '../core/documents';
 import { variableTokens, type VariableKey } from '../core/render';
 
 export type TreeNode =
+  | { kind: 'root' }
   | { kind: 'scope'; scope: Scope }
   | {
       kind: 'category';
@@ -62,6 +63,7 @@ export class PromptTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dis
       undefined,
     private readonly customCategoryDescription: (category: string) => string | undefined = () =>
       undefined,
+    private readonly scopeCount: (scope: Scope) => number | undefined = () => undefined,
   ) {
     this.unsubscribe = service.subscribe(() => this.refresh());
   }
@@ -75,9 +77,24 @@ export class PromptTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dis
   }
 
   getTreeItem(node: TreeNode): vscode.TreeItem {
+    if (node.kind === 'root') {
+      const item = new vscode.TreeItem('Prompts', vscode.TreeItemCollapsibleState.Expanded);
+      item.id = 'prompts';
+      let total = 0;
+      const scopes: Scope[] = this.workspaceAvailable() ? ['user', 'workspace'] : ['user'];
+      for (const scope of scopes) {
+        const count = this.scopeCount(scope);
+        if (count === undefined) return item;
+        total += count;
+      }
+      item.label = `Prompts (${total})`;
+      return item;
+    }
     if (node.kind === 'scope') {
+      const name = node.scope === 'user' ? 'User' : 'Workspace';
+      const count = this.scopeCount(node.scope);
       const item = new vscode.TreeItem(
-        node.scope === 'user' ? 'User' : 'Workspace',
+        count === undefined ? name : `${name} (${count})`,
         vscode.TreeItemCollapsibleState.Expanded,
       );
       item.id = node.scope;
@@ -102,7 +119,7 @@ export class PromptTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dis
       return new vscode.TreeItem(node.label, vscode.TreeItemCollapsibleState.Collapsed);
     if (node.kind === 'empty') {
       const item = new vscode.TreeItem('No valid prompts match this filter.');
-      item.description = 'Select to clear filter';
+      item.tooltip = 'No valid prompts match this filter.\nSelect to clear filter';
       item.contextValue = 'emptyState';
       item.command = { command: 'prompteur.clearSearch', title: 'Clear Filter' };
       return item;
@@ -198,7 +215,8 @@ export class PromptTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dis
 
   async getChildren(node?: TreeNode): Promise<TreeNode[]> {
     try {
-      if (!node)
+      if (!node) return [{ kind: 'root' }];
+      if (node.kind === 'root')
         return (this.workspaceAvailable() ? ['user', 'workspace'] : ['user']).map((scope) => ({
           kind: 'scope',
           scope: scope as Scope,
