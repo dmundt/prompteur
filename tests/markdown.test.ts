@@ -84,4 +84,26 @@ describe('Markdown prompt documents', () => {
     expect(isPromptMarkdown('prompts/review.prompt.yaml')).toBe(false);
     expect(relativePath.parse('prompts/review.prompt.md')).toBe('prompts/review.prompt.md');
   });
+  it('accepts nested relative paths and rejects unsafe or non-portable segments', () => {
+    expect(relativePath.parse('prompts/category/nested/review.prompt.md')).toBe(
+      'prompts/category/nested/review.prompt.md',
+    );
+    for (const path of [
+      '',
+      '/absolute.prompt.md',
+      'prompts//empty.prompt.md',
+      'prompts/./review.prompt.md',
+      'prompts/../review.prompt.md',
+      'prompts\\review.prompt.md',
+      'prompts/C:/review.prompt.md',
+      'prompts/name\0.prompt.md',
+      'prompts/CON',
+      'prompts/con.prompt.md',
+      'prompts/LPT9.txt',
+      'prompts/trailing.',
+      'prompts/trailing ',
+      'prompts/invalid?.prompt.md',
+    ])
+      expect(relativePath.safeParse(path).success, path).toBe(false);
+  });
 });
