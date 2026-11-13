@@ -88,6 +88,7 @@ describe('Markdown prompt documents', () => {
     expect(relativePath.parse('prompts/category/nested/review.prompt.md')).toBe(
       'prompts/category/nested/review.prompt.md',
     );
+    expect(relativePath.parse('prompts/über.prompt.md')).toBe('prompts/über.prompt.md');
     for (const path of [
       '',
       '/absolute.prompt.md',
@@ -105,5 +106,12 @@ describe('Markdown prompt documents', () => {
       'prompts/invalid?.prompt.md',
     ])
       expect(relativePath.safeParse(path).success, path).toBe(false);
+    for (const control of ['\u0001', '\n', '\t', '\r', '\u001f']) {
+      const path = `prompts/a${control}b.prompt.md`;
+      const result = relativePath.safeParse(path);
+      expect(result.success, path).toBe(false);
+      if (!result.success && control === '\n')
+        expect(result.error.issues[0]?.message).toContain('Windows control characters');
+    }
   });
 });
