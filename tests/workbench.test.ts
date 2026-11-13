@@ -147,7 +147,20 @@ describe('native tree interactions', () => {
     expect(prompts[0]!.kind === 'entry' && prompts[0]!.entry.data.category).toBe('review');
     expect(tree.getTreeItem(prompts[0]!).description).toBe('#security');
     const tooltip = tree.getTreeItem(prompts[0]!).tooltip as MarkdownString;
-    expect(tooltip.value).toContain('Review overview');
+    expect(tooltip.value).toBe(
+      '**Review**  \n' +
+        'Description · <span style="color:var(--vscode-descriptionForeground);">Review overview</span>' +
+        '\n\n---\n\n' +
+        [
+          'Scope · <span style="color:var(--vscode-descriptionForeground);">User</span>',
+          `Category · [review](command:prompteur.filterFromTooltip?${encodeURIComponent(JSON.stringify(['category', 'review']))})`,
+          `Tags · [#security](command:prompteur.filterFromTooltip?${encodeURIComponent(JSON.stringify(['tag', 'security']))})`,
+        ].join('  \n') +
+        `\n\n---\n\nPath · $(file) [prompts/review/a.prompt.md](command:prompteur.openPromptPath?${encodeURIComponent(JSON.stringify(['user', 'prompts/review/a.prompt.md']))})`,
+    );
+    expect(tooltip.supportThemeIcons).toBe(true);
+    expect(tooltip.supportHtml).toBe(true);
+    expect(tooltip.value.match(/\*\*/g)).toHaveLength(2);
     expect(tooltip.value).not.toContain('Copy Text:');
     expect(tooltip.value).not.toContain('Copy Prompt:');
     expect(tooltip.value).toContain('[review](command:prompteur.filterFromTooltip?');
@@ -165,6 +178,82 @@ describe('native tree interactions', () => {
     await service.refresh('user');
     expect(changed).toHaveBeenCalled();
     expect((await service.get('user')).entries).toHaveLength(1);
+    tree.dispose();
+  });
+  it('shows workspace scope and omits empty optional hover rows', async () => {
+    const { port, files } = memoryFiles();
+    files.set('workspace:prompts/example.prompt.md', encodeMarkdown(newPrompt('Example [safe]')));
+    const tree = new PromptTree(new LibraryService(port), () => true, vi.fn());
+    const category = (await tree.getChildren({ kind: 'scope', scope: 'workspace' }))[0]!;
+    const entry = (await tree.getChildren(category))[0]!;
+    const tooltip = tree.getTreeItem(entry).tooltip as MarkdownString;
+
+    expect(tooltip.value).toBe(
+      [
+        '**Example \\[safe\\]**',
+        'Scope · <span style="color:var(--vscode-descriptionForeground);">Workspace</span>',
+        `Category · [explain](command:prompteur.filterFromTooltip?${encodeURIComponent(JSON.stringify(['category', 'explain']))})`,
+      ].join('  \n') +
+        `\n\n---\n\nPath · $(file) [prompts/example.prompt.md](command:prompteur.openPromptPath?${encodeURIComponent(JSON.stringify(['workspace', 'prompts/example.prompt.md']))})`,
+    );
+    tree.dispose();
+  });
+  it('keeps icon-like metadata and link labels literal', async () => {
+    const { port, files } = memoryFiles();
+    const path = 'prompts/$(warning).prompt.md';
+    const tag = '$(zap)';
+    files.set(
+      `user:${path}`,
+      encodeMarkdown({
+        ...newPrompt('$(file)'),
+        description: '$(warning)',
+        tags: [tag],
+      }),
+    );
+    const tree = new PromptTree(new LibraryService(port), () => false, vi.fn());
+    const category = (await tree.getChildren({ kind: 'scope', scope: 'user' }))[0]!;
+    const entry = (await tree.getChildren(category))[0]!;
+    const tooltip = tree.getTreeItem(entry).tooltip as MarkdownString;
+
+    expect(tooltip.value).toContain('**\\\\$(file)**');
+    expect(tooltip.value).toContain(
+      'Description · <span style="color:var(--vscode-descriptionForeground);">\\\\$(warning)</span>',
+    );
+    expect(tooltip.value).toContain(
+      `[#\\\\$(zap)](command:prompteur.filterFromTooltip?${encodeURIComponent(JSON.stringify(['tag', tag]))})`,
+    );
+    expect(tooltip.value).toContain(
+      `$(file) [prompts/\\\\$(warning).prompt.md](command:prompteur.openPromptPath?${encodeURIComponent(JSON.stringify(['user', path]))})`,
+    );
+    tree.dispose();
+  });
+  it('keeps multiline prompt metadata compact and escapes Markdown', async () => {
+    const { port, files } = memoryFiles();
+    files.set(
+      'user:prompts/example.prompt.md',
+      encodeMarkdown({
+        ...newPrompt('First\nSecond <img src="bad">'),
+        description: 'First line\n[unsafe](command:evil.run) </span><b>HTML & text</b>',
+      }),
+    );
+    const tree = new PromptTree(new LibraryService(port), () => false, vi.fn());
+    const category = (await tree.getChildren({ kind: 'scope', scope: 'user' }))[0]!;
+    const entry = (await tree.getChildren(category))[0]!;
+    const tooltip = tree.getTreeItem(entry).tooltip as MarkdownString;
+
+    expect(tooltip.value).toContain(
+      '**First Second &lt;img src="bad"&gt;**  \nDescription · <span style="color:var(--vscode-descriptionForeground);">First line \\[unsafe\\](command:evil.run) &lt;/span&gt;&lt;b&gt;HTML &amp; text&lt;/b&gt;</span>',
+    );
+    expect(tooltip.value).not.toContain('<img');
+    expect(tooltip.value).not.toContain('<b>');
+    const sections = tooltip.value.split('\n\n---\n\n');
+    expect(sections).toHaveLength(3);
+    expect(sections[0]).not.toContain('\n\n');
+    expect(sections[1]).toMatch(/^Scope · /);
+    expect(sections[2]).toMatch(/^Path · \$\(file\) \[/);
+    expect(tooltip.isTrusted).toEqual({
+      enabledCommands: ['prompteur.filterFromTooltip', 'prompteur.openPromptPath'],
+    });
     tree.dispose();
   });
   it('shows an actionable empty state only when an active filter has no valid matches', async () => {
@@ -242,10 +331,18 @@ describe('native tree interactions', () => {
       return (tree.getTreeItem(entry!).tooltip as MarkdownString).value;
     };
 
-    expect(hover('context')).toContain('Context: Filename, Selection, Clipboard, Workspace, Text');
-    expect(hover('none')).not.toContain('Context:');
-    expect(hover('invalid')).toContain('Context unavailable: Unsupported variable: unknown');
-    expect(hover('unbalanced')).toContain('Context unavailable: Unbalanced variable braces');
+    expect(hover('context')).toContain(
+      'Context · <span style="color:var(--vscode-descriptionForeground);">Filename, Selection, Clipboard, Workspace, Text</span>',
+    );
+    expect(hover('none')).not.toContain('Context ·');
+    expect(hover('context')).not.toContain('$(warning)');
+    expect(hover('none')).not.toContain('$(warning)');
+    expect(hover('invalid')).toContain(
+      '$(warning) Context unavailable · <span style="color:var(--vscode-descriptionForeground);">Unsupported variable: unknown</span>',
+    );
+    expect(hover('unbalanced')).toContain(
+      '$(warning) Context unavailable · <span style="color:var(--vscode-descriptionForeground);">Unbalanced variable braces</span>',
+    );
     files.set(
       'user:prompts/context.prompt.md',
       encodeMarkdown({ ...newPrompt('context'), content: '{{workspace}}' }),
@@ -257,7 +354,7 @@ describe('native tree interactions', () => {
     );
     expect(updated).toBeDefined();
     expect((tree.getTreeItem(updated!).tooltip as MarkdownString).value).toContain(
-      'Context: Workspace',
+      'Context · <span style="color:var(--vscode-descriptionForeground);">Workspace</span>',
     );
     expect(report).not.toHaveBeenCalled();
     tree.dispose();

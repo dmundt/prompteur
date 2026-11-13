@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Show prompt scope and metadata in a compact hover with a bold title, normal-weight labels, theme-muted text values, and file/invalid-context warning icons.
+
 ## 1.2.0
 
 - Expand Prompts and available User/Workspace scopes when the Prompteur view becomes visible.
