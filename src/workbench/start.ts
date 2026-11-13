@@ -5,13 +5,16 @@ import { LibraryService, messageOf } from '../application/library';
 import { appendExactFilter, type SearchOptions } from '../application/search';
 import {
   newPrompt,
+  decodeMarkdown,
   encodeMarkdown,
   promptFolder,
   promptCategories,
+  PromptDocumentError,
   type Entry,
   type PromptData,
   type Scope,
 } from '../core/documents';
+import { documentByteLimit } from '../core/limits';
 import { generate, variableTokens, type Context } from '../core/render';
 import { NativeEditor } from './editor';
 import { PromptLibraryTool } from './prompt-tool';
@@ -551,6 +554,7 @@ class Workbench implements vscode.Disposable {
     const invalid = this.validateNewCategory(next);
     if (invalid) throw new Error(invalid);
     const affected = await this.categoryEntries(category);
+    await this.assertNoDirtyDocumentsForCategory(category, 'renaming');
     for (const entry of affected) this.assertCategoryWritable(entry);
     if (
       (await vscode.window.showWarningMessage(
@@ -570,6 +574,7 @@ class Workbench implements vscode.Disposable {
     )
       throw new Error('Prompts changed. Retry the rename.');
     for (const entry of current) this.assertCategoryWritable(entry);
+    await this.assertNoDirtyDocumentsForCategory(category, 'renaming');
     const previousCategories = new Set(this.approvedCategories);
     const previousDescriptions = new Map(this.categoryDescriptions);
     const categories = new Set(previousCategories).add(next);
@@ -659,6 +664,45 @@ class Workbench implements vscode.Disposable {
       throw new Error(`Save or discard unsaved changes before renaming: ${entry.path}`);
   }
 
+  private async assertNoDirtyDocumentsForCategory(
+    category: string,
+    action: 'renaming' | 'removing',
+  ): Promise<void> {
+    const allowedCategories = this.allowedCategories();
+    for (const document of vscode.workspace.textDocuments) {
+      if (!document.isDirty) continue;
+      const location = await this.editor.locate(document.uri);
+      if (!location) continue;
+      const source = document.getText();
+      if (Buffer.byteLength(source, 'utf8') > documentByteLimit) continue;
+      let data: PromptData;
+      try {
+        data = decodeMarkdown(source, allowedCategories);
+      } catch (error) {
+        if (error instanceof PromptDocumentError) continue;
+        throw error;
+      }
+      if (data.category === category)
+        throw new Error(`Save or discard unsaved changes before ${action}: ${location.path}`);
+    }
+  }
+
+  private async assertCategoryUnused(category: string): Promise<void> {
+    let usageCount = 0;
+    for (const scope of this.roots.keys()) {
+      await this.service.refresh(scope);
+      usageCount += (await this.service.get(scope)).entries.filter(
+        (entry) => entry.data.category === category,
+      ).length;
+    }
+    if (!usageCount) return;
+    const promptNoun = usageCount === 1 ? 'prompt' : 'prompts';
+    const promptVerb = usageCount === 1 ? 'uses' : 'use';
+    throw new Error(
+      `Cannot remove "${category}" while ${usageCount} ${promptNoun} ${promptVerb} it. Reassign them first.`,
+    );
+  }
+
   private async saveCategories(
     categories: Set<string>,
     descriptions: Map<string, string>,
@@ -709,20 +753,8 @@ class Workbench implements vscode.Disposable {
     );
     if (!choice) return;
 
-    let usageCount = 0;
-    for (const scope of this.roots.keys()) {
-      await this.service.refresh(scope);
-      usageCount += (await this.service.get(scope)).entries.filter(
-        (entry) => entry.data.category === choice.value,
-      ).length;
-    }
-    if (usageCount) {
-      const promptNoun = usageCount === 1 ? 'prompt' : 'prompts';
-      const promptVerb = usageCount === 1 ? 'uses' : 'use';
-      throw new Error(
-        `Cannot remove "${choice.value}" while ${usageCount} ${promptNoun} ${promptVerb} it. Reassign them first.`,
-      );
-    }
+    await this.assertCategoryUnused(choice.value);
+    await this.assertNoDirtyDocumentsForCategory(choice.value, 'removing');
 
     const answer = await vscode.window.showWarningMessage(
       `Remove "${choice.value}" from this VS Code profile's approved categories?`,
@@ -731,6 +763,8 @@ class Workbench implements vscode.Disposable {
     );
     if (answer !== 'Remove Category') return;
 
+    await this.assertCategoryUnused(choice.value);
+    await this.assertNoDirtyDocumentsForCategory(choice.value, 'removing');
     const categoriesAfterRemoval = new Set(this.approvedCategories);
     categoriesAfterRemoval.delete(choice.value);
     const descriptions = new Map(this.categoryDescriptions);
