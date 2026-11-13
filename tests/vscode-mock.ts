@@ -238,7 +238,7 @@ export const messages = {
 };
 export const views = new Map<
   string,
-  { treeDataProvider: unknown; dragAndDropController?: unknown }
+  { treeDataProvider: unknown; dragAndDropController?: unknown; message?: string }
 >();
 export const handlers = new Map<string, (...args: unknown[]) => Promise<unknown>>();
 export const providers = new Map<string, { provideTextDocumentContent: () => string }>();
@@ -311,8 +311,12 @@ export const window = {
   onDidChangeActiveTextEditor: activeChanged.event,
   createTextEditorDecorationType: () => new Disposable(),
   createTreeView: (id: string, options: { treeDataProvider: unknown }) => {
-    views.set(id, options);
-    return new Disposable(() => views.delete(id));
+    const view: Disposable & { treeDataProvider: unknown; message?: string } = Object.assign(
+      new Disposable(() => views.delete(id)),
+      options,
+    );
+    views.set(id, view);
+    return view;
   },
   createInputBox: () => {
     const box = new FakeInputBox();

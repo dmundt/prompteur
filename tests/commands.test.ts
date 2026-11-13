@@ -1245,6 +1245,62 @@ describe('release commands', () => {
     await expect(run('copy', node)).rejects.toThrow();
     expect(collections[0]!.get(document.uri.toString())?.length).toBe(1);
   });
+  it('reuses the open search input and releases listeners when it hides', async () => {
+    await run('search');
+    const box = inputBoxes.at(-1)!;
+    const show = vi.spyOn(box, 'show');
+    const dispose = vi.spyOn(box, 'dispose').mockImplementation(() => undefined);
+    box.valueChanged.fire('review');
+    await run('searchActive');
+    expect(inputBoxes).toHaveLength(1);
+    expect(show).toHaveBeenCalledOnce();
+    box.accepted.fire();
+    expect(dispose).toHaveBeenCalledOnce();
+    box.valueChanged.fire('stale input');
+    expect(tree().query).toBe('review');
+    await run('search');
+    expect(inputBoxes).toHaveLength(2);
+    expect(inputBoxes.at(-1)!.value).toBe('review');
+    box.hidden.fire();
+    expect(dispose).toHaveBeenCalledOnce();
+    await run('searchActive');
+    expect(inputBoxes).toHaveLength(2);
+  });
+  it('disposes the open search input and its listeners on shutdown without a hide event', async () => {
+    await run('search');
+    const box = inputBoxes.at(-1)!;
+    const dispose = vi.spyOn(box, 'dispose').mockImplementation(() => undefined);
+    const provider = tree();
+    box.valueChanged.fire('review');
+    for (const disposable of context.subscriptions) disposable.dispose();
+    context.subscriptions = [];
+    expect(dispose).toHaveBeenCalledOnce();
+    const executions = commandExecutions.length;
+    box.valueChanged.fire('stale input');
+    box.accepted.fire();
+    box.hidden.fire();
+    expect(provider.query).toBe('review');
+    expect(commandExecutions).toHaveLength(executions);
+    expect(dispose).toHaveBeenCalledOnce();
+  });
+  it('shows the trimmed filter as literal tree text without changing the query', async () => {
+    const view = views.get('prompteur.prompts')!;
+    expect(view.message).toBeUndefined();
+    await run('search');
+    const box = inputBoxes.at(-1)!;
+    const query = '  tag:"security review" [text](command:example) <test>  ';
+    box.valueChanged.fire(query);
+    expect(tree().query).toBe(query);
+    expect(view.message).toBe(`Filter: ${query.trim()}`);
+    box.hidden.fire();
+    expect(view.message).toBe(`Filter: ${query.trim()}`);
+    await run('search');
+    inputBoxes.at(-1)!.valueChanged.fire(' \t ');
+    expect(view.message).toBe('');
+    inputBoxes.at(-1)!.valueChanged.fire('review');
+    await run('clearSearch');
+    expect(view.message).toBe('');
+  });
   it('live filters exact tags and clears the main tree filter', async () => {
     await addPrompt('review', 'review');
     expect(contextKeys.get('prompteur.filterActive')).toBe(false);
@@ -1321,6 +1377,9 @@ describe('release commands', () => {
     expect(box.value).toBe(tree().query);
     await commands.executeCommand('prompteur.filterFromTooltip', 'category', 'explain');
     expect(tree().query).toBe('needle tag:"security review" category:"explain"');
+    expect(views.get('prompteur.prompts')!.message).toBe(
+      'Filter: needle tag:"security review" category:"explain"',
+    );
     await commands.executeCommand('prompteur.filterFromTooltip', 'category', 'explain');
     expect(tree().query).toBe('needle tag:"security review" category:"explain"');
 

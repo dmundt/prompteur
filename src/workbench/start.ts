@@ -31,9 +31,11 @@ class Workbench implements vscode.Disposable {
   private readonly userPromptSync: UserPromptSync;
   private readonly editor: NativeEditor;
   private readonly tree: PromptTree;
+  private readonly treeView: vscode.TreeView<TreeNode>;
   private readonly textInput = new TextInput();
   private target: vscode.TextEditor | undefined;
   private searchBox: vscode.InputBox | undefined;
+  private disposeSearch: (() => void) | undefined;
   private filterContextUpdate: Promise<void> = Promise.resolve();
   private copiedPrompt: { data: PromptData; source: string } | undefined;
   private readonly approvedCategories = new Set<string>();
@@ -122,15 +124,11 @@ class Workbench implements vscode.Disposable {
           ? (this.categoryDescriptions.get(category) ?? '')
           : undefined,
     );
-    this.disposables.push(
-      this.editor,
-      this.textInput,
-      this.tree,
-      vscode.window.createTreeView('prompteur.prompts', {
-        treeDataProvider: this.tree,
-        showCollapseAll: true,
-      }),
-    );
+    this.treeView = vscode.window.createTreeView('prompteur.prompts', {
+      treeDataProvider: this.tree,
+      showCollapseAll: true,
+    });
+    this.disposables.push(this.editor, this.textInput, this.tree, this.treeView);
     this.disposables.push(
       vscode.workspace.onDidChangeConfiguration((event) => {
         if (
@@ -295,6 +293,7 @@ class Workbench implements vscode.Disposable {
 
   private setFilter(query: string): Promise<void> {
     this.tree.query = query;
+    this.treeView.message = query.trim() ? `Filter: ${query.trim()}` : '';
     this.tree.refresh();
     const update = this.filterContextUpdate.then(async () => {
       await vscode.commands.executeCommand('setContext', 'prompteur.filterActive', !!query.trim());
@@ -978,21 +977,36 @@ class Workbench implements vscode.Disposable {
   }
 
   private async search(): Promise<void> {
+    if (this.searchBox) {
+      this.searchBox.show();
+      return;
+    }
     const box = vscode.window.createInputBox();
     box.title = 'Filter prompts (tag:value, category:value)';
     box.value = this.tree.query;
     this.searchBox = box;
-    const changed = box.onDidChangeValue((value) => {
-      void this.setFilter(value).catch((error) => this.report(error));
-    });
-    const accepted = box.onDidAccept(() => box.hide());
-    box.onDidHide(() => {
-      changed.dispose();
-      accepted.dispose();
-      if (this.searchBox === box) this.searchBox = undefined;
+    const listeners: vscode.Disposable[] = [];
+    const cleanup = () => {
+      if (this.searchBox !== box) return;
+      this.searchBox = undefined;
+      this.disposeSearch = undefined;
+      for (const listener of listeners) listener.dispose();
       box.dispose();
-    });
-    box.show();
+    };
+    this.disposeSearch = cleanup;
+    listeners.push(
+      box.onDidChangeValue((value) => {
+        void this.setFilter(value).catch((error) => this.report(error));
+      }),
+      box.onDidAccept(() => box.hide()),
+      box.onDidHide(cleanup),
+    );
+    try {
+      box.show();
+    } catch (error) {
+      cleanup();
+      throw error;
+    }
   }
 
   async initialize(): Promise<void> {
@@ -1018,6 +1032,7 @@ class Workbench implements vscode.Disposable {
   }
 
   dispose(): void {
+    this.disposeSearch?.();
     for (const disposable of this.disposables.reverse()) disposable.dispose();
   }
 }
