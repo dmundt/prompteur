@@ -6,6 +6,7 @@
 - `LibraryService` filesystem port: `list`, `read`, expected-source `write`/`remove`.
 - Operations: lazy `get`, incremental/full `refresh`, configurable `search`, internal cross-scope `searchRanked`, validated `save`/`writeSource`, `delete`, subscriptions.
 - Snapshots contain entries/problems; treat as immutable.
+- The **Prompteur** view has an initially expanded **Prompts** root above User and available Workspace scopes. Scope labels show filtered valid entry counts in parentheses; the root label shows their sum. Counts load eagerly without blocking activation and update on filter, search-setting, and library changes. Zero matches display `(0)`; validation problems are excluded. `categoryCountMode` still controls category rows only. No `TreeView.badge` is assigned. Incomplete library loads do not publish partial totals; errors use native notifications.
 
 - Built-ins: `explain`, `plan`, `implement`, `review`, `test`, `debug`, `document`.
 - Users may approve profile-wide categories; runtime validates them. Remove a custom category only when no valid prompt uses it.

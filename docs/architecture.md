@@ -14,7 +14,8 @@
 - Filesystem port exists for tests, not speculative providers. Core/application do not import VS Code.
 - No library-path configuration, ordering/usage sidecar, or generic transfer protocol.
 
-- Tree expansion deduplicates lazy loads. Initial reads use at most 16 workers.
+- Library reads deduplicate concurrent initial loads. Initial reads use at most 16 workers per scope.
+- Activation starts eager reads of available libraries in the background for filtered scope counts and their sum on an initially expanded Prompts root. Counts follow per-scope tree search; category count modes remain independent. No Activity Bar count badge.
 - Cache stores source plus decoded prompt or validation error.
 - Watchers debounce 80 ms; publish one snapshot per burst. Create/delete rescans; edits reload changed files.
 - Enforce input budgets. Batch categories above 200 children.

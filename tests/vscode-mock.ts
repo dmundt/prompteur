@@ -238,7 +238,12 @@ export const messages = {
 };
 export const views = new Map<
   string,
-  { treeDataProvider: unknown; dragAndDropController?: unknown; message?: string }
+  {
+    treeDataProvider: unknown;
+    dragAndDropController?: unknown;
+    message?: string;
+    badge?: { value: number; tooltip: string };
+  }
 >();
 export const handlers = new Map<string, (...args: unknown[]) => Promise<unknown>>();
 export const providers = new Map<string, { provideTextDocumentContent: () => string }>();

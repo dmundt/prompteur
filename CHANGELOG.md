@@ -2,8 +2,9 @@
 
 ## Unreleased
 
+- Add an expanded Prompts root and parenthesized root/per-library counts that follow the active filter, without an Activity Bar count badge. Rename the view to Prompteur.
 - Show the active filter above the prompt tree and reuse the open filter input.
-- Show an actionable tree row when the active prompt filter has no matches.
+- Show an actionable tree row when the active prompt filter has no matches; hover for the clear-filter instruction.
 
 ## 1.2.0
 

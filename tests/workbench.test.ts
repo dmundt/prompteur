@@ -3,7 +3,7 @@ import type * as vscode from 'vscode';
 import { LibraryService } from '../src/application/library';
 import { PromptTree, type TreeNode } from '../src/workbench/tree';
 import { watchLibrary } from '../src/workbench/watch';
-import { MarkdownString, Uri, watchers } from './vscode-mock';
+import { MarkdownString, TreeItemCollapsibleState, Uri, watchers } from './vscode-mock';
 import { encodeMarkdown, newPrompt } from '../src/core/documents';
 import { memoryFiles } from './helpers';
 
@@ -105,7 +105,14 @@ describe('native tree interactions', () => {
     const tree = new PromptTree(service, () => true, report);
     const changed = vi.fn();
     tree.onDidChangeTreeData(changed);
-    const roots = await tree.getChildren();
+    const top = await tree.getChildren();
+    expect(top).toEqual([{ kind: 'root' }]);
+    expect(tree.getTreeItem(top[0]!)).toMatchObject({
+      label: 'Prompts',
+      id: 'prompts',
+      collapsibleState: TreeItemCollapsibleState.Expanded,
+    });
+    const roots = await tree.getChildren(top[0]);
     expect(roots).toHaveLength(2);
     expect(tree.getTreeItem(roots[0]!).label).toBe('User');
     expect(tree.getTreeItem(roots[0]!).iconPath).toBeUndefined();
@@ -160,10 +167,11 @@ describe('native tree interactions', () => {
     expect(noMatches.map((node) => node.kind)).toEqual(['empty', 'problem']);
     expect(tree.getTreeItem(noMatches[0]!)).toMatchObject({
       label: 'No valid prompts match this filter.',
-      description: 'Select to clear filter',
+      tooltip: 'No valid prompts match this filter.\nSelect to clear filter',
       contextValue: 'emptyState',
       command: { command: 'prompteur.clearSearch', title: 'Clear Filter' },
     });
+    expect(tree.getTreeItem(noMatches[0]!).description).toBeUndefined();
 
     tree.query = '';
     const unfiltered = await tree.getChildren(scope);
