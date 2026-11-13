@@ -8,6 +8,7 @@ import {
   type Entry,
 } from '../src/core/documents';
 import { SearchIndex } from '../src/application/search';
+import { documentByteLimit } from '../src/core/limits';
 
 const prompt = {
   ...newPrompt('Inspect change'),
@@ -55,6 +56,41 @@ describe('minimal document metadata', () => {
       'replacement',
     ])
       expect(promptSchema.safeParse({ ...prompt, [field]: 'removed' }).success).toBe(false);
+  });
+  it('accepts category and tag metadata at their schema limits only', () => {
+    const category = 'x'.repeat(64);
+    const tags = Array.from({ length: 128 }, (_, index) => `tag-${index}`);
+    expect(promptSchema.parse({ ...prompt, category, tags })).toMatchObject({ category, tags });
+    expect(promptSchema.parse({ ...prompt, tags: tags.slice(1) })).toMatchObject({
+      tags: tags.slice(1),
+    });
+    expect(() => promptSchema.parse({ ...prompt, category: `${category}x` })).toThrow();
+    expect(() => promptSchema.parse({ ...prompt, tags: [...tags, 'tag-128'] })).toThrow();
+    expect(() => promptSchema.parse({ ...prompt, tags: ['  '] })).toThrow();
+    expect(() => promptSchema.parse({ ...prompt, tags: [''] })).toThrow();
+  });
+  it('accepts documents through the 1 MiB UTF-8 byte limit only', () => {
+    const base = encodeMarkdown(prompt);
+    const overhead = Buffer.byteLength(base);
+    const remaining = documentByteLimit - overhead;
+    const content = 'é'.repeat(Math.floor(remaining / 2)) + (remaining % 2 ? 'x' : '');
+    const exact = encodeMarkdown({ ...prompt, content });
+    expect(Buffer.byteLength(exact)).toBe(documentByteLimit);
+    expect(decodeMarkdown(exact).content).toBe(content);
+    expect(() => encodeMarkdown({ ...prompt, content: `${content}x` })).toThrow('byte limit');
+    expect(() => decodeMarkdown(`${exact}x`)).toThrow('byte limit');
+  });
+  it('accepts YAML at depth 64 and node count 50,000, rejecting the next level', () => {
+    const nested = (depth: number) =>
+      `version: 1\nname: A\ncategory: review\nnested: ${'['.repeat(depth)}x${']'.repeat(depth)}`;
+    expect(() => decodeMarkdown(`---\n${nested(61)}\n---\n`)).toThrow('Unrecognized key');
+    expect(() => decodeMarkdown(`---\n${nested(62)}\n---\n`)).toThrow('node/depth limit');
+
+    const withTagNodes = (count: number) =>
+      `version: 1\nname: A\ncategory: review\ntags: [${Array(count).fill('x').join(',')}]`;
+    expect(() => decodeMarkdown(`---\n${withTagNodes(49_986)}\n---\n`)).toThrow('<=128 items');
+    expect(() => decodeMarkdown(`---\n${withTagNodes(49_987)}\n---\n`)).toThrow('<=128 items');
+    expect(() => decodeMarkdown(`---\n${withTagNodes(49_988)}\n---\n`)).toThrow('node/depth limit');
   });
   it('preserves comments without generating internal metadata', () => {
     const source = encodeMarkdown(prompt).replace('---\n', '---\n# Metadata note\n');

@@ -1,5 +1,6 @@
 import * as assert from 'node:assert/strict';
 import * as vscode from 'vscode';
+import { assertLocalDuration } from '../timing';
 
 export async function run(): Promise<void> {
   const skipClipboard = process.env.PROMPTEUR_TEST_SKIP_CLIPBOARD === '1';
@@ -19,8 +20,7 @@ export async function run(): Promise<void> {
       vscode.lm.tools.some((tool) => tool.name === 'prompteur_findPrompt'),
       'Copilot prompt search tool must register when the host supports Language Model Tools',
     );
-  if (process.env.PROMPTEUR_TEST_ENFORCE_ACTIVATION === 'true')
-    assert.ok(activation < 200, `Activation exceeded 200 ms: ${activation.toFixed(1)}`);
+  assertLocalDuration(activation, 200, 'Activation');
   const document = await vscode.workspace.openTextDocument({
     language: 'typescript',
     content: 'const answer = 42;',
