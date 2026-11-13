@@ -48,6 +48,7 @@ const categoryDescriptions = new Map<string, string>(
 export class PromptTree implements vscode.TreeDataProvider<TreeNode>, vscode.Disposable {
   private readonly changes = new vscode.EventEmitter<TreeNode | undefined>();
   private readonly contextSummaries = new WeakMap<Entry, string>();
+  private readonly parents = new WeakMap<TreeNode, TreeNode>();
   readonly onDidChangeTreeData = this.changes.event;
   private readonly unsubscribe: () => void;
   query = '';
@@ -70,6 +71,13 @@ export class PromptTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dis
 
   refresh(): void {
     this.changes.fire(undefined);
+  }
+  getParent(node: TreeNode): TreeNode | undefined {
+    return node.kind === 'root'
+      ? undefined
+      : node.kind === 'scope'
+        ? { kind: 'root' }
+        : this.parents.get(node);
   }
   dispose(): void {
     this.unsubscribe();
@@ -216,11 +224,16 @@ export class PromptTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dis
   async getChildren(node?: TreeNode): Promise<TreeNode[]> {
     try {
       if (!node) return [{ kind: 'root' }];
-      if (node.kind === 'root')
-        return (this.workspaceAvailable() ? ['user', 'workspace'] : ['user']).map((scope) => ({
-          kind: 'scope',
-          scope: scope as Scope,
-        }));
+      if (node.kind === 'root') {
+        const scopes = (this.workspaceAvailable() ? ['user', 'workspace'] : ['user']).map(
+          (scope): TreeNode => ({
+            kind: 'scope',
+            scope: scope as Scope,
+          }),
+        );
+        for (const scope of scopes) this.parents.set(scope, node);
+        return scopes;
+      }
       if (node.kind === 'batch') return node.children;
       if (node.kind !== 'scope' && node.kind !== 'category') return [];
       const snapshot = await this.service.get(node.scope);
@@ -273,13 +286,21 @@ export class PromptTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dis
             ...problem,
           })),
         );
-      if (nodes.length <= 200) return nodes;
-      return Array.from({ length: Math.ceil(nodes.length / 200) }, (_, index) => ({
-        kind: 'batch',
+      if (nodes.length <= 200) {
+        for (const child of nodes) this.parents.set(child, node);
+        return nodes;
+      }
+      const batches = Array.from({ length: Math.ceil(nodes.length / 200) }, (_, index) => ({
+        kind: 'batch' as const,
         scope: node.scope,
         label: `${index * 200 + 1}-${Math.min((index + 1) * 200, nodes.length)}`,
         children: nodes.slice(index * 200, (index + 1) * 200),
       }));
+      for (const batch of batches) {
+        this.parents.set(batch, node);
+        for (const child of batch.children) this.parents.set(child, batch);
+      }
+      return batches;
     } catch (error) {
       this.report(messageOf(error));
       return [];
