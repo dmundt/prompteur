@@ -2,14 +2,13 @@
 
 ## Unreleased
 
+## 1.2.0
+
 - Expand Prompts and available User/Workspace scopes when the Prompteur view becomes visible.
 - Show local prompts and counts without waiting for startup User prompt synchronization; refresh after reconciliation.
 - Add an expanded Prompts root and parenthesized root/per-library counts that follow the active filter, without an Activity Bar count badge. Rename the view to Prompteur.
 - Show the active filter above the prompt tree and reuse the open filter input.
 - Show an actionable tree row when the active prompt filter has no matches; hover for the clear-filter instruction.
-
-## 1.2.0
-
 - Add custom category rename across both libraries and muted `custom` row labels.
 - Add direct category creation and an explicit approval action for prompts with unapproved categories; preserve prompt files.
 - Add optional custom category descriptions with native creation input and context-menu/Command Palette editing; sync them with approved categories.
