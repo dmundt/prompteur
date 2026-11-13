@@ -17,6 +17,7 @@ import {
   CancellationError,
   Disposable,
   env,
+  EventEmitter,
   FakeDocument,
   FakeEditor,
   FakeMemento,
@@ -91,6 +92,26 @@ async function addPrompt(
   await run('refresh');
   return (await entries(scope)).find((node) => node.entry.path === `prompts/${name}.prompt.md`)!;
 }
+async function customCategoryPrompts() {
+  responses.input.push('Research', 'Explore options.');
+  await run('addCategory');
+  const source =
+    '---\n# Authored note\nversion: 1\nname: Research\ncategory: research # Keep note\n---\nResearch {{selection}}\n';
+  const paths = [
+    join(userRoot(), 'prompts', 'research.prompt.md'),
+    join(workspaceRoot(), 'prompts', 'research.prompt.md'),
+  ];
+  for (const path of paths) {
+    await fs.mkdir(join(path, '..'), { recursive: true });
+    await fs.writeFile(path, source);
+  }
+  await run('refresh');
+  return {
+    source,
+    paths,
+    node: { kind: 'category', scope: 'user', category: 'research' } satisfies TreeNode,
+  };
+}
 async function destination(source = 'code') {
   const document = new FakeDocument(Uri.file(join(root, 'project', 'main.ts')), source);
   const editor = new FakeEditor(document);
@@ -115,6 +136,7 @@ beforeEach(async () => {
     subscriptions: [],
   };
   await activate(context as unknown as vscode.ExtensionContext);
+  await vi.waitFor(() => expect(tree().getTreeItem({ kind: 'root' }).label).toBe('Prompts (0)'));
 });
 afterEach(async () => {
   for (const disposable of context.subscriptions) disposable.dispose();
@@ -122,19 +144,439 @@ afterEach(async () => {
   await fs.rm(root, { force: true, recursive: true });
 });
 
+describe('prompt workflow integration', () => {
+  it('expands Prompts and available library scopes when the view becomes visible', async () => {
+    const view = views.get('prompteur.prompts')!;
+    view.setVisible(false);
+    expect(view.revealCalls).toEqual([]);
+    view.setVisible(true);
+
+    await vi.waitFor(() =>
+      expect(view.revealCalls.map(({ element }) => element)).toEqual([
+        { kind: 'scope', scope: 'user' },
+        { kind: 'scope', scope: 'workspace' },
+      ]),
+    );
+    expect(view.revealCalls.map(({ options }) => options)).toEqual(
+      Array.from({ length: 2 }, () => ({ expand: true, select: false })),
+    );
+    view.setVisible(false);
+    view.setVisible(true);
+    await vi.waitFor(() => expect(view.revealCalls).toHaveLength(4));
+  });
+
+  it('reconciles synced User prompts on reload and preserves files on an invalid reload', async () => {
+    const local = await addPrompt('local', 'Local content');
+    const workspacePrompt = await addPrompt('workspace', 'Workspace content', 'workspace');
+    const remotePath = 'prompts/remote.prompt.md';
+    const remoteSource = encodeMarkdown({ ...newPrompt('Remote'), content: 'Remote content' });
+    await vi.waitFor(() => {
+      const state = context.globalState.get<{ files: Record<string, string> }>('syncedUserPrompts');
+      expect(state?.files[local.entry.path]).toBe(local.entry.source);
+      expect(context.globalState.get('userPromptSyncBaseline')).toEqual(state);
+    });
+    const incoming = {
+      version: 1,
+      files: { [remotePath]: remoteSource },
+      deleted: [local.entry.path],
+    };
+    await context.globalState.update('syncedUserPrompts', incoming);
+    await run('refresh');
+    await vi.waitFor(async () => {
+      expect(await fs.readFile(join(userRoot(), remotePath), 'utf8')).toBe(remoteSource);
+      expect(tree().getTreeItem({ kind: 'root' }).label).toBe('Prompts (2)');
+      expect(context.globalState.get('userPromptSyncBaseline')).toEqual(incoming);
+    });
+    await expect(fs.stat(join(userRoot(), local.entry.path))).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+    await vi.waitFor(async () =>
+      expect((await entries()).map((node) => node.entry.path)).toEqual([remotePath]),
+    );
+    expect(await fs.readFile(join(workspaceRoot(), workspacePrompt.entry.path), 'utf8')).toBe(
+      workspacePrompt.entry.source,
+    );
+    expect(context.globalState.get('syncedUserPrompts')).toEqual(incoming);
+
+    const invalid = { version: 1, files: { '../outside.prompt.md': 'unsafe' }, deleted: [] };
+    await context.globalState.update('syncedUserPrompts', invalid);
+    await expect(run('refresh')).rejects.toThrow('invalid data');
+    expect(messages.errors.at(-1)).toContain('invalid data');
+    expect(await fs.readFile(join(userRoot(), remotePath), 'utf8')).toBe(remoteSource);
+    expect(context.globalState.get('syncedUserPrompts')).toEqual(invalid);
+    expect(context.globalState.get('userPromptSyncBaseline')).toEqual(incoming);
+    await context.globalState.update('syncedUserPrompts', incoming);
+    await run('refresh');
+    expect((await entries()).map((node) => node.entry.path)).toEqual([remotePath]);
+  });
+
+  it('creates, saves, copies and deletes a prompt while protecting dirty edits', async () => {
+    const category: TreeNode = { kind: 'category', scope: 'user', category: 'review' };
+    responses.input.push('Integrated prompt');
+    await run('newPrompt', category);
+    const document = window.activeTextEditor!.document;
+    const path = 'prompts/integrated-prompt.prompt.md';
+    expect(document.uri.fsPath).toBe(join(userRoot(), path));
+    const source = encodeMarkdown({
+      ...newPrompt('Integrated prompt', 'review'),
+      content: 'Review {{selection}} in {{filename}}',
+    });
+    document.change(source);
+    await saveDocument(document);
+    await run('refresh');
+    const node = (await entries()).find((item) => item.entry.path === path)!;
+    const target = await destination('selected code');
+    await run('copy', node);
+    expect(env.clipboard.value).toBe('Review selected code in main.ts');
+    expect(target.document.getText()).toBe('selected code');
+    await vi.waitFor(() =>
+      expect(
+        context.globalState.get<{ files: Record<string, string> }>('syncedUserPrompts')?.files[
+          path
+        ],
+      ).toBe(source),
+    );
+
+    document.change(`${source}\nUnsaved edit`);
+    await expect(run('delete', node)).rejects.toThrow('Save or discard');
+    expect(messages.errors.at(-1)).toContain('Save or discard');
+    expect(await fs.readFile(document.uri.fsPath, 'utf8')).toBe(source);
+    document.change(source);
+    await saveDocument(document);
+    responses.warning.push('Delete');
+    await run('delete', node);
+    await expect(fs.stat(document.uri.fsPath)).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(await entries()).toEqual([]);
+    await vi.waitFor(() => {
+      const state = context.globalState.get<{ files: Record<string, string>; deleted: string[] }>(
+        'syncedUserPrompts',
+      );
+      expect(state?.files[path]).toBeUndefined();
+      expect(state?.deleted).toContain(path);
+    });
+  });
+
+  it('renders a Workspace prompt for Copilot only after Trust is granted', async () => {
+    const node = await addPrompt(
+      'workspace-review',
+      'Review {{selection}} with {{clipboard}}',
+      'workspace',
+    );
+    const target = await destination('selected code');
+    env.clipboard.value = 'local context';
+    const readClipboard = vi.spyOn(env.clipboard, 'readText');
+    workspace.isTrusted = false;
+    await expect(runPromptTool({ scope: 'workspace', path: node.entry.path })).rejects.toThrow(
+      'Trust this workspace',
+    );
+    expect(readClipboard).not.toHaveBeenCalled();
+    workspace.isTrusted = true;
+    const result = JSON.parse(await runPromptTool({ query: 'workspace-review' }));
+    expect(result).toMatchObject({
+      status: 'match',
+      prompt: { scope: 'workspace', path: node.entry.path },
+      missing: [],
+      content: 'Review selected code with local context',
+    });
+    expect(readClipboard).toHaveBeenCalledOnce();
+    expect(target.document.getText()).toBe('selected code');
+    expect(env.clipboard.value).toBe('local context');
+    expect(await fs.readFile(join(workspaceRoot(), node.entry.path), 'utf8')).toBe(
+      node.entry.source,
+    );
+    expect(
+      context.globalState.get<{ files: Record<string, string> }>('syncedUserPrompts')?.files[
+        node.entry.path
+      ],
+    ).toBeUndefined();
+  });
+});
+
 describe('release commands', () => {
+  it('sums filtered scope counts and updates them after filter and library changes without a badge', async () => {
+    await addPrompt('user-one', 'needle');
+    await addPrompt('user-two', 'other');
+    await addPrompt('workspace-one', 'needle', 'workspace');
+    const invalid = join(workspaceRoot(), 'prompts', 'invalid.prompt.md');
+    await fs.writeFile(invalid, '---\nversion: [\n---\n');
+    await run('refresh');
+    const view = views.get('prompteur.prompts')!;
+    const counts = () =>
+      (['user', 'workspace'] as const).map((scope) => tree().getTreeItem(scopeNode(scope)).label);
+    await vi.waitFor(() => {
+      expect(counts()).toEqual(['User (2)', 'Workspace (1)']);
+      expect(tree().getTreeItem({ kind: 'root' }).label).toBe('Prompts (3)');
+      expect(view.badge).toBeUndefined();
+    });
+
+    await run('search');
+    inputBoxes.at(-1)!.valueChanged.fire('needle');
+    for (const mode of ['filtered', 'total', 'hidden']) {
+      workspace.configuration.set('prompteur.categoryCountMode', mode);
+      configurationChanged.fire({
+        affectsConfiguration: (section) => section === 'prompteur.categoryCountMode',
+      });
+      expect(await entries('user')).toHaveLength(1);
+      expect(await entries('workspace')).toHaveLength(1);
+      await vi.waitFor(() => expect(counts()).toEqual(['User (1)', 'Workspace (1)']));
+      expect(tree().getTreeItem({ kind: 'root' }).label).toBe('Prompts (2)');
+      expect(view.badge).toBeUndefined();
+    }
+    workspace.configuration.set('prompteur.groupByCategory', false);
+    inputBoxes.at(-1)!.valueChanged.fire('no matches');
+    expect((await tree().getChildren(scopeNode()))[0]?.kind).toBe('empty');
+    await vi.waitFor(() => expect(counts()).toEqual(['User (0)', 'Workspace (0)']));
+    expect(tree().getTreeItem({ kind: 'root' }).label).toBe('Prompts (0)');
+    expect(view.badge).toBeUndefined();
+
+    await run('clearSearch');
+    await fs.writeFile(invalid, encodeMarkdown(newPrompt('Repaired')));
+    await run('refresh');
+    await vi.waitFor(() => {
+      expect(counts()).toEqual(['User (2)', 'Workspace (2)']);
+      expect(tree().getTreeItem({ kind: 'root' }).label).toBe('Prompts (4)');
+      expect(view.badge).toBeUndefined();
+    });
+    await fs.unlink(invalid);
+    await run('refresh');
+    await vi.waitFor(() => expect(tree().getTreeItem({ kind: 'root' }).label).toBe('Prompts (3)'));
+    expect(counts()).toEqual(['User (2)', 'Workspace (1)']);
+
+    workspace.configuration.set('prompteur.defaultScope', 'user');
+    responses.input.push('Created');
+    await run('newPrompt', { kind: 'root' });
+    await vi.waitFor(() => {
+      expect(counts()).toEqual(['User (3)', 'Workspace (1)']);
+      expect(tree().getTreeItem({ kind: 'root' }).label).toBe('Prompts (4)');
+    });
+    workspace.configuration.set('prompteur.groupByCategory', true);
+    await run('clearSearch');
+    const created = (await entries()).find((node) => node.entry.data.name === 'Created')!;
+    responses.warning.push('Delete');
+    await run('delete', created);
+    await vi.waitFor(() => expect(tree().getTreeItem({ kind: 'root' }).label).toBe('Prompts (3)'));
+    expect(counts()).toEqual(['User (2)', 'Workspace (1)']);
+
+    await run('search');
+    inputBoxes.at(-1)!.valueChanged.fire('user');
+    await vi.waitFor(() => expect(counts()).toEqual(['User (2)', 'Workspace (0)']));
+    workspace.configuration.set('prompteur.search.matching', 'exact');
+    configurationChanged.fire({
+      affectsConfiguration: (section) => section === 'prompteur.search',
+    });
+    await vi.waitFor(() => expect(counts()).toEqual(['User (0)', 'Workspace (0)']));
+    inputBoxes.at(-1)!.valueChanged.fire('workspace-one');
+    inputBoxes.at(-1)!.valueChanged.fire('user-one');
+    await vi.waitFor(() => expect(counts()).toEqual(['User (1)', 'Workspace (0)']));
+    expect(tree().getTreeItem({ kind: 'root' }).label).toBe('Prompts (1)');
+    await run('clearSearch');
+    expect(counts()).toEqual(['User (2)', 'Workspace (1)']);
+  });
+  it('eagerly loads both scopes without tree expansion or blocking activation', async () => {
+    for (const disposable of context.subscriptions.splice(0)) disposable.dispose();
+    workspace.configuration.set('prompteur.syncUserPrompts', false);
+    await fs.mkdir(join(workspaceRoot(), 'prompts'), { recursive: true });
+    await fs.writeFile(
+      join(workspaceRoot(), 'prompts', 'eager.prompt.md'),
+      encodeMarkdown(newPrompt('Eager')),
+    );
+    let release!: (paths: string[]) => void;
+    const pending = new Promise<string[]>((resolve) => {
+      release = resolve;
+    });
+    const original = LocalFiles.prototype.list;
+    const list = vi.spyOn(LocalFiles.prototype, 'list').mockImplementation(function (
+      this: LocalFiles,
+      scope,
+    ) {
+      return scope === 'workspace' ? pending : original.call(this, scope);
+    });
+    await activate(context as unknown as vscode.ExtensionContext);
+    const view = views.get('prompteur.prompts')!;
+    expect(list).toHaveBeenCalledWith('user');
+    expect(list).toHaveBeenCalledWith('workspace');
+    expect(view.badge).toBeUndefined();
+    expect(tree().getTreeItem({ kind: 'root' }).label).toBe('Prompts');
+    release(['prompts/eager.prompt.md']);
+    await vi.waitFor(() => expect(tree().getTreeItem({ kind: 'root' }).label).toBe('Prompts (1)'));
+    expect(tree().getTreeItem(scopeNode('user')).label).toBe('User (0)');
+    expect(tree().getTreeItem(scopeNode('workspace')).label).toBe('Workspace (1)');
+    expect(tree().getTreeItem({ kind: 'root' }).label).toBe('Prompts (1)');
+  });
+  it.each([false, true])(
+    'shows local prompts and counts before startup sync finishes (failure: %s)',
+    async (fail) => {
+      for (const disposable of context.subscriptions.splice(0)) disposable.dispose();
+      for (const base of [userRoot(), workspaceRoot()]) {
+        await fs.mkdir(join(base, 'prompts'), { recursive: true });
+        await fs.writeFile(
+          join(base, 'prompts', 'local.prompt.md'),
+          encodeMarkdown(newPrompt('Local')),
+        );
+      }
+      const remote = encodeMarkdown(newPrompt('Remote'));
+      await context.globalState.update('syncedUserPrompts', {
+        version: 1,
+        files: { 'prompts/remote.prompt.md': remote },
+        deleted: [],
+      });
+      let release!: () => void;
+      const pending = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const original = LocalFiles.prototype.write;
+      const write = vi.spyOn(LocalFiles.prototype, 'write').mockImplementation(async function (
+        this: LocalFiles,
+        scope,
+        path,
+        source,
+        expected,
+      ) {
+        if (scope === 'user' && path === 'prompts/remote.prompt.md') {
+          await pending;
+          if (fail) throw new Error('Startup sync failed');
+        }
+        await original.call(this, scope, path, source, expected);
+      });
+      try {
+        await activate(context as unknown as vscode.ExtensionContext);
+        await vi.waitFor(() => {
+          expect(write).toHaveBeenCalledWith('user', 'prompts/remote.prompt.md', remote, undefined);
+          expect(tree().getTreeItem({ kind: 'root' }).label).toBe('Prompts (2)');
+        });
+        for (const scope of ['user', 'workspace'] as const) {
+          expect(tree().getTreeItem(scopeNode(scope)).label).toBe(
+            `${scope === 'user' ? 'User' : 'Workspace'} (1)`,
+          );
+          expect((await entries(scope)).map((node) => node.entry.data.name)).toEqual(['Local']);
+        }
+        expect(messages.errors).toEqual([]);
+      } finally {
+        release();
+      }
+      if (fail) {
+        await vi.waitFor(() => expect(messages.errors).toContain('Prompteur: Startup sync failed'));
+        expect(tree().getTreeItem({ kind: 'root' }).label).toBe('Prompts (2)');
+        expect((await entries()).map((node) => node.entry.data.name)).toEqual(['Local']);
+      } else {
+        await vi.waitFor(() =>
+          expect(tree().getTreeItem({ kind: 'root' }).label).toBe('Prompts (3)'),
+        );
+        expect(tree().getTreeItem(scopeNode('user')).label).toBe('User (2)');
+        expect(tree().getTreeItem(scopeNode('workspace')).label).toBe('Workspace (1)');
+        expect((await entries()).map((node) => node.entry.data.name)).toEqual(['Local', 'Remote']);
+        expect(messages.errors).toEqual([]);
+      }
+    },
+  );
+  it('reports count loading failures without showing a partial total and recovers on reload', async () => {
+    for (const disposable of context.subscriptions.splice(0)) disposable.dispose();
+    workspace.configuration.set('prompteur.syncUserPrompts', false);
+    const original = LocalFiles.prototype.list;
+    const list = vi.spyOn(LocalFiles.prototype, 'list').mockImplementation(function (
+      this: LocalFiles,
+      scope,
+    ) {
+      if (scope === 'workspace') return Promise.reject(new Error('Count read failed'));
+      return original.call(this, scope);
+    });
+    await activate(context as unknown as vscode.ExtensionContext);
+    await vi.waitFor(() => expect(messages.errors).toContain('Prompteur: Count read failed'));
+    expect(views.get('prompteur.prompts')!.badge).toBeUndefined();
+    expect(tree().getTreeItem(scopeNode('user')).label).toBe('User');
+    expect(tree().getTreeItem({ kind: 'root' }).label).toBe('Prompts');
+    list.mockRestore();
+    await run('refresh');
+    await vi.waitFor(() => expect(tree().getTreeItem({ kind: 'root' }).label).toBe('Prompts (0)'));
+  });
+  it('does not publish pending counts after disposal', async () => {
+    for (const disposable of context.subscriptions.splice(0)) disposable.dispose();
+    workspace.configuration.set('prompteur.syncUserPrompts', false);
+    let release!: (paths: string[]) => void;
+    const pending = new Promise<string[]>((resolve) => {
+      release = resolve;
+    });
+    vi.spyOn(LocalFiles.prototype, 'list').mockImplementation((scope) =>
+      scope === 'workspace' ? pending : Promise.resolve([]),
+    );
+    await activate(context as unknown as vscode.ExtensionContext);
+    const view = views.get('prompteur.prompts')!;
+    const refresh = vi.spyOn(tree(), 'refresh');
+    for (const disposable of context.subscriptions.splice(0)) disposable.dispose();
+    release([]);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(view.badge).toBeUndefined();
+    expect(refresh).not.toHaveBeenCalled();
+  });
+  it('counts only User prompts when no Workspace library is available', async () => {
+    await addPrompt('personal', 'safe');
+    for (const disposable of context.subscriptions.splice(0)) disposable.dispose();
+    workspace.workspaceFolders = [];
+    await activate(context as unknown as vscode.ExtensionContext);
+    await vi.waitFor(() => expect(tree().getTreeItem({ kind: 'root' }).label).toBe('Prompts (1)'));
+    const [root] = await tree().getChildren();
+    expect(await tree().getChildren(root)).toEqual([{ kind: 'scope', scope: 'user' }]);
+    expect(tree().getTreeItem(scopeNode()).label).toBe('User (1)');
+    expect(tree().getTreeItem({ kind: 'root' }).label).toBe('Prompts (1)');
+  });
   it('uses the local profile path when VS Code exposes a non-file storage URI', async () => {
     for (const disposable of context.subscriptions) disposable.dispose();
     context.subscriptions = [];
     context.globalStorageUri = Uri.parse('vscode-userdata:/profile/storage');
     await activate(context as unknown as vscode.ExtensionContext);
     await run('addStarters', scopeNode());
-    expect(await entries()).toHaveLength(16);
+    expect(await entries()).toHaveLength(37);
+    await run('openUserLibrary');
+    expect(commandExecutions.at(-1)).toEqual({
+      id: 'revealFileInOS',
+      args: [Uri.file(userRoot())],
+    });
+  });
+  it('reveals only the User library root without requiring Workspace Trust', async () => {
+    await addPrompt('existing');
+    workspace.isTrusted = false;
+    await run('openUserLibrary', scopeNode('workspace'));
+    expect(commandExecutions.at(-1)).toEqual({
+      id: 'revealFileInOS',
+      args: [Uri.file(userRoot())],
+    });
+  });
+  it('reports an unavailable User library without invoking the system file manager', async () => {
+    await expect(run('openUserLibrary')).rejects.toThrow();
+    expect(messages.errors.at(-1)).toContain(userRoot());
+    expect(commandExecutions.some((item) => item.id === 'revealFileInOS')).toBe(false);
+  });
+  it('reveals each scope folder from its hover link without requiring Trust', async () => {
+    await addPrompt('user');
+    await addPrompt('workspace', 'Content', 'workspace');
+    workspace.isTrusted = false;
+    for (const scope of ['user', 'workspace'] as const) {
+      const tooltip = tree().getTreeItem(scopeNode(scope)).tooltip as MarkdownString;
+      const location = scope === 'user' ? userRoot() : workspaceRoot();
+      expect(tooltip.isTrusted).toEqual({ enabledCommands: ['prompteur.openLibraryFolder'] });
+      const link = /command:prompteur.openLibraryFolder\?([^)]*)/.exec(tooltip.value);
+      expect(link).not.toBeNull();
+      const args: unknown[] = JSON.parse(decodeURIComponent(link![1]!));
+      await commands.executeCommand('prompteur.openLibraryFolder', ...args);
+      expect(commandExecutions.at(-1)).toEqual({
+        id: 'revealFileInOS',
+        args: [Uri.file(location)],
+      });
+    }
+  });
+  it('rejects invalid or missing library folder links without creating folders', async () => {
+    for (const scope of ['../outside', undefined, 'workspace']) {
+      await expect(commands.executeCommand('prompteur.openLibraryFolder', scope)).rejects.toThrow();
+    }
+    expect(messages.errors).toHaveLength(3);
+    expect(commandExecutions.some((item) => item.id === 'revealFileInOS')).toBe(false);
+    await expect(fs.stat(workspaceRoot())).rejects.toThrow();
   });
   it('syncs User prompts through VS Code state and supports a flat tree', async () => {
     expect(context.globalState.syncedKeys).toEqual([
       'syncedUserPrompts',
       'approvedPromptCategories',
+      'promptCategoryDescriptions',
     ]);
     const remotePrompt = encodeMarkdown(newPrompt('Remote Sync'));
     await context.globalState.update('syncedUserPrompts', {
@@ -149,7 +591,9 @@ describe('release commands', () => {
       expect(await fs.readFile(join(userRoot(), 'prompts', 'remote-sync.prompt.md'), 'utf8')).toBe(
         remotePrompt,
       );
+      expect(messages.errors).toEqual([]);
       expect((await entries()).some((node) => node.entry.data.name === 'Remote Sync')).toBe(true);
+      expect(tree().getTreeItem({ kind: 'root' }).label).toBe('Prompts (1)');
     });
 
     await addPrompt('local-sync', 'local content');
@@ -186,7 +630,7 @@ describe('release commands', () => {
       activationEvents: string[];
       extensionDependencies?: string[];
       contributes: {
-        commands: { command: string; title: string; enablement?: string }[];
+        commands: { command: string; title: string; enablement?: string; icon?: string }[];
         languageModelTools: {
           name: string;
           canBeReferencedInPrompt: boolean;
@@ -195,6 +639,7 @@ describe('release commands', () => {
         configuration: { properties: Record<string, unknown> };
         menus: {
           commandPalette: { command: string; when: string }[];
+          'editor/title': { command: string; when: string; group: string }[];
           'view/item/context': { command: string; when: string; group: string }[];
           'view/title': { command: string; when: string; group: string }[];
         };
@@ -204,6 +649,7 @@ describe('release commands', () => {
       [
         ...manifest.contributes.commands.map((item) => item.command),
         'prompteur.filterFromTooltip',
+        'prompteur.openLibraryFolder',
         'prompteur.openPromptPath',
       ].sort(),
     );
@@ -267,7 +713,7 @@ describe('release commands', () => {
     const promptMenu = manifest.contributes.menus['view/item/context'].filter(
       (item) =>
         item.when.includes('viewItem == prompt') ||
-        item.when.includes('viewItem =~ /^(prompt|problem)$/'),
+        item.when.includes('viewItem =~ /^(prompt|problem|categoryProblem)$/'),
     );
     expect(
       promptMenu.filter((item) => !item.group.startsWith('inline@')).map((item) => item.command),
@@ -285,13 +731,53 @@ describe('release commands', () => {
     expect(contextItems[0]?.group).toBe('0_text@1');
     expect(contextItems.slice(1).every((item) => item.group.split('@')[0] !== '0_text')).toBe(true);
     expect(manifest.contributes.menus.commandPalette).toEqual([
+      { command: 'prompteur.approveCategory', when: 'false' },
       { command: 'prompteur.duplicate', when: 'false' },
+      { command: 'prompteur.searchActive', when: 'false' },
     ]);
+    expect(manifest.contributes.menus['view/title']).toEqual(
+      expect.arrayContaining([
+        {
+          command: 'prompteur.search',
+          when: 'view == prompteur.prompts && !prompteur.filterActive',
+          group: 'navigation@3',
+        },
+        {
+          command: 'prompteur.searchActive',
+          when: 'view == prompteur.prompts && prompteur.filterActive',
+          group: 'navigation@3',
+        },
+      ]),
+    );
+    expect(manifest.contributes.commands).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ command: 'prompteur.search', icon: '$(search)' }),
+        expect.objectContaining({ command: 'prompteur.searchActive', icon: '$(filter)' }),
+      ]),
+    );
     expect(manifest.contributes.menus['view/item/context']).toContainEqual(
       expect.objectContaining({
         command: 'prompteur.pastePrompt',
-        when: expect.stringContaining('viewItem =~ /^(scope|category)$/'),
+        when: expect.stringContaining('viewItem =~ /^(scope|category|customCategory)$/'),
       }),
+    );
+    expect(manifest.contributes.menus['view/item/context']).toEqual(
+      expect.arrayContaining([
+        {
+          command: 'prompteur.editCategoryDescription',
+          when: 'view == prompteur.prompts && viewItem == customCategory',
+          group: '2_edit@1',
+        },
+        {
+          command: 'prompteur.renameCategory',
+          when: 'view == prompteur.prompts && viewItem == customCategory',
+          group: '2_edit@2',
+        },
+        expect.objectContaining({
+          command: 'prompteur.newPrompt',
+          when: 'view == prompteur.prompts && viewItem =~ /^(scope|category|customCategory)$/',
+        }),
+      ]),
     );
     expect(manifest.contributes.commands.map((item) => item.command)).not.toContain(
       'prompteur.migrateCategories',
@@ -377,7 +863,7 @@ describe('release commands', () => {
       'legacy YAML stays untouched',
     );
     await run('addStarters', scopeNode());
-    expect(await entries()).toHaveLength(16);
+    expect(await entries()).toHaveLength(37);
     expect(await fs.readFile(join(userRoot(), 'prompts', 'code-review.yaml'), 'utf8')).toBe(
       'legacy YAML stays untouched',
     );
@@ -386,9 +872,9 @@ describe('release commands', () => {
     expect(await fs.readFile(bundled, 'utf8')).toBe(original);
     expect(await fs.readFile(join(userRoot(), 'settings.yaml'), 'utf8')).toContain('templates');
   });
-  it('installs sixteen starters as ordinary files without changing bundled source', async () => {
+  it('installs thirty-seven starters as ordinary files without changing bundled source', async () => {
     await run('addStarters', scopeNode());
-    expect(await entries()).toHaveLength(16);
+    expect(await entries()).toHaveLength(37);
     const node = (await entries()).find((item) =>
       item.entry.path.endsWith('review-code.prompt.md'),
     )!;
@@ -398,6 +884,27 @@ describe('release commands', () => {
     await destination();
     await run('copy', node);
     expect(env.clipboard.value).toContain('Review the selected code or available diff:');
+  });
+  it('adds issue and task starters to an existing library without changing saved prompts', async () => {
+    const starterDir = resolve('resources/starter/prompts');
+    const target = join(userRoot(), 'prompts');
+    await fs.mkdir(target, { recursive: true });
+    for (const path of await fs.readdir(starterDir)) {
+      if (path === 'create-issue.prompt.md' || path === 'create-task.prompt.md') continue;
+      await fs.copyFile(join(starterDir, path), join(target, path));
+    }
+    const existing = join(target, 'review-code.prompt.md');
+    await fs.writeFile(existing, 'Existing user content');
+
+    await run('addStarters', scopeNode());
+    expect(messages.info.at(-1)).toContain(
+      'Added 2 starter prompts. Saved files matching bundled versions: 34; differing: 1.',
+    );
+    expect(await fs.readFile(existing, 'utf8')).toBe('Existing user content');
+    for (const name of ['create-issue', 'create-task'])
+      expect(await fs.readFile(join(target, `${name}.prompt.md`), 'utf8')).toBe(
+        await fs.readFile(join(starterDir, `${name}.prompt.md`), 'utf8'),
+      );
   });
   it('summarizes saved matches and differences while preserving dirty and invalid prompts', async () => {
     const starterDir = resolve('resources/starter/prompts');
@@ -420,7 +927,7 @@ describe('release commands', () => {
 
     await run('addStarters', scopeNode());
     expect(messages.info.at(-1)).toBe(
-      'Added 13 starter prompts. Saved files matching bundled versions: 1; differing: 1. Unsaved editors without saved files skipped: 1. No existing files were overwritten.',
+      'Added 34 starter prompts. Saved files matching bundled versions: 1; differing: 1. Unsaved editors without saved files skipped: 1. No existing files were overwritten.',
     );
     expect(await fs.readFile(join(target, matching), 'utf8')).toBe(original);
     expect(await fs.readFile(join(target, invalid), 'utf8')).toBe('invalid frontmatter');
@@ -433,7 +940,7 @@ describe('release commands', () => {
     await run('addStarters', scopeNode());
     await run('addStarters', scopeNode());
     expect(messages.info.at(-1)).toContain(
-      'Saved files matching bundled versions: 16; differing: 0',
+      'Saved files matching bundled versions: 37; differing: 0',
     );
   });
   it('reports a concurrent starter creation without overwriting it', async () => {
@@ -627,15 +1134,20 @@ describe('release commands', () => {
     expect(readClipboard).not.toHaveBeenCalled();
   });
   it('computes best match before candidate truncation even with alphabetical ordering', async () => {
-    for (let index = 0; index < 11; index++) await addPrompt(`alpha-${index}`, 'inspect');
+    for (let index = 0; index < 8; index++) await addPrompt(`alpha-${index}`, 'inspect');
     await addPrompt('z-inspect', 'Best');
     workspace.configuration.set('prompteur.search.ranking', 'name');
     expect(JSON.parse(await runPromptTool({ query: 'inspect' })).content).toBe('Best');
     workspace.configuration.set('prompteur.search.selection', 'requireChoice');
     const result = JSON.parse(await runPromptTool({ query: 'inspect' }));
-    expect(result.matches).toHaveLength(10);
-    expect(result.truncated).toBe(true);
+    expect(result.matches).toHaveLength(9);
+    expect(result.truncated).toBe(false);
     expect(result).not.toHaveProperty('content');
+    await addPrompt('alpha-nine', 'inspect');
+    expect(JSON.parse(await runPromptTool({ query: 'inspect' })).matches).toHaveLength(10);
+    expect(JSON.parse(await runPromptTool({ query: 'inspect' })).truncated).toBe(false);
+    await addPrompt('alpha-overflow', 'inspect');
+    expect(JSON.parse(await runPromptTool({ query: 'inspect' })).truncated).toBe(true);
   });
   it('refreshes library filtering for live settings while leaving every matching row visible', async () => {
     await addPrompt('alpha', 'Inspect body');
@@ -791,6 +1303,11 @@ describe('release commands', () => {
   });
   it('rejects blank paths and oversized search queries explicitly', async () => {
     await expect(runPromptTool({ scope: 'user', path: '  ' })).rejects.toThrow('scope and path');
+    expect(JSON.parse(await runPromptTool({ query: 'x'.repeat(255) })).status).toBe('not_found');
+    expect(JSON.parse(await runPromptTool({ query: 'x'.repeat(256) }))).toMatchObject({
+      status: 'not_found',
+      query: 'x'.repeat(256),
+    });
     await expect(runPromptTool({ query: 'x'.repeat(257) })).rejects.toThrow('256');
   });
   it('reports an empty result and rejects an empty search query', async () => {
@@ -955,6 +1472,74 @@ describe('release commands', () => {
     expect(target.document.getText()).toBe('');
     expect(messages.warnings).toEqual([]);
   });
+  it('uses entered text while preserving source context', async () => {
+    const node = await addPrompt('entered', '{{text}}\n{{text}}\n{{selection}} {{filename}}');
+    await destination('Source selection');
+    const copying = run('copy', node);
+    await vi.waitFor(() => expect(inputBoxes.at(-1)?.title).toBe('Enter prompt text'));
+    const input = inputBoxes.at(-1)!;
+    expect(env.clipboard.value).toBe('');
+    input.value = 'Entered text';
+    input.accepted.fire();
+    await copying;
+    expect(env.clipboard.value).toBe('Entered text\nEntered text\nSource selection main.ts');
+    const selectionOnly = await addPrompt('selection-only', '{{selection}} {{filename}}');
+    await run('copy', selectionOnly);
+    expect(env.clipboard.value).toBe('Source selection main.ts');
+  });
+  it('cancels text entry without output and previews submitted text', async () => {
+    const node = await addPrompt('entered', '{{text}}');
+    env.clipboard.value = 'Unchanged';
+    const copying = run('copy', node);
+    await vi.waitFor(() => expect(inputBoxes.at(-1)?.title).toBe('Enter prompt text'));
+    inputBoxes.at(-1)!.hide();
+    await copying;
+    expect(env.clipboard.value).toBe('Unchanged');
+    expect(messages.errors).toEqual([]);
+    const previous = inputBoxes.at(-1);
+    const preview = run('preview', node);
+    await vi.waitFor(() => expect(inputBoxes.at(-1)).not.toBe(previous));
+    inputBoxes.at(-1)!.value = 'User text for preview';
+    inputBoxes.at(-1)!.accepted.fire();
+    await preview;
+    expect(window.activeTextEditor!.document.getText()).toBe('User text for preview');
+    expect(env.clipboard.value).toBe('Unchanged');
+  });
+  it('rechecks Workspace Trust after text entry', async () => {
+    const node = await addPrompt('entered', '{{text}}', 'workspace');
+    const copying = run('copy', node);
+    const rejected = expect(copying).rejects.toThrow('Trust');
+    await vi.waitFor(() => expect(inputBoxes.at(-1)?.title).toBe('Enter prompt text'));
+    inputBoxes.at(-1)!.value = 'User text';
+    workspace.isTrusted = false;
+    inputBoxes.at(-1)!.accepted.fire();
+    await rejected;
+    expect(env.clipboard.value).toBe('');
+  });
+  it('collects Copilot text only for a chosen prompt and honors cancellation', async () => {
+    const first = await addPrompt('text-one', '{{text}}');
+    await addPrompt('text-two', '{{text}}');
+    expect(JSON.parse(await runPromptTool({ query: 'text-' })).status).toBe('ambiguous');
+    expect(inputBoxes).toHaveLength(0);
+    const result = runPromptTool({ scope: 'user', path: first.entry.path });
+    await vi.waitFor(() => expect(inputBoxes.at(-1)?.title).toBe('Enter prompt text'));
+    inputBoxes.at(-1)!.value = 'Explicit Copilot text';
+    inputBoxes.at(-1)!.accepted.fire();
+    expect(JSON.parse(await result).content).toBe('Explicit Copilot text');
+
+    const cancellation = new EventEmitter<void>();
+    const token = { isCancellationRequested: false, onCancellationRequested: cancellation.event };
+    const previous = inputBoxes.at(-1);
+    const invocation = promptTool().invoke(
+      { input: { scope: 'user', path: first.entry.path }, toolInvocationToken: undefined },
+      token,
+    );
+    const rejected = expect(invocation).rejects.toBeInstanceOf(CancellationError);
+    await vi.waitFor(() => expect(inputBoxes.at(-1)).not.toBe(previous));
+    token.isCancellationRequested = true;
+    cancellation.fire();
+    await rejected;
+  });
   it.each(['filename', 'workspace', 'filename, workspace'])(
     'copies without blocking when optional context is missing: %s',
     async (missing) => {
@@ -1046,15 +1631,125 @@ describe('release commands', () => {
     await expect(run('copy', node)).rejects.toThrow();
     expect(collections[0]!.get(document.uri.toString())?.length).toBe(1);
   });
+  it('reuses the open search input and releases listeners when it hides', async () => {
+    await run('search');
+    const box = inputBoxes.at(-1)!;
+    const show = vi.spyOn(box, 'show');
+    const dispose = vi.spyOn(box, 'dispose').mockImplementation(() => undefined);
+    box.valueChanged.fire('review');
+    await run('searchActive');
+    expect(inputBoxes).toHaveLength(1);
+    expect(show).toHaveBeenCalledOnce();
+    box.accepted.fire();
+    expect(dispose).toHaveBeenCalledOnce();
+    box.valueChanged.fire('stale input');
+    expect(tree().query).toBe('review');
+    await run('search');
+    expect(inputBoxes).toHaveLength(2);
+    expect(inputBoxes.at(-1)!.value).toBe('review');
+    box.hidden.fire();
+    expect(dispose).toHaveBeenCalledOnce();
+    await run('searchActive');
+    expect(inputBoxes).toHaveLength(2);
+  });
+  it('disposes the open search input and its listeners on shutdown without a hide event', async () => {
+    await run('search');
+    const box = inputBoxes.at(-1)!;
+    const dispose = vi.spyOn(box, 'dispose').mockImplementation(() => undefined);
+    const provider = tree();
+    box.valueChanged.fire('review');
+    for (const disposable of context.subscriptions) disposable.dispose();
+    context.subscriptions = [];
+    expect(dispose).toHaveBeenCalledOnce();
+    const executions = commandExecutions.length;
+    box.valueChanged.fire('stale input');
+    box.accepted.fire();
+    box.hidden.fire();
+    expect(provider.query).toBe('review');
+    expect(commandExecutions).toHaveLength(executions);
+    expect(dispose).toHaveBeenCalledOnce();
+  });
+  it('shows the trimmed filter as literal tree text without changing the query', async () => {
+    const view = views.get('prompteur.prompts')!;
+    expect(view.message).toBeUndefined();
+    await run('search');
+    const box = inputBoxes.at(-1)!;
+    const query = '  tag:"security review" [text](command:example) <test>  ';
+    box.valueChanged.fire(query);
+    expect(tree().query).toBe(query);
+    expect(view.message).toBe(`Filter: ${query.trim()}`);
+    box.hidden.fire();
+    expect(view.message).toBe(`Filter: ${query.trim()}`);
+    await run('search');
+    inputBoxes.at(-1)!.valueChanged.fire(' \t ');
+    expect(view.message).toBe('');
+    inputBoxes.at(-1)!.valueChanged.fire('review');
+    await run('clearSearch');
+    expect(view.message).toBe('');
+  });
   it('live filters exact tags and clears the main tree filter', async () => {
     await addPrompt('review', 'review');
+    expect(contextKeys.get('prompteur.filterActive')).toBe(false);
     await run('search');
     const box = inputBoxes[0]!;
     box.valueChanged.fire('nonexistent');
+    await vi.waitFor(() => expect(contextKeys.get('prompteur.filterActive')).toBe(true));
     expect(await entries()).toHaveLength(0);
+    box.valueChanged.fire('  ');
+    await vi.waitFor(() => expect(contextKeys.get('prompteur.filterActive')).toBe(false));
+    box.valueChanged.fire('nonexistent');
+    await vi.waitFor(() => expect(contextKeys.get('prompteur.filterActive')).toBe(true));
     box.accepted.fire();
+    await run('searchActive');
+    const reopened = inputBoxes.at(-1)!;
+    expect(reopened.value).toBe('nonexistent');
     await run('clearSearch');
+    expect(contextKeys.get('prompteur.filterActive')).toBe(false);
+    expect(reopened.value).toBe('');
     expect(await entries()).toHaveLength(1);
+  });
+  it('keeps the active indicator in order during rapid filter changes', async () => {
+    const execute = commands.executeCommand.bind(commands);
+    let release!: () => void;
+    let started!: () => void;
+    const activeUpdateStarted = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    const delayed = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const spy = vi.spyOn(commands, 'executeCommand').mockImplementation(async (id, ...args) => {
+      if (id === 'setContext' && args[0] === 'prompteur.filterActive' && args[1] === true) {
+        started();
+        await delayed;
+      }
+      return execute(id, ...args);
+    });
+    await run('search');
+    inputBoxes.at(-1)!.valueChanged.fire('review');
+    await activeUpdateStarted;
+    const clear = run('clearSearch');
+    release();
+    await clear;
+    expect(contextKeys.get('prompteur.filterActive')).toBe(false);
+    expect(tree().query).toBe('');
+    spy.mockRestore();
+  });
+  it('reports filter indicator errors and processes subsequent changes', async () => {
+    const execute = commands.executeCommand.bind(commands);
+    const spy = vi.spyOn(commands, 'executeCommand').mockImplementation(async (id, ...args) => {
+      if (id === 'setContext' && args[0] === 'prompteur.filterActive' && args[1] === true)
+        throw new Error('Filter indicator unavailable');
+      return execute(id, ...args);
+    });
+    await run('search');
+    inputBoxes.at(-1)!.valueChanged.fire('review');
+    await vi.waitFor(() =>
+      expect(messages.errors.at(-1)).toContain('Filter indicator unavailable'),
+    );
+    await run('clearSearch');
+    expect(contextKeys.get('prompteur.filterActive')).toBe(false);
+    spy.mockRestore();
   });
   it('appends tooltip filters to the open search and opens validated prompt paths', async () => {
     const userPrompt = await addPrompt('tooltip-user', 'needle');
@@ -1063,10 +1758,14 @@ describe('release commands', () => {
     const box = inputBoxes.at(-1)!;
     box.valueChanged.fire('needle');
     await commands.executeCommand('prompteur.filterFromTooltip', 'tag', 'security review');
+    expect(contextKeys.get('prompteur.filterActive')).toBe(true);
     expect(tree().query).toBe('needle tag:"security review"');
     expect(box.value).toBe(tree().query);
     await commands.executeCommand('prompteur.filterFromTooltip', 'category', 'explain');
     expect(tree().query).toBe('needle tag:"security review" category:"explain"');
+    expect(views.get('prompteur.prompts')!.message).toBe(
+      'Filter: needle tag:"security review" category:"explain"',
+    );
     await commands.executeCommand('prompteur.filterFromTooltip', 'category', 'explain');
     expect(tree().query).toBe('needle tag:"security review" category:"explain"');
 
@@ -1088,6 +1787,12 @@ describe('release commands', () => {
     ).rejects.toThrow('changed or became invalid');
     await commands.executeCommand('prompteur.clearSearch');
     expect(box.value).toBe('');
+    expect(contextKeys.get('prompteur.filterActive')).toBe(false);
+    box.hide();
+    await commands.executeCommand('prompteur.filterFromTooltip', 'tag', 'security');
+    expect(contextKeys.get('prompteur.filterActive')).toBe(true);
+    await run('searchActive');
+    expect(inputBoxes.at(-1)!.value).toBe('tag:"security"');
   });
   it('confirms deletion, blocks dirty editors and rejects stale nodes', async () => {
     const node = await addPrompt('delete', 'safe');
@@ -1160,9 +1865,19 @@ describe('release commands', () => {
     ).toBe(true);
   });
   it('uses the default for starters and paste, but never falls back from unavailable Workspace', async () => {
+    const extensionRoot = join(root, 'test-extension');
+    const starterRoot = join(extensionRoot, 'resources', 'starter', 'prompts');
+    await fs.mkdir(starterRoot, { recursive: true });
+    await fs.writeFile(
+      join(starterRoot, 'default-starter.prompt.md'),
+      encodeMarkdown(newPrompt('Default Starter')),
+    );
+    context.extensionUri = Uri.file(extensionRoot);
     workspace.configuration.set('prompteur.defaultScope', 'workspace');
     await run('addStarters');
-    expect(await entries('workspace')).toHaveLength(16);
+    expect((await entries('workspace')).map((node) => node.entry.data.name)).toEqual([
+      'Default Starter',
+    ]);
     expect(await entries('user')).toHaveLength(0);
 
     const source = await addPrompt('default-paste', 'Copied');
@@ -1176,7 +1891,7 @@ describe('release commands', () => {
     responses.quick.push('Review');
     responses.input.push('Untrusted Workspace Prompt');
     await expect(run('newPrompt')).rejects.toThrow('Trust');
-    expect(await entries('workspace')).toHaveLength(17);
+    expect(await entries('workspace')).toHaveLength(2);
 
     for (const disposable of context.subscriptions.splice(0)) disposable.dispose();
     workspace.workspaceFolders = [];
@@ -1261,11 +1976,25 @@ describe('release commands', () => {
   });
   it('requires confirmation to add a profile category and shares it across libraries', async () => {
     responses.quick.push('$(add) Add Category...');
-    responses.input.push('Research', 'User Research Prompt');
+    responses.input.push(
+      'Research',
+      'Explore options and collect evidence.',
+      'User Research Prompt',
+    );
     responses.warning.push('Add Category');
     await run('newPrompt', scopeNode('user'));
     expect(context.globalState.values.get('approvedPromptCategories')).toEqual(['research']);
+    expect(context.globalState.values.get('promptCategoryDescriptions')).toEqual({
+      research: 'Explore options and collect evidence.',
+    });
     expect((await entries('user'))[0]?.entry.data.category).toBe('research');
+    expect(
+      tree().getTreeItem({ kind: 'category', scope: 'user', category: 'research' }),
+    ).toMatchObject({
+      contextValue: 'customCategory',
+      description: 'custom',
+      tooltip: 'Explore options and collect evidence.',
+    });
 
     for (const disposable of context.subscriptions.splice(0)) disposable.dispose();
     await activate(context as unknown as vscode.ExtensionContext);
@@ -1273,6 +2002,265 @@ describe('release commands', () => {
     responses.input.push('Workspace Research Prompt');
     await run('newPrompt', scopeNode('workspace'));
     expect((await entries('workspace'))[0]?.entry.data.category).toBe('research');
+    expect(
+      tree().getTreeItem({ kind: 'category', scope: 'workspace', category: 'research' }).tooltip,
+    ).toBe('Explore options and collect evidence.');
+  });
+  it('creates a category directly without creating a dummy prompt', async () => {
+    responses.input.push('Custom', 'Custom tasks');
+    await run('addCategory');
+    expect(context.globalState.values.get('approvedPromptCategories')).toEqual(['custom']);
+    expect(context.globalState.values.get('promptCategoryDescriptions')).toEqual({
+      custom: 'Custom tasks',
+    });
+    expect(await entries()).toEqual([]);
+    responses.quick.push('Custom');
+    responses.input.push('Custom prompt');
+    await run('newPrompt', scopeNode());
+    expect((await entries())[0]?.entry.data.category).toBe('custom');
+  });
+  it('renames custom categories across both libraries while preserving formatting and help', async () => {
+    const { source, paths, node } = await customCategoryPrompts();
+    await run('copyPrompt', (await entries())[0]);
+    responses.input.push('  Discovery  ');
+    await run('renameCategory', node);
+    for (const path of paths)
+      expect(await fs.readFile(path, 'utf8')).toBe(
+        source.replace('category: research', 'category: discovery'),
+      );
+    for (const scope of ['user', 'workspace'] as const) {
+      expect((await entries(scope))[0]?.entry.data.category).toBe('discovery');
+      expect(tree().getTreeItem({ kind: 'category', scope, category: 'discovery' })).toMatchObject({
+        tooltip: 'Explore options.',
+        contextValue: 'customCategory',
+        description: 'custom',
+      });
+    }
+    expect(context.globalState.values.get('approvedPromptCategories')).toEqual(['discovery']);
+    expect(context.globalState.values.get('promptCategoryDescriptions')).toEqual({
+      discovery: 'Explore options.',
+    });
+    expect(messages.info.at(-1)).toContain('2 prompt(s)');
+    await run('pastePrompt', scopeNode());
+    const pasted = await entries();
+    expect(pasted).toHaveLength(2);
+    expect(pasted.every((entry) => entry.entry.data.category === 'discovery')).toBe(true);
+  });
+  it('renames an unused category from the palette and validates new names', async () => {
+    responses.input.push('Research', '');
+    await run('addCategory');
+    const input = vi.spyOn(window, 'showInputBox');
+    responses.quick.push('Research');
+    responses.input.push('Discovery');
+    await run('renameCategory');
+    const options = input.mock.calls[0]?.[0];
+    expect(options).toMatchObject({ value: 'research' });
+    expect(options?.validateInput?.('Review')).toBe('Category is already approved');
+    expect(options?.validateInput?.('  ')).toBe('Category name is required');
+    expect(options?.validateInput?.('x'.repeat(65))).toContain('64 characters');
+    expect(options?.validateInput?.('__add_category__')).toBe('Category is already approved');
+    expect(options?.validateInput?.('__remove_category__')).toBe('Category is already approved');
+    expect(context.globalState.values.get('approvedPromptCategories')).toEqual(['discovery']);
+    expect(await entries()).toEqual([]);
+  });
+  it('cancels rename before writing and refuses built-in category targets', async () => {
+    const { source, paths, node } = await customCategoryPrompts();
+    responses.input.push(null);
+    await run('renameCategory', node);
+    responses.input.push('Discovery');
+    responses.warning.push(null);
+    await run('renameCategory', node);
+    for (const path of paths) expect(await fs.readFile(path, 'utf8')).toBe(source);
+    expect(context.globalState.values.get('approvedPromptCategories')).toEqual(['research']);
+    await expect(
+      run('renameCategory', { kind: 'category', scope: 'user', category: 'review' }),
+    ).rejects.toThrow('Only approved custom');
+  });
+  it('blocks rename for untrusted workspace writes and dirty prompt editors', async () => {
+    const { source, paths, node } = await customCategoryPrompts();
+    workspace.isTrusted = false;
+    responses.input.push('Discovery');
+    await expect(run('renameCategory', node)).rejects.toThrow('Trust this workspace');
+    workspace.isTrusted = true;
+    const document = new FakeDocument(Uri.file(paths[0]!), source);
+    document.isDirty = true;
+    workspace.textDocuments.push(document);
+    responses.input.push('Discovery');
+    await expect(run('renameCategory', node)).rejects.toThrow('Save or discard unsaved changes');
+    for (const path of paths) expect(await fs.readFile(path, 'utf8')).toBe(source);
+    expect(context.globalState.values.get('approvedPromptCategories')).toEqual(['research']);
+  });
+  it('requires invalid prompts to be repaired before category rename', async () => {
+    const { node } = await customCategoryPrompts();
+    await fs.writeFile(join(userRoot(), 'prompts', 'bad.prompt.md'), 'Invalid YAML');
+    responses.input.push('Discovery');
+    await expect(run('renameCategory', node)).rejects.toThrow('Repair invalid prompts');
+    expect(context.globalState.values.get('approvedPromptCategories')).toEqual(['research']);
+  });
+  it('rolls back earlier files and metadata when a later rename write fails', async () => {
+    const { source, paths, node } = await customCategoryPrompts();
+    const write = LocalFiles.prototype.write;
+    vi.spyOn(LocalFiles.prototype, 'write').mockImplementation(async function (
+      this: LocalFiles,
+      scope,
+      path,
+      text,
+      expected,
+    ) {
+      if (scope === 'workspace' && text.includes('category: discovery'))
+        throw new Error('Workspace write failed');
+      await write.call(this, scope, path, text, expected);
+    });
+    responses.input.push('Discovery');
+    await expect(run('renameCategory', node)).rejects.toThrow(
+      'Original prompts and category metadata restored',
+    );
+    for (const path of paths) expect(await fs.readFile(path, 'utf8')).toBe(source);
+    expect(context.globalState.values.get('approvedPromptCategories')).toEqual(['research']);
+    expect(context.globalState.values.get('promptCategoryDescriptions')).toEqual({
+      research: 'Explore options.',
+    });
+  });
+  it('restores renamed files if final metadata persistence fails', async () => {
+    const { source, paths, node } = await customCategoryPrompts();
+    const update = context.globalState.update.bind(context.globalState);
+    vi.spyOn(context.globalState, 'update').mockImplementation(async (key, value) => {
+      if (
+        key === 'approvedPromptCategories' &&
+        Array.isArray(value) &&
+        value.length === 1 &&
+        value[0] === 'discovery'
+      )
+        throw new Error('Final metadata save failed');
+      await update(key, value);
+    });
+    responses.input.push('Discovery');
+    await expect(run('renameCategory', node)).rejects.toThrow(
+      'Original prompts and category metadata restored',
+    );
+    for (const path of paths) expect(await fs.readFile(path, 'utf8')).toBe(source);
+    expect(context.globalState.values.get('approvedPromptCategories')).toEqual(['research']);
+  });
+  it('preserves both categories and reports partial recovery when rollback is blocked', async () => {
+    const { node } = await customCategoryPrompts();
+    const write = LocalFiles.prototype.write;
+    vi.spyOn(LocalFiles.prototype, 'write').mockImplementation(async function (
+      this: LocalFiles,
+      scope,
+      path,
+      text,
+      expected,
+    ) {
+      if (scope === 'workspace') throw new Error('Workspace unavailable');
+      if (text.includes('category: research')) throw new Error('Rollback unavailable');
+      await write.call(this, scope, path, text, expected);
+    });
+    responses.input.push('Discovery');
+    await expect(run('renameCategory', node)).rejects.toThrow(
+      'Recovery incomplete; both categories remain approved',
+    );
+    expect(context.globalState.values.get('approvedPromptCategories')).toEqual([
+      'discovery',
+      'research',
+    ]);
+    expect((await entries())[0]?.entry.data.category).toBe('discovery');
+    expect((await entries('workspace'))[0]?.entry.data.category).toBe('research');
+    expect(messages.errors.at(-1)).toContain('Rollback unavailable');
+  });
+  it('does not overwrite concurrent file edits during rename recovery', async () => {
+    const { paths, node } = await customCategoryPrompts();
+    const write = LocalFiles.prototype.write;
+    let newer = '';
+    vi.spyOn(LocalFiles.prototype, 'write').mockImplementation(async function (
+      this: LocalFiles,
+      scope,
+      path,
+      text,
+      expected,
+    ) {
+      if (scope === 'workspace') throw new Error('Workspace unavailable');
+      await write.call(this, scope, path, text, expected);
+      newer = `${text}\nNew external edit\n`;
+      await fs.writeFile(paths[0]!, newer);
+    });
+    responses.input.push('Discovery');
+    await expect(run('renameCategory', node)).rejects.toThrow('File changed during rename');
+    expect(await fs.readFile(paths[0]!, 'utf8')).toBe(newer);
+    expect(context.globalState.values.get('approvedPromptCategories')).toEqual([
+      'discovery',
+      'research',
+    ]);
+  });
+  it('blocks overlapping category changes while rename is pending', async () => {
+    const { node } = await customCategoryPrompts();
+    vi.spyOn(window, 'showWarningMessage').mockImplementationOnce(async () => {
+      await expect(run('editCategoryDescription', node)).rejects.toThrow(
+        'Finish the category rename',
+      );
+      return 'Rename Category';
+    });
+    responses.input.push('Discovery');
+    await run('renameCategory', node);
+    expect(context.globalState.values.get('approvedPromptCategories')).toEqual(['discovery']);
+  });
+  it('repairs unapproved categories with explicit approval without rewriting the prompt', async () => {
+    const source =
+      '---\nversion: 1\nname: Custom Category Tester\ndescription: Help\ncategory: custom\ntags: []\n---\nText for testing custom categories.';
+    const path = join(userRoot(), 'prompts', 'custom-category-tester.prompt.md');
+    await fs.mkdir(join(userRoot(), 'prompts'), { recursive: true });
+    await fs.writeFile(path, source);
+    await run('refresh');
+    const problem = (await tree().getChildren(scopeNode())).find(
+      (node) => node.kind === 'problem',
+    )!;
+    expect(tree().getTreeItem(problem).contextValue).toBe('categoryProblem');
+    expect(tree().getTreeItem(problem).tooltip).toContain('Approve Prompt Category');
+    expect(await entries()).toEqual([]);
+    const document = new FakeDocument(Uri.file(path), source);
+    workspace.textDocuments.push(document);
+    await window.showTextDocument(document);
+    responses.input.push('Custom category help');
+    await run('approveCategory', problem);
+    expect(messages.warnings.at(-1)).toContain('Add "custom"');
+    expect(await fs.readFile(path, 'utf8')).toBe(source);
+    expect((await entries())[0]?.entry.data.category).toBe('custom');
+    expect((await tree().getChildren(scopeNode())).some((node) => node.kind === 'problem')).toBe(
+      false,
+    );
+    expect(
+      tree().getTreeItem({ kind: 'category', scope: 'user', category: 'custom' }).tooltip,
+    ).toBe('Custom category help');
+  });
+  it('does not approve when repair is cancelled or the file category changed', async () => {
+    const path = join(userRoot(), 'prompts', 'custom.prompt.md');
+    const source = '---\nversion: 1\nname: Custom\ncategory: custom\n---\nBody';
+    await fs.mkdir(join(userRoot(), 'prompts'), { recursive: true });
+    await fs.writeFile(path, source);
+    await run('refresh');
+    const problem = (await tree().getChildren(scopeNode())).find(
+      (node) => node.kind === 'problem',
+    )!;
+    responses.input.push('');
+    responses.warning.push(null);
+    await run('approveCategory', problem);
+    expect(context.globalState.values.has('approvedPromptCategories')).toBe(false);
+    await fs.writeFile(path, source.replace('category: custom', 'category: review'));
+    await expect(run('approveCategory', problem)).rejects.toThrow(
+      'Prompt no longer has an unapproved category',
+    );
+    expect(context.globalState.values.has('approvedPromptCategories')).toBe(false);
+  });
+  it('rejects forged repair paths without reading arbitrary files', async () => {
+    await expect(
+      run('approveCategory', {
+        kind: 'problem',
+        scope: 'user',
+        path: '../outside.prompt.md',
+        message: 'unapproved',
+        unapprovedCategory: 'custom',
+      }),
+    ).rejects.toThrow('Prompt problem changed');
+    expect(context.globalState.values.has('approvedPromptCategories')).toBe(false);
   });
   it('loads only valid non-built-in categories from profile state', async () => {
     for (const disposable of context.subscriptions.splice(0)) disposable.dispose();
@@ -1294,9 +2282,181 @@ describe('release commands', () => {
     expect(quickPicks.at(-1)?.activeItems.map((item) => item.value)).toEqual(['research']);
     expect((await entries('user'))[0]?.entry.data.category).toBe('research');
   });
+  it('edits descriptions through a category or picker, supports clearing, and leaves files unchanged', async () => {
+    for (const disposable of context.subscriptions.splice(0)) disposable.dispose();
+    context.globalState.values.set('approvedPromptCategories', ['research']);
+    context.globalState.values.set('promptCategoryDescriptions', { research: 'Old help' });
+    await activate(context as unknown as vscode.ExtensionContext);
+    const category: TreeNode = { kind: 'category', scope: 'workspace', category: 'Research' };
+    const showInputBox = vi.spyOn(window, 'showInputBox');
+    const refresh = vi.spyOn(tree(), 'refresh');
+    workspace.isTrusted = false;
+    responses.input.push('  [Plain text](command:evil.run)  ');
+    await run('editCategoryDescription', category);
+    expect(showInputBox.mock.calls[0]?.[0]).toMatchObject({ value: 'Old help' });
+    for (const scope of ['user', 'workspace'] as const)
+      expect(tree().getTreeItem({ ...category, scope }).tooltip).toBe(
+        '[Plain text](command:evil.run)',
+      );
+    expect(refresh).toHaveBeenCalled();
+    await expect(fs.stat(workspaceRoot())).rejects.toThrow();
+    responses.quick.push('Research');
+    responses.input.push('');
+    await run('editCategoryDescription');
+    expect(context.globalState.values.get('promptCategoryDescriptions')).toEqual({});
+    expect(tree().getTreeItem(category).tooltip).toBe(
+      'User-defined category for organizing prompts.',
+    );
+    expect(context.globalState.values.get('approvedPromptCategories')).toEqual(['research']);
+  });
+  it('cancels description creation and editing without changing metadata', async () => {
+    responses.quick.push('$(add) Add Category...');
+    responses.input.push('Research', null);
+    const warning = vi.spyOn(window, 'showWarningMessage');
+    await run('newPrompt', scopeNode());
+    expect(warning).not.toHaveBeenCalled();
+    expect(context.globalState.values.has('approvedPromptCategories')).toBe(false);
+    expect(context.globalState.values.has('promptCategoryDescriptions')).toBe(false);
+    for (const disposable of context.subscriptions.splice(0)) disposable.dispose();
+    context.globalState.values.set('approvedPromptCategories', ['research']);
+    context.globalState.values.set('promptCategoryDescriptions', { research: 'Keep' });
+    await activate(context as unknown as vscode.ExtensionContext);
+    responses.quick.push(null);
+    await run('editCategoryDescription');
+    responses.input.push(null);
+    await run('editCategoryDescription', { kind: 'category', scope: 'user', category: 'research' });
+    expect(context.globalState.values.get('promptCategoryDescriptions')).toEqual({
+      research: 'Keep',
+    });
+  });
+  it('validates short single-line descriptions and protects built-ins', async () => {
+    responses.quick.push('$(add) Add Category...');
+    responses.input.push('Research', 'x'.repeat(240), 'Research prompt');
+    const showInputBox = vi.spyOn(window, 'showInputBox');
+    await run('newPrompt', scopeNode());
+    const validate = showInputBox.mock.calls[1]?.[0]?.validateInput;
+    expect(validate?.('x'.repeat(240))).toBeUndefined();
+    expect(validate?.('x'.repeat(239))).toBeUndefined();
+    expect(validate?.(` ${'x'.repeat(240)} `)).toBeUndefined();
+    expect(validate?.('x'.repeat(241))).toContain('240 characters');
+    expect(validate?.('First\nSecond')).toContain('single line');
+    expect(validate?.('   ')).toBeUndefined();
+    await expect(
+      run('editCategoryDescription', { kind: 'category', scope: 'user', category: 'review' }),
+    ).rejects.toThrow('Only approved custom');
+    expect(context.globalState.values.get('promptCategoryDescriptions')).toEqual({
+      research: 'x'.repeat(240),
+    });
+  });
+  it('reports no custom categories when editing from the palette', async () => {
+    const picker = vi.spyOn(window, 'showQuickPick');
+    await run('editCategoryDescription');
+    expect(messages.info.at(-1)).toBe('No approved custom categories to edit.');
+    expect(picker).not.toHaveBeenCalled();
+  });
+  it('keeps prior descriptions when saving an edit fails', async () => {
+    for (const disposable of context.subscriptions.splice(0)) disposable.dispose();
+    context.globalState.values.set('approvedPromptCategories', ['research']);
+    context.globalState.values.set('promptCategoryDescriptions', { research: 'Keep' });
+    await activate(context as unknown as vscode.ExtensionContext);
+    const update = vi.spyOn(context.globalState, 'update');
+    update.mockRejectedValueOnce(new Error('State unavailable'));
+    responses.input.push('Changed');
+    const node: TreeNode = { kind: 'category', scope: 'user', category: 'research' };
+    await expect(run('editCategoryDescription', node)).rejects.toThrow('State unavailable');
+    expect(tree().getTreeItem(node).tooltip).toBe('Keep');
+    expect(messages.errors.at(-1)).toContain('State unavailable');
+  });
+  it('rolls back description metadata when category approval cannot be saved', async () => {
+    const update = context.globalState.update.bind(context.globalState);
+    vi.spyOn(context.globalState, 'update').mockImplementation(async (key, value) => {
+      if (key === 'approvedPromptCategories') throw new Error('Approval save failed');
+      await update(key, value);
+    });
+    responses.quick.push('$(add) Add Category...');
+    responses.input.push('Research', 'New help');
+    await expect(run('newPrompt', scopeNode())).rejects.toThrow('Approval save failed');
+    expect(context.globalState.values.get('promptCategoryDescriptions')).toBeUndefined();
+    expect(context.globalState.values.has('approvedPromptCategories')).toBe(false);
+    expect(await entries()).toEqual([]);
+    await run('editCategoryDescription');
+    expect(messages.info.at(-1)).toContain('No approved custom categories');
+  });
+  it('rejects malformed saved descriptions instead of silently replacing metadata', async () => {
+    for (const disposable of context.subscriptions.splice(0)) disposable.dispose();
+    context.globalState.values.set('promptCategoryDescriptions', { research: 42 });
+    await expect(activate(context as unknown as vscode.ExtensionContext)).rejects.toThrow(
+      'Invalid custom category descriptions',
+    );
+    expect(context.globalState.values.get('promptCategoryDescriptions')).toEqual({ research: 42 });
+  });
+  it.each([
+    ['non-object value', ['research']],
+    ['empty category key', { '': 'Help' }],
+    ['non-normalized category key', { Research: 'Help' }],
+    ['overlong category key', { ['x'.repeat(65)]: 'Help' }],
+    ['overlong description', { research: 'x'.repeat(241) }],
+    ['multiline description', { research: 'First\nSecond' }],
+    ['non-string description', { research: 42 }],
+  ])('rejects malformed custom category metadata: %s', async (_label, descriptions) => {
+    for (const disposable of context.subscriptions.splice(0)) disposable.dispose();
+    context.globalState.values.set('promptCategoryDescriptions', descriptions);
+    await expect(activate(context as unknown as vscode.ExtensionContext)).rejects.toThrow(
+      'Invalid custom category descriptions',
+    );
+    expect(context.globalState.values.get('promptCategoryDescriptions')).toEqual(descriptions);
+  });
+  it('keeps unused category and description when removal cannot be saved', async () => {
+    for (const disposable of context.subscriptions.splice(0)) disposable.dispose();
+    context.globalState.values.set('approvedPromptCategories', ['research']);
+    context.globalState.values.set('promptCategoryDescriptions', { research: 'Keep' });
+    await activate(context as unknown as vscode.ExtensionContext);
+    const update = context.globalState.update.bind(context.globalState);
+    vi.spyOn(context.globalState, 'update').mockImplementation(async (key, value) => {
+      if (key === 'approvedPromptCategories') throw new Error('Removal save failed');
+      await update(key, value);
+    });
+    responses.quick.push('Research');
+    await expect(run('removeCategory')).rejects.toThrow('Removal save failed');
+    expect(context.globalState.values.get('promptCategoryDescriptions')).toEqual({
+      research: 'Keep',
+    });
+    expect(context.globalState.values.get('approvedPromptCategories')).toEqual(['research']);
+    expect(
+      tree().getTreeItem({ kind: 'category', scope: 'user', category: 'research' }).tooltip,
+    ).toBe('Keep');
+  });
+  it('reports both category save and metadata rollback failures', async () => {
+    const update = context.globalState.update.bind(context.globalState);
+    let descriptionWrites = 0;
+    vi.spyOn(context.globalState, 'update').mockImplementation(async (key, value) => {
+      if (key === 'approvedPromptCategories') throw new Error('Approval save failed');
+      if (key === 'promptCategoryDescriptions' && ++descriptionWrites > 1)
+        throw new Error('Rollback unavailable');
+      await update(key, value);
+    });
+    responses.quick.push('$(add) Add Category...');
+    responses.input.push('Research', 'Help');
+    await expect(run('newPrompt', scopeNode())).rejects.toThrow(
+      'Category save failed: Approval save failed. Description rollback failed: Rollback unavailable',
+    );
+    expect(messages.errors.at(-1)).toContain('Rollback unavailable');
+    expect(context.globalState.values.has('approvedPromptCategories')).toBe(false);
+  });
+  it('persists prototype-like custom category names safely', async () => {
+    responses.quick.push('$(add) Add Category...');
+    responses.input.push('__proto__', 'Prototype research', 'Research prompt');
+    await run('newPrompt', scopeNode());
+    for (const disposable of context.subscriptions.splice(0)) disposable.dispose();
+    await activate(context as unknown as vscode.ExtensionContext);
+    expect(
+      tree().getTreeItem({ kind: 'category', scope: 'user', category: '__proto__' }),
+    ).toMatchObject({ contextValue: 'customCategory', tooltip: 'Prototype research' });
+  });
   it('removes an unused approved category from the picker without creating a prompt', async () => {
     for (const disposable of context.subscriptions.splice(0)) disposable.dispose();
     context.globalState.values.set('approvedPromptCategories', ['research']);
+    context.globalState.values.set('promptCategoryDescriptions', { research: 'Research help' });
     await activate(context as unknown as vscode.ExtensionContext);
     responses.quick.push('$(remove) Remove Category...', 'Research');
     responses.warning.push('Remove Category');
@@ -1305,6 +2465,7 @@ describe('release commands', () => {
 
     expect(quickPicks[0]?.items.map((item) => item.value)).toContain('__remove_category__');
     expect(context.globalState.values.get('approvedPromptCategories')).toEqual([]);
+    expect(context.globalState.values.get('promptCategoryDescriptions')).toEqual({});
     expect(await entries('user')).toEqual([]);
   });
   it('reports an empty state when no custom categories are approved', async () => {
@@ -1351,9 +2512,24 @@ describe('release commands', () => {
       true,
     );
   });
+  it('blocks removal when only a Workspace prompt uses the custom category', async () => {
+    const { paths } = await customCategoryPrompts();
+    await fs.rm(paths[0]!);
+    await run('refresh');
+    responses.quick.push('Research');
+
+    await expect(run('removeCategory')).rejects.toThrow(
+      'Cannot remove "research" while 1 prompt uses it.',
+    );
+
+    expect(context.globalState.values.get('approvedPromptCategories')).toEqual(['research']);
+    expect(await fs.readFile(paths[1]!, 'utf8')).toContain('category: research');
+    expect(await entries('user')).toEqual([]);
+    expect((await entries('workspace'))[0]?.entry.data.category).toBe('research');
+  });
   it('does not add or create a category when approval is cancelled', async () => {
     responses.quick.push('$(add) Add Category...');
-    responses.input.push('Temporary');
+    responses.input.push('Temporary', '');
     responses.warning.push(null);
     await run('newPrompt', scopeNode('user'));
     expect(context.globalState.values.has('approvedPromptCategories')).toBe(false);
@@ -1361,13 +2537,14 @@ describe('release commands', () => {
   });
   it('validates added category names for emptiness, length, reserved values, and duplicates', async () => {
     responses.quick.push('$(add) Add Category...');
-    responses.input.push('Research', 'Research Prompt');
+    responses.input.push('Research', '', 'Research Prompt');
     responses.warning.push('Add Category');
     const showInputBox = vi.spyOn(window, 'showInputBox');
     await run('newPrompt', scopeNode('user'));
 
     const validate = showInputBox.mock.calls[0]?.[0]?.validateInput;
     expect(validate?.('')).toBe('Category name is required');
+    expect(validate?.('x'.repeat(64))).toBeUndefined();
     expect(validate?.('x'.repeat(65))).toBe('Category name must be 64 characters or fewer');
     expect(validate?.('__add_category__')).toBe('Category is already approved');
     expect(validate?.('Another Category')).toBeUndefined();
@@ -1376,7 +2553,7 @@ describe('release commands', () => {
     responses.input.push('research');
     responses.warning.push(null);
     await run('newPrompt', scopeNode('user'));
-    expect(showInputBox.mock.calls[2]?.[0]?.validateInput?.('research')).toBe(
+    expect(showInputBox.mock.calls[3]?.[0]?.validateInput?.('research')).toBe(
       'Category is already approved',
     );
     expect(context.globalState.values.get('approvedPromptCategories')).toEqual(['research']);

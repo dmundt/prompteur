@@ -1,9 +1,10 @@
 import * as vscode from 'vscode';
 import { LibraryService, messageOf } from '../application/library';
-import type { Entry, Scope } from '../core/documents';
+import type { Entry, Problem, PromptCategory, Scope } from '../core/documents';
 import { variableTokens, type VariableKey } from '../core/render';
 
 export type TreeNode =
+  | { kind: 'root' }
   | { kind: 'scope'; scope: Scope }
   | {
       kind: 'category';
@@ -13,8 +14,9 @@ export type TreeNode =
       totalCount?: number;
     }
   | { kind: 'entry'; scope: Scope; entry: Entry }
-  | { kind: 'problem'; scope: Scope; path: string; message: string }
-  | { kind: 'batch'; scope: Scope; label: string; children: TreeNode[] };
+  | ({ kind: 'problem'; scope: Scope } & Problem)
+  | { kind: 'batch'; scope: Scope; label: string; children: TreeNode[] }
+  | { kind: 'empty'; scope: Scope };
 
 const basename = (path: string): string => path.slice(path.lastIndexOf('/') + 1);
 const escapeLinkLabel = (value: string): string =>
@@ -29,11 +31,24 @@ const contextLabels: Record<VariableKey, string> = {
   clipboard: 'Clipboard',
   filename: 'Filename',
   workspace: 'Workspace',
+  text: 'Text',
 };
+const categoryDescriptions = new Map<string, string>(
+  Object.entries({
+    explain: 'Understand code, behavior, and changes.',
+    plan: 'Define requirements, scope, and implementation steps.',
+    implement: 'Make scoped code changes.',
+    review: 'Assess code, architecture, security, and readiness.',
+    test: 'Design or add tests.',
+    debug: 'Diagnose failures and investigate causes.',
+    document: 'Write or improve documentation.',
+  } satisfies Record<PromptCategory, string>),
+);
 
 export class PromptTree implements vscode.TreeDataProvider<TreeNode>, vscode.Disposable {
   private readonly changes = new vscode.EventEmitter<TreeNode | undefined>();
   private readonly contextSummaries = new WeakMap<Entry, string>();
+  private readonly parents = new WeakMap<TreeNode, TreeNode>();
   readonly onDidChangeTreeData = this.changes.event;
   private readonly unsubscribe: () => void;
   query = '';
@@ -45,6 +60,11 @@ export class PromptTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dis
     private readonly showTags: () => boolean = () => true,
     private readonly categoryCountMode: () => 'filtered' | 'total' | 'hidden' = () => 'filtered',
     private readonly groupByCategory: () => boolean = () => true,
+    private readonly libraryRoot: (scope: Scope) => Pick<vscode.Uri, 'fsPath'> | undefined = () =>
+      undefined,
+    private readonly customCategoryDescription: (category: string) => string | undefined = () =>
+      undefined,
+    private readonly scopeCount: (scope: Scope) => number | undefined = () => undefined,
   ) {
     this.unsubscribe = service.subscribe(() => this.refresh());
   }
@@ -52,23 +72,66 @@ export class PromptTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dis
   refresh(): void {
     this.changes.fire(undefined);
   }
+  getParent(node: TreeNode): TreeNode | undefined {
+    return node.kind === 'root'
+      ? undefined
+      : node.kind === 'scope'
+        ? { kind: 'root' }
+        : this.parents.get(node);
+  }
   dispose(): void {
     this.unsubscribe();
     this.changes.dispose();
   }
 
   getTreeItem(node: TreeNode): vscode.TreeItem {
+    if (node.kind === 'root') {
+      const item = new vscode.TreeItem('Prompts', vscode.TreeItemCollapsibleState.Expanded);
+      item.id = 'prompts';
+      let total = 0;
+      const scopes: Scope[] = this.workspaceAvailable() ? ['user', 'workspace'] : ['user'];
+      for (const scope of scopes) {
+        const count = this.scopeCount(scope);
+        if (count === undefined) return item;
+        total += count;
+      }
+      item.label = `Prompts (${total})`;
+      return item;
+    }
     if (node.kind === 'scope') {
+      const name = node.scope === 'user' ? 'User' : 'Workspace';
+      const count = this.scopeCount(node.scope);
       const item = new vscode.TreeItem(
-        node.scope === 'user' ? 'User' : 'Workspace',
+        count === undefined ? name : `${name} (${count})`,
         vscode.TreeItemCollapsibleState.Expanded,
       );
       item.id = node.scope;
       item.contextValue = 'scope';
+      const tooltip = new vscode.MarkdownString();
+      tooltip.appendText(
+        node.scope === 'user'
+          ? 'Prompts stored in this VS Code profile; optional VS Code Settings Sync.'
+          : 'Prompts stored in the first workspace folder; writes, generation, and preview require Workspace Trust.',
+      );
+      const root = this.libraryRoot(node.scope);
+      if (root) {
+        tooltip.appendMarkdown(
+          `\n\n[${escapeLinkLabel(root.fsPath)}](${commandUri('prompteur.openLibraryFolder', [node.scope])})`,
+        );
+        tooltip.isTrusted = { enabledCommands: ['prompteur.openLibraryFolder'] };
+      }
+      item.tooltip = tooltip;
       return item;
     }
     if (node.kind === 'batch')
       return new vscode.TreeItem(node.label, vscode.TreeItemCollapsibleState.Collapsed);
+    if (node.kind === 'empty') {
+      const item = new vscode.TreeItem('No valid prompts match this filter.');
+      item.tooltip = 'No valid prompts match this filter.\nSelect to clear filter';
+      item.contextValue = 'emptyState';
+      item.command = { command: 'prompteur.clearSearch', title: 'Clear Filter' };
+      return item;
+    }
     if (node.kind === 'category') {
       const name = node.category.charAt(0).toUpperCase() + node.category.slice(1);
       const countMode = this.categoryCountMode();
@@ -77,13 +140,20 @@ export class PromptTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dis
       const label = visibleCount === undefined ? name : `${name} (${visibleCount})`;
       const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.Collapsed);
       item.id = `${node.scope}:category:${node.category.toLowerCase()}`;
-      item.contextValue = 'category';
+      const description = this.customCategoryDescription(node.category.toLowerCase());
+      item.contextValue = description === undefined ? 'category' : 'customCategory';
+      if (description !== undefined) item.description = 'custom';
+      item.tooltip =
+        categoryDescriptions.get(node.category.trim().toLowerCase()) ??
+        (description || 'User-defined category for organizing prompts.');
       return item;
     }
     if (node.kind === 'problem') {
       const item = new vscode.TreeItem(basename(node.path));
-      item.contextValue = 'problem';
-      item.tooltip = node.message;
+      item.contextValue = node.unapprovedCategory ? 'categoryProblem' : 'problem';
+      item.tooltip = node.unapprovedCategory
+        ? `${node.message}\nRight-click > Approve Prompt Category to use this category.`
+        : node.message;
       item.iconPath = new vscode.ThemeIcon('warning');
       item.command = {
         command: 'prompteur.edit',
@@ -153,11 +223,17 @@ export class PromptTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dis
 
   async getChildren(node?: TreeNode): Promise<TreeNode[]> {
     try {
-      if (!node)
-        return (this.workspaceAvailable() ? ['user', 'workspace'] : ['user']).map((scope) => ({
-          kind: 'scope',
-          scope: scope as Scope,
-        }));
+      if (!node) return [{ kind: 'root' }];
+      if (node.kind === 'root') {
+        const scopes = (this.workspaceAvailable() ? ['user', 'workspace'] : ['user']).map(
+          (scope): TreeNode => ({
+            kind: 'scope',
+            scope: scope as Scope,
+          }),
+        );
+        for (const scope of scopes) this.parents.set(scope, node);
+        return scopes;
+      }
       if (node.kind === 'batch') return node.children;
       if (node.kind !== 'scope' && node.kind !== 'category') return [];
       const snapshot = await this.service.get(node.scope);
@@ -166,37 +242,42 @@ export class PromptTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dis
         this.query,
         node.kind === 'category' ? node.category : undefined,
       );
-      const countByCategory = (source: readonly Entry[]) => {
-        const counts = new Map<string, number>();
-        for (const entry of source) {
-          const key = (entry.data.category.trim() || 'misc').toLowerCase();
-          counts.set(key, (counts.get(key) ?? 0) + 1);
-        }
-        return counts;
-      };
-      const filteredCounts = countByCategory(entries);
-      const totalCounts = countByCategory(snapshot.entries);
-      const categories: TreeNode[] = Array.from(
-        new Map(
-          entries
-            .map((entry) => entry.data.category.trim() || 'misc')
-            .map((category) => [category.toLowerCase(), category] as const),
-        ).values(),
-      )
-        .sort((left, right) => left.localeCompare(right))
-        .map((category): TreeNode => ({
-          kind: 'category',
+      let nodes: TreeNode[];
+      if (node.kind === 'scope' && this.groupByCategory()) {
+        const countByCategory = (source: readonly Entry[]) => {
+          const counts = new Map<string, number>();
+          for (const entry of source) {
+            const key = (entry.data.category.trim() || 'misc').toLowerCase();
+            counts.set(key, (counts.get(key) ?? 0) + 1);
+          }
+          return counts;
+        };
+        const filteredCounts = countByCategory(entries);
+        const totalCounts = countByCategory(snapshot.entries);
+        nodes = Array.from(
+          new Map(
+            entries
+              .map((entry) => entry.data.category.trim() || 'misc')
+              .map((category) => [category.toLowerCase(), category] as const),
+          ).values(),
+        )
+          .sort((left, right) => left.localeCompare(right))
+          .map((category): TreeNode => ({
+            kind: 'category',
+            scope: node.scope,
+            category,
+            filteredCount: filteredCounts.get(category.toLowerCase()) ?? 0,
+            totalCount: totalCounts.get(category.toLowerCase()) ?? 0,
+          }));
+      } else {
+        nodes = entries.map((entry): TreeNode => ({
+          kind: 'entry',
           scope: node.scope,
-          category,
-          filteredCount: filteredCounts.get(category.toLowerCase()) ?? 0,
-          totalCount: totalCounts.get(category.toLowerCase()) ?? 0,
+          entry,
         }));
-      const prompts: TreeNode[] = entries.map((entry): TreeNode => ({
-        kind: 'entry',
-        scope: node.scope,
-        entry,
-      }));
-      const nodes = node.kind === 'scope' && this.groupByCategory() ? categories : prompts;
+      }
+      if (this.query.trim() && entries.length === 0)
+        nodes.unshift({ kind: 'empty', scope: node.scope });
       if (node.kind === 'scope')
         nodes.push(
           ...snapshot.problems.map((problem): TreeNode => ({
@@ -205,13 +286,21 @@ export class PromptTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dis
             ...problem,
           })),
         );
-      if (nodes.length <= 200) return nodes;
-      return Array.from({ length: Math.ceil(nodes.length / 200) }, (_, index) => ({
-        kind: 'batch',
+      if (nodes.length <= 200) {
+        for (const child of nodes) this.parents.set(child, node);
+        return nodes;
+      }
+      const batches = Array.from({ length: Math.ceil(nodes.length / 200) }, (_, index) => ({
+        kind: 'batch' as const,
         scope: node.scope,
         label: `${index * 200 + 1}-${Math.min((index + 1) * 200, nodes.length)}`,
         children: nodes.slice(index * 200, (index + 1) * 200),
       }));
+      for (const batch of batches) {
+        this.parents.set(batch, node);
+        for (const child of batch.children) this.parents.set(child, batch);
+      }
+      return batches;
     } catch (error) {
       this.report(messageOf(error));
       return [];

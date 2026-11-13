@@ -4,6 +4,7 @@ import { appendExactFilter, defaultSearchOptions, SearchIndex } from '../src/app
 import { encodeMarkdown, newPrompt, type Entry } from '../src/core/documents';
 import { generate, variableTokens } from '../src/core/render';
 import { memoryFiles } from './helpers';
+import { assertLocalDuration } from './timing';
 
 const source = (name: string) => encodeMarkdown(newPrompt(name));
 describe('prompt library', () => {
@@ -173,6 +174,11 @@ describe('prompt library', () => {
 
 describe('prompt search and rendering', () => {
   it('substitutes once and handles empty, invalid and unbalanced variables explicitly', () => {
+    expect(generate('{{text}}\n{{text}}', { text: 'First\n{{selection}}' })).toEqual({
+      text: 'First\n{{selection}}\nFirst\n{{selection}}',
+      missing: [],
+    });
+    expect(generate('{{text}}', {})).toEqual({ text: '', missing: ['text'] });
     expect(
       generate('{{selection}} {{filename}}', { selection: '{{clipboard}}', filename: 'a.ts' }),
     ).toEqual({
@@ -272,29 +278,38 @@ describe('prompt search and rendering', () => {
     expect(index.query(quotedFilter)).toEqual([quotedEntry]);
   });
 
-  it('queries 10,000 cached prompts within the existing 200ms budget', () => {
+  it('queries 10,000 cached prompts with local timing budgets', () => {
     const entries: Entry[] = Array.from({ length: 10_000 }, (_, i) => ({
       key: String(i),
       scope: 'user',
       path: `prompts/${i}.prompt.md`,
       source: '',
-      data: { ...newPrompt(`Prompt ${i}`), tags: i === 123 ? ['target'] : [] },
+      data: {
+        ...newPrompt(`Prompt ${i}`),
+        tags: i === 123 ? ['target'] : [],
+        content: i === 123 ? 'unique search phrase' : '',
+      },
     }));
     const index = new SearchIndex();
     index.update(entries);
     const start = performance.now();
-    expect(index.query('tag:target')[0]?.key).toBe('123');
-    expect(performance.now() - start).toBeLessThan(200);
+    const tagResults = index.query('tag:target');
+    const tagDuration = performance.now() - start;
+    expect(tagResults.map((entry) => entry.key)).toEqual(['123']);
+    assertLocalDuration(tagDuration, 200, '10,000-prompt tag search');
+    const fullTextStart = performance.now();
+    const fullTextResults = index.query('unique search phrase');
+    const fullTextDuration = performance.now() - fullTextStart;
+    expect(fullTextResults.map((entry) => entry.key)).toEqual(['123']);
+    assertLocalDuration(fullTextDuration, 200, '10,000-prompt full-text search');
     const fuzzyStart = performance.now();
-    expect(
-      index
-        .query('Prampt 123', undefined, {
-          ...defaultSearchOptions,
-          matching: 'fuzzy',
-        })
-        .some((entry) => entry.key === '123'),
-    ).toBe(true);
-    expect(performance.now() - fuzzyStart).toBeLessThan(200);
+    const fuzzyResults = index.query('Prampt 123', undefined, {
+      ...defaultSearchOptions,
+      matching: 'fuzzy',
+    });
+    const fuzzyDuration = performance.now() - fuzzyStart;
+    expect(fuzzyResults.some((entry) => entry.key === '123')).toBe(true);
+    assertLocalDuration(fuzzyDuration, 200, '10,000-prompt fuzzy search');
   });
 
   it('shares exact-first modes, case handling and filter constraints', () => {
@@ -373,11 +388,14 @@ describe('prompt search and rendering', () => {
   });
 
   it.each([
+    ['cde', 'code', false],
     ['cat', 'cot', false],
     ['code', 'cide', true],
     ['code', 'cde', true],
     ['code', 'coxde', true],
     ['code', 'cdoe', false],
+    ['reviewx', 'reviewy', true],
+    ['reviewxy', 'reviewyx', true],
     ['reviewx', 'reviezz', false],
     ['reviewxy', 'reviewzz', true],
     ['reviewxy', 'reviezzz', false],

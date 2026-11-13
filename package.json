@@ -2,7 +2,7 @@
   "name": "prompteur",
   "displayName": "Prompteur",
   "description": "Git-friendly local Markdown prompts with categories, tags, and clipboard generation.",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "publisher": "dmundt",
   "icon": "resources/icon.png",
   "license": "MIT",
@@ -48,7 +48,7 @@
       "prompteur": [
         {
           "id": "prompteur.prompts",
-          "name": "Prompts"
+          "name": "Prompteur"
         }
       ]
     },
@@ -148,6 +148,26 @@
         "icon": "$(library)"
       },
       {
+        "command": "prompteur.addCategory",
+        "title": "Add Prompt Category",
+        "category": "Prompteur"
+      },
+      {
+        "command": "prompteur.approveCategory",
+        "title": "Approve Prompt Category",
+        "category": "Prompteur"
+      },
+      {
+        "command": "prompteur.renameCategory",
+        "title": "Rename Category...",
+        "category": "Prompteur"
+      },
+      {
+        "command": "prompteur.editCategoryDescription",
+        "title": "Edit Category Description",
+        "category": "Prompteur"
+      },
+      {
         "command": "prompteur.removeCategory",
         "title": "Remove Prompt Category",
         "category": "Prompteur"
@@ -208,6 +228,12 @@
         "icon": "$(search)"
       },
       {
+        "command": "prompteur.searchActive",
+        "title": "Filter Prompts (active)",
+        "category": "Prompteur",
+        "icon": "$(filter)"
+      },
+      {
         "command": "prompteur.clearSearch",
         "title": "Clear Filter",
         "category": "Prompteur",
@@ -218,6 +244,12 @@
         "title": "Reload Libraries",
         "category": "Prompteur",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "prompteur.openUserLibrary",
+        "title": "Reveal User Library Folder",
+        "category": "Prompteur",
+        "icon": "$(folder-opened)"
       },
       {
         "command": "prompteur.openSettings",
@@ -288,7 +320,15 @@
     "menus": {
       "commandPalette": [
         {
+          "command": "prompteur.approveCategory",
+          "when": "false"
+        },
+        {
           "command": "prompteur.duplicate",
+          "when": "false"
+        },
+        {
+          "command": "prompteur.searchActive",
           "when": "false"
         }
       ],
@@ -305,7 +345,12 @@
         },
         {
           "command": "prompteur.search",
-          "when": "view =~ /^prompteur\\./",
+          "when": "view == prompteur.prompts && !prompteur.filterActive",
+          "group": "navigation@3"
+        },
+        {
+          "command": "prompteur.searchActive",
+          "when": "view == prompteur.prompts && prompteur.filterActive",
           "group": "navigation@3"
         },
         {
@@ -315,6 +360,21 @@
         }
       ],
       "view/item/context": [
+        {
+          "command": "prompteur.renameCategory",
+          "when": "view == prompteur.prompts && viewItem == customCategory",
+          "group": "2_edit@2"
+        },
+        {
+          "command": "prompteur.approveCategory",
+          "when": "view == prompteur.prompts && viewItem == categoryProblem",
+          "group": "2_edit@2"
+        },
+        {
+          "command": "prompteur.editCategoryDescription",
+          "when": "view == prompteur.prompts && viewItem == customCategory",
+          "group": "2_edit@1"
+        },
         {
           "command": "prompteur.copy",
           "when": "view =~ /^prompteur\\./ && viewItem == prompt",
@@ -337,7 +397,7 @@
         },
         {
           "command": "prompteur.edit",
-          "when": "view =~ /^prompteur\\./ && viewItem =~ /^(prompt|problem)$/",
+          "when": "view =~ /^prompteur\\./ && viewItem =~ /^(prompt|problem|categoryProblem)$/",
           "group": "2_edit@1"
         },
         {
@@ -347,12 +407,12 @@
         },
         {
           "command": "prompteur.pastePrompt",
-          "when": "view == prompteur.prompts && viewItem =~ /^(scope|category)$/",
+          "when": "view == prompteur.prompts && viewItem =~ /^(scope|category|customCategory)$/",
           "group": "create@2"
         },
         {
           "command": "prompteur.newPrompt",
-          "when": "view == prompteur.prompts && viewItem =~ /^(scope|category)$/",
+          "when": "view == prompteur.prompts && viewItem =~ /^(scope|category|customCategory)$/",
           "group": "create@1"
         }
       ]

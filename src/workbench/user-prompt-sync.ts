@@ -4,6 +4,7 @@ import type { FilePort } from '../application/library';
 
 export const userPromptSyncStateKey = 'syncedUserPrompts';
 const approvedCategoriesStateKey = 'approvedPromptCategories';
+export const categoryDescriptionsStateKey = 'promptCategoryDescriptions';
 const baselineKey = 'userPromptSyncBaseline';
 
 interface SyncState {
@@ -76,7 +77,11 @@ export class UserPromptSync {
 
   configure(enabled: boolean): Promise<void> {
     this.enabled = enabled;
-    this.state.setKeysForSync(enabled ? [userPromptSyncStateKey, approvedCategoriesStateKey] : []);
+    this.state.setKeysForSync(
+      enabled
+        ? [userPromptSyncStateKey, approvedCategoriesStateKey, categoryDescriptionsStateKey]
+        : [],
+    );
     return enabled ? this.reconcile() : Promise.resolve();
   }
 
@@ -121,13 +126,18 @@ export class UserPromptSync {
     const paths = (await this.files.list('user')).filter(safePromptPath);
     if (paths.length > libraryEntryLimit) throw new Error('User prompt sync entry limit exceeded');
     let bytes = 0;
-    for (const path of paths) {
-      const source = await this.files.read('user', path);
-      if (source === undefined) continue;
-      assertTextBudget(source);
-      bytes += Buffer.byteLength(source);
-      if (bytes > libraryByteLimit) throw new Error('User prompt sync size limit exceeded');
-      files[path] = source;
+    for (let offset = 0; offset < paths.length; offset += 16) {
+      const batch = paths.slice(offset, offset + 16);
+      const results = await Promise.allSettled(batch.map((path) => this.files.read('user', path)));
+      for (const [index, result] of results.entries()) {
+        if (result.status === 'rejected') throw result.reason;
+        const source = result.value;
+        if (source === undefined) continue;
+        assertTextBudget(source);
+        bytes += Buffer.byteLength(source);
+        if (bytes > libraryByteLimit) throw new Error('User prompt sync size limit exceeded');
+        files[batch[index]!] = source;
+      }
     }
     return files;
   }

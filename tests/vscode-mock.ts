@@ -173,6 +173,10 @@ export class FakeDocument {
     this.isDirty = true;
     changed.fire({ document: this });
   }
+  close() {
+    this.isClosed = true;
+    closed.fire(this);
+  }
 }
 export class FakeEditor {
   selection = new Range(new Position(0, 0), new Position(0, 0));
@@ -232,10 +236,21 @@ export const messages = {
   info: [] as string[],
   preview: '',
 };
-export const views = new Map<
-  string,
-  { treeDataProvider: unknown; dragAndDropController?: unknown }
->();
+type MockTreeView = {
+  treeDataProvider: unknown;
+  dragAndDropController?: unknown;
+  message?: string;
+  badge?: { value: number; tooltip: string };
+  visible: boolean;
+  revealCalls: { element: unknown; options?: { expand?: boolean | number; select?: boolean } }[];
+  onDidChangeVisibility: (listener: (event: { visible: boolean }) => unknown) => Disposable;
+  reveal: (
+    element: unknown,
+    options?: { expand?: boolean | number; select?: boolean },
+  ) => Promise<void>;
+  setVisible: (visible: boolean) => void;
+};
+export const views = new Map<string, MockTreeView>();
 export const handlers = new Map<string, (...args: unknown[]) => Promise<unknown>>();
 export const providers = new Map<string, { provideTextDocumentContent: () => string }>();
 export const languageModelTools = new Map<string, unknown>();
@@ -247,6 +262,8 @@ export const lm = {
 };
 export class FakeInputBox {
   title = '';
+  prompt = '';
+  validationMessage: string | undefined;
   value = '';
   valueChanged = new EventEmitter<string>();
   accepted = new EventEmitter<void>();
@@ -305,8 +322,32 @@ export const window = {
   onDidChangeActiveTextEditor: activeChanged.event,
   createTextEditorDecorationType: () => new Disposable(),
   createTreeView: (id: string, options: { treeDataProvider: unknown }) => {
-    views.set(id, options);
-    return new Disposable(() => views.delete(id));
+    const visibility = new EventEmitter<{ visible: boolean }>();
+    const revealCalls: {
+      element: unknown;
+      options?: { expand?: boolean | number; select?: boolean };
+    }[] = [];
+    const view: MockTreeView & Disposable = Object.assign(
+      new Disposable(() => views.delete(id)),
+      options,
+      {
+        visible: false,
+        revealCalls,
+        setVisible(visible: boolean) {
+          view.visible = visible;
+          visibility.fire({ visible });
+        },
+        onDidChangeVisibility: visibility.event,
+        async reveal(
+          element: unknown,
+          revealOptions?: { expand?: boolean | number; select?: boolean },
+        ) {
+          revealCalls.push(revealOptions ? { element, options: revealOptions } : { element });
+        },
+      },
+    );
+    views.set(id, view);
+    return view;
   },
   createInputBox: () => {
     const box = new FakeInputBox();

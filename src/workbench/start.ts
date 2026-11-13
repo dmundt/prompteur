@@ -5,6 +5,7 @@ import { LibraryService, messageOf } from '../application/library';
 import { appendExactFilter, type SearchOptions } from '../application/search';
 import {
   newPrompt,
+  encodeMarkdown,
   promptFolder,
   promptCategories,
   type Entry,
@@ -15,11 +16,13 @@ import { generate, variableTokens, type Context } from '../core/render';
 import { NativeEditor } from './editor';
 import { PromptLibraryTool } from './prompt-tool';
 import { PromptTree, type TreeNode } from './tree';
-import { UserPromptSync } from './user-prompt-sync';
+import { categoryDescriptionsStateKey, UserPromptSync } from './user-prompt-sync';
 import { watchLibrary } from './watch';
+import { TextInput } from './text-input';
 
 const addCategoryValue = '__add_category__';
 const removeCategoryValue = '__remove_category__';
+const categoryDescriptionLimit = 240;
 
 class Workbench implements vscode.Disposable {
   private readonly disposables: vscode.Disposable[] = [];
@@ -28,10 +31,19 @@ class Workbench implements vscode.Disposable {
   private readonly userPromptSync: UserPromptSync;
   private readonly editor: NativeEditor;
   private readonly tree: PromptTree;
+  private readonly treeView: vscode.TreeView<TreeNode>;
+  private readonly scopeCounts = new Map<Scope, number>();
+  private countUpdate = 0;
+  private disposed = false;
+  private readonly textInput = new TextInput();
   private target: vscode.TextEditor | undefined;
   private searchBox: vscode.InputBox | undefined;
+  private disposeSearch: (() => void) | undefined;
+  private filterContextUpdate: Promise<void> = Promise.resolve();
   private copiedPrompt: { data: PromptData; source: string } | undefined;
   private readonly approvedCategories = new Set<string>();
+  private categoryDescriptions = new Map<string, string>();
+  private renamingCategory = false;
 
   constructor(private readonly context: vscode.ExtensionContext) {
     const savedCategories = context.globalState.get<unknown>('approvedPromptCategories', []);
@@ -42,6 +54,22 @@ class Workbench implements vscode.Disposable {
         if (category && !promptCategories.some((builtin) => builtin === category))
           this.approvedCategories.add(category);
       }
+    const descriptions = context.globalState.get<unknown>(categoryDescriptionsStateKey, {});
+    if (!descriptions || typeof descriptions !== 'object' || Array.isArray(descriptions))
+      throw new Error('Invalid custom category descriptions in profile state');
+    for (const [category, description] of Object.entries(descriptions)) {
+      if (
+        !category.trim() ||
+        category !== category.trim().toLowerCase() ||
+        category.length > 64 ||
+        typeof description !== 'string' ||
+        description.length > categoryDescriptionLimit ||
+        /[\r\n]/.test(description)
+      )
+        throw new Error('Invalid custom category descriptions in profile state');
+      if (this.approvedCategories.has(category) && description.trim())
+        this.categoryDescriptions.set(category, description.trim());
+    }
     const userStorage =
       context.globalStorageUri.scheme === 'file'
         ? context.globalStorageUri
@@ -76,7 +104,7 @@ class Workbench implements vscode.Disposable {
             this.service,
             () => this.roots.has('workspace'),
             () => vscode.workspace.isTrusted,
-            (entry) => this.generate(entry, this.destination()),
+            (entry, token) => this.generate(entry, this.destination(), token),
             () => this.searchOptions().selection,
           ),
         ),
@@ -93,13 +121,24 @@ class Workbench implements vscode.Disposable {
           .getConfiguration('prompteur')
           .get<'filtered' | 'total' | 'hidden'>('categoryCountMode', 'filtered'),
       () => vscode.workspace.getConfiguration('prompteur').get<boolean>('groupByCategory', true),
+      (scope) => this.roots.get(scope),
+      (category) =>
+        this.approvedCategories.has(category)
+          ? (this.categoryDescriptions.get(category) ?? '')
+          : undefined,
+      (scope) => this.scopeCounts.get(scope),
     );
+    this.treeView = vscode.window.createTreeView('prompteur.prompts', {
+      treeDataProvider: this.tree,
+      showCollapseAll: true,
+    });
+    this.disposables.push(this.editor, this.textInput, this.tree, this.treeView);
+    let viewWasVisible = this.treeView.visible;
+    const expandScopes = () => void this.expandLibraryScopes().catch((error) => this.report(error));
     this.disposables.push(
-      this.editor,
-      this.tree,
-      vscode.window.createTreeView('prompteur.prompts', {
-        treeDataProvider: this.tree,
-        showCollapseAll: true,
+      this.treeView.onDidChangeVisibility(({ visible }) => {
+        if (visible && !viewWasVisible) expandScopes();
+        viewWasVisible = visible;
       }),
     );
     this.disposables.push(
@@ -111,6 +150,8 @@ class Workbench implements vscode.Disposable {
           event.affectsConfiguration('prompteur.search')
         )
           this.tree.refresh();
+        if (event.affectsConfiguration('prompteur.search'))
+          void this.updatePromptCounts().catch((error) => this.report(error));
         if (event.affectsConfiguration('prompteur.syncUserPrompts'))
           void this.configurePromptSync().catch((error) => this.report(error));
       }),
@@ -125,6 +166,17 @@ class Workbench implements vscode.Disposable {
       newPrompt: (node) => this.create(node),
       addStarters: (node) => this.addStarters(node),
       removeCategory: () => this.removeApprovedCategory(),
+      addCategory: () => this.addCategory(),
+      approveCategory: (node) => this.approveCategory(node),
+      editCategoryDescription: (node) => this.editCategoryDescription(node),
+      renameCategory: async (node) => {
+        this.renamingCategory = true;
+        try {
+          await this.renameCategory(node);
+        } finally {
+          this.renamingCategory = false;
+        }
+      },
       edit: (node) => this.edit(node),
       delete: (node) => this.remove(node),
       duplicate: (node) => this.duplicate(node),
@@ -133,6 +185,8 @@ class Workbench implements vscode.Disposable {
       pastePrompt: (node) => this.pastePrompt(node),
       preview: (node) => this.preview(node),
       search: () => this.search(),
+      searchActive: () => this.search(),
+      openUserLibrary: () => this.openLibraryFolder('user'),
       openSettings: async () => {
         await vscode.commands.executeCommand(
           'workbench.action.openSettings',
@@ -140,9 +194,8 @@ class Workbench implements vscode.Disposable {
         );
       },
       clearSearch: async () => {
-        this.tree.query = '';
         if (this.searchBox) this.searchBox.value = '';
-        this.tree.refresh();
+        await this.setFilter('');
       },
       refresh: async () => {
         await this.userPromptSync.reconcile();
@@ -153,14 +206,38 @@ class Workbench implements vscode.Disposable {
       this.disposables.push(
         vscode.commands.registerCommand(`prompteur.${name}`, async (node?: TreeNode) => {
           try {
+            if (
+              this.renamingCategory &&
+              [
+                'renameCategory',
+                'newPrompt',
+                'duplicate',
+                'copyPrompt',
+                'pastePrompt',
+                'addCategory',
+                'approveCategory',
+                'removeCategory',
+                'editCategoryDescription',
+              ].includes(name)
+            )
+              throw new Error('Finish the category rename before changing categories.');
             await action(node);
           } catch (error) {
+            if (error instanceof vscode.CancellationError) return;
             this.report(error);
             throw error;
           }
         }),
       );
     this.disposables.push(
+      vscode.commands.registerCommand('prompteur.openLibraryFolder', async (scope: unknown) => {
+        try {
+          await this.openLibraryFolder(scope);
+        } catch (error) {
+          this.report(error);
+          throw error;
+        }
+      }),
       vscode.commands.registerCommand(
         'prompteur.filterFromTooltip',
         async (kind: unknown, value: unknown) => {
@@ -223,9 +300,20 @@ class Workbench implements vscode.Disposable {
   private async filterFromTooltip(kind: unknown, value: unknown): Promise<void> {
     if ((kind !== 'tag' && kind !== 'category') || typeof value !== 'string' || !value.trim())
       throw new Error('Invalid prompt filter link');
-    this.tree.query = appendExactFilter(this.tree.query, kind, value);
-    if (this.searchBox) this.searchBox.value = this.tree.query;
+    const query = appendExactFilter(this.tree.query, kind, value);
+    if (this.searchBox) this.searchBox.value = query;
+    await this.setFilter(query);
+  }
+
+  private setFilter(query: string): Promise<void> {
+    this.tree.query = query;
+    this.treeView.message = query.trim() ? `Filter: ${query.trim()}` : '';
     this.tree.refresh();
+    const update = this.filterContextUpdate.then(async () => {
+      await vscode.commands.executeCommand('setContext', 'prompteur.filterActive', !!query.trim());
+    });
+    this.filterContextUpdate = update.catch(() => undefined);
+    return Promise.all([update, this.updatePromptCounts()]).then(() => undefined);
   }
 
   private async openPromptPath(scope: unknown, path: unknown): Promise<void> {
@@ -236,6 +324,14 @@ class Workbench implements vscode.Disposable {
     );
     if (!entry) throw new Error('Prompt changed or became invalid. Reload or repair its YAML.');
     await vscode.window.showTextDocument(this.uri(entry));
+  }
+
+  private async openLibraryFolder(scope: unknown): Promise<void> {
+    if (scope !== 'user' && scope !== 'workspace') throw new Error('Invalid library folder link');
+    const root = this.roots.get(scope);
+    if (!root) throw new Error('Workspace library is unavailable');
+    await vscode.workspace.fs.stat(root);
+    await vscode.commands.executeCommand('revealFileInOS', root);
   }
 
   private uri(entry: Pick<Entry, 'scope' | 'path'>): vscode.Uri {
@@ -257,7 +353,7 @@ class Workbench implements vscode.Disposable {
   }
 
   private async scope(node?: TreeNode): Promise<Scope | undefined> {
-    if (node) return node.scope;
+    if (node && node.kind !== 'root') return node.scope;
     const defaultScope = vscode.workspace
       .getConfiguration('prompteur')
       .get<unknown>('defaultScope', 'ask');
@@ -323,21 +419,34 @@ class Workbench implements vscode.Disposable {
     const value = await vscode.window.showInputBox({
       title: 'Add prompt category',
       prompt: 'Category name for this VS Code profile',
-      validateInput: (input) => {
-        const category = input.trim().toLowerCase();
-        if (!category) return 'Category name is required';
-        if (category.length > 64) return 'Category name must be 64 characters or fewer';
-        if (
-          this.categoryValue(category) ||
-          category === addCategoryValue ||
-          category === removeCategoryValue
-        )
-          return 'Category is already approved';
-        return undefined;
-      },
+      validateInput: (input) => this.validateNewCategory(input),
     });
     if (!value?.trim()) return undefined;
     const category = value.trim().toLowerCase();
+    return this.approveCategoryName(category);
+  }
+
+  private async approveCategory(node?: TreeNode): Promise<void> {
+    if (node?.kind !== 'problem' || !this.roots.has(node.scope))
+      throw new Error('Choose a prompt with an unapproved category');
+    const snapshot = await this.service.get(node.scope);
+    if (!snapshot.problems.some((problem) => problem.path === node.path))
+      throw new Error('Prompt problem changed. Reload the library.');
+    await this.service.refresh(node.scope, node.path);
+    const problem = (await this.service.get(node.scope)).problems.find(
+      (candidate) => candidate.path === node.path,
+    );
+    if (!problem?.unapprovedCategory)
+      throw new Error('Prompt no longer has an unapproved category. Reload or repair its YAML.');
+    const category = problem.unapprovedCategory;
+    if (category === addCategoryValue || category === removeCategoryValue)
+      throw new Error('Category name is reserved. Change the category in the prompt YAML.');
+    await this.approveCategoryName(category);
+  }
+
+  private async approveCategoryName(category: string): Promise<string | undefined> {
+    const description = await this.inputCategoryDescription(category);
+    if (description === undefined) return undefined;
     const answer = await vscode.window.showWarningMessage(
       `Add "${category}" to this VS Code profile's User and Workspace categories?`,
       { modal: true },
@@ -345,16 +454,10 @@ class Workbench implements vscode.Disposable {
     );
     if (answer !== 'Add Category') return undefined;
 
-    this.approvedCategories.add(category);
-    try {
-      await this.context.globalState.update(
-        'approvedPromptCategories',
-        [...this.approvedCategories].sort((left, right) => left.localeCompare(right)),
-      );
-    } catch (error) {
-      this.approvedCategories.delete(category);
-      throw error;
-    }
+    const categories = new Set(this.approvedCategories).add(category);
+    const descriptions = new Map(this.categoryDescriptions);
+    if (description) descriptions.set(category, description);
+    await this.saveCategories(categories, descriptions);
     for (const scope of this.roots.keys()) {
       try {
         await this.service.refresh(scope);
@@ -363,6 +466,230 @@ class Workbench implements vscode.Disposable {
       }
     }
     return category;
+  }
+
+  private async inputCategoryDescription(category: string): Promise<string | undefined> {
+    const value = await vscode.window.showInputBox({
+      title: `Description for ${category}`,
+      prompt: `Optional category help; leave blank for generic help (maximum ${categoryDescriptionLimit} characters)`,
+      value: this.categoryDescriptions.get(category) ?? '',
+      validateInput: (input) =>
+        /[\r\n]/.test(input)
+          ? 'Description must be a single line'
+          : input.trim().length > categoryDescriptionLimit
+            ? `Description must be ${categoryDescriptionLimit} characters or fewer`
+            : undefined,
+    });
+    return value?.trim();
+  }
+
+  private validateNewCategory(input: string): string | undefined {
+    const category = input.trim().toLowerCase();
+    if (!category) return 'Category name is required';
+    if (category.length > 64) return 'Category name must be 64 characters or fewer';
+    if (
+      this.categoryValue(category) ||
+      category === addCategoryValue ||
+      category === removeCategoryValue
+    )
+      return 'Category is already approved';
+    return undefined;
+  }
+
+  private async pickCustomCategory(node: TreeNode | undefined, title: string) {
+    if (node) {
+      if (node.kind !== 'category' || !this.approvedCategories.has(node.category.toLowerCase()))
+        throw new Error('Only approved custom categories can be edited');
+      return node.category.toLowerCase();
+    }
+    const categories = [...this.approvedCategories].sort((left, right) =>
+      left.localeCompare(right),
+    );
+    if (!categories.length) {
+      void vscode.window.showInformationMessage('No approved custom categories to edit.');
+      return undefined;
+    }
+    return (
+      await vscode.window.showQuickPick(
+        categories.map((value) => ({
+          label: value.charAt(0).toUpperCase() + value.slice(1),
+          value,
+          description: this.categoryDescriptions.get(value) ?? '',
+        })),
+        { title },
+      )
+    )?.value;
+  }
+
+  private async editCategoryDescription(node?: TreeNode): Promise<void> {
+    const category = await this.pickCustomCategory(node, 'Edit category description');
+    if (!category) return;
+    const description = await this.inputCategoryDescription(category);
+    if (description === undefined) return;
+    const descriptions = new Map(this.categoryDescriptions);
+    if (description) descriptions.set(category, description);
+    else descriptions.delete(category);
+    await this.context.globalState.update(
+      categoryDescriptionsStateKey,
+      Object.fromEntries(descriptions),
+    );
+    this.categoryDescriptions = descriptions;
+    this.tree.refresh();
+  }
+
+  private async renameCategory(node?: TreeNode): Promise<void> {
+    const category = await this.pickCustomCategory(node, 'Rename prompt category');
+    if (!category) return;
+    const input = await vscode.window.showInputBox({
+      title: 'Rename prompt category',
+      prompt: 'New category name for both libraries',
+      value: category,
+      validateInput: (value) => this.validateNewCategory(value),
+    });
+    if (input === undefined) return;
+    const next = input.trim().toLowerCase();
+    const invalid = this.validateNewCategory(next);
+    if (invalid) throw new Error(invalid);
+    const affected = await this.categoryEntries(category);
+    for (const entry of affected) this.assertCategoryWritable(entry);
+    if (
+      (await vscode.window.showWarningMessage(
+        `Rename "${category}" to "${next}" in this profile and ${affected.length} saved prompt(s) across User and Workspace? Prompt filenames and category description stay unchanged.`,
+        { modal: true },
+        'Rename Category',
+      )) !== 'Rename Category'
+    )
+      return;
+    if (!this.approvedCategories.has(category) || this.validateNewCategory(next))
+      throw new Error('Categories changed. Retry the rename.');
+    const current = await this.categoryEntries(category);
+    const previousSources = new Map(affected.map((entry) => [entry.key, entry.source]));
+    if (
+      current.length !== affected.length ||
+      current.some((entry) => previousSources.get(entry.key) !== entry.source)
+    )
+      throw new Error('Prompts changed. Retry the rename.');
+    for (const entry of current) this.assertCategoryWritable(entry);
+    const previousCategories = new Set(this.approvedCategories);
+    const previousDescriptions = new Map(this.categoryDescriptions);
+    const categories = new Set(previousCategories).add(next);
+    const descriptions = new Map(previousDescriptions);
+    const description = descriptions.get(category);
+    if (description) descriptions.set(next, description);
+    const changes = current.map((entry) => ({
+      entry,
+      source: encodeMarkdown({ ...entry.data, category: next }, entry.source, [...categories]),
+    }));
+    await this.saveCategories(categories, descriptions);
+    const attempted: typeof changes = [];
+    try {
+      for (const change of changes) {
+        this.assertCategoryWritable(change.entry);
+        attempted.push(change);
+        await this.service.writeSource(
+          change.entry.scope,
+          change.entry.path,
+          change.source,
+          change.entry.source,
+        );
+      }
+      if ((await this.categoryEntries(category)).length)
+        throw new Error('Prompts changed during rename. Retry the rename.');
+      categories.delete(category);
+      descriptions.delete(category);
+      await this.saveCategories(categories, descriptions);
+    } catch (error) {
+      const failures: string[] = [];
+      for (const { entry, source } of attempted.reverse()) {
+        try {
+          const saved = await this.service.readFile(entry.scope, entry.path);
+          if (saved === entry.source) continue;
+          if (saved !== source) throw new Error('File changed during rename');
+          this.assertCategoryWritable(entry);
+          await this.service.writeSource(entry.scope, entry.path, entry.source, source);
+        } catch (rollbackError) {
+          failures.push(`${entry.scope}/${entry.path}: ${messageOf(rollbackError)}`);
+        }
+      }
+      if (!failures.length) {
+        try {
+          await this.saveCategories(previousCategories, previousDescriptions);
+        } catch (rollbackError) {
+          failures.push(`Profile metadata: ${messageOf(rollbackError)}`);
+        }
+      }
+      throw new Error(
+        `Category rename failed: ${messageOf(error)}. ${
+          failures.length
+            ? `Recovery incomplete; both categories remain approved. Check affected prompts: ${failures.join('; ')}`
+            : 'Original prompts and category metadata restored.'
+        }`,
+      );
+    }
+    if (this.copiedPrompt?.data.category === category)
+      this.copiedPrompt = {
+        ...this.copiedPrompt,
+        data: { ...this.copiedPrompt.data, category: next },
+      };
+    void vscode.window.showInformationMessage(
+      `Renamed "${category}" to "${next}" in ${changes.length} prompt(s).`,
+    );
+  }
+
+  private async categoryEntries(category: string): Promise<Entry[]> {
+    const entries: Entry[] = [];
+    for (const scope of this.roots.keys()) {
+      await this.service.refresh(scope);
+      const snapshot = await this.service.get(scope);
+      if (snapshot.problems.length)
+        throw new Error('Repair invalid prompts in both libraries before renaming a category.');
+      entries.push(...snapshot.entries.filter((entry) => entry.data.category === category));
+    }
+    return entries;
+  }
+
+  private assertCategoryWritable(entry: Entry): void {
+    this.assertTrusted(entry);
+    const uri = this.uri(entry).toString();
+    if (
+      vscode.workspace.textDocuments.some(
+        (document) => document.uri.toString() === uri && document.isDirty,
+      )
+    )
+      throw new Error(`Save or discard unsaved changes before renaming: ${entry.path}`);
+  }
+
+  private async saveCategories(
+    categories: Set<string>,
+    descriptions: Map<string, string>,
+  ): Promise<void> {
+    const previousDescriptions = this.context.globalState.get<unknown>(
+      categoryDescriptionsStateKey,
+    );
+    await this.context.globalState.update(
+      categoryDescriptionsStateKey,
+      Object.fromEntries(descriptions),
+    );
+    try {
+      await this.context.globalState.update(
+        'approvedPromptCategories',
+        [...categories].sort((left, right) => left.localeCompare(right)),
+      );
+    } catch (error) {
+      try {
+        await this.context.globalState.update(categoryDescriptionsStateKey, previousDescriptions);
+      } catch (rollbackError) {
+        throw new AggregateError(
+          [error, rollbackError],
+          `Category save failed: ${messageOf(error)}. Description rollback failed: ${messageOf(rollbackError)}`,
+        );
+      }
+      throw error;
+    }
+    this.approvedCategories.clear();
+    for (const category of categories) this.approvedCategories.add(category);
+    this.categoryDescriptions = new Map(descriptions);
+    this.tree.refresh();
   }
 
   private async removeApprovedCategory(): Promise<void> {
@@ -404,16 +731,11 @@ class Workbench implements vscode.Disposable {
     );
     if (answer !== 'Remove Category') return;
 
-    this.approvedCategories.delete(choice.value);
-    try {
-      await this.context.globalState.update(
-        'approvedPromptCategories',
-        [...this.approvedCategories].sort((left, right) => left.localeCompare(right)),
-      );
-    } catch (error) {
-      this.approvedCategories.add(choice.value);
-      throw error;
-    }
+    const categoriesAfterRemoval = new Set(this.approvedCategories);
+    categoriesAfterRemoval.delete(choice.value);
+    const descriptions = new Map(this.categoryDescriptions);
+    descriptions.delete(choice.value);
+    await this.saveCategories(categoriesAfterRemoval, descriptions);
     for (const scope of this.roots.keys()) {
       try {
         await this.service.refresh(scope);
@@ -610,11 +932,14 @@ class Workbench implements vscode.Disposable {
     await vscode.window.showTextDocument(this.uri({ scope, path }));
   }
 
-  private async generate(entry: Entry, target: vscode.TextEditor | undefined) {
+  private async generate(
+    entry: Entry,
+    target: vscode.TextEditor | undefined,
+    token?: vscode.CancellationToken,
+  ) {
     this.assertTrusted(entry);
-    const needsClipboard = variableTokens(entry.data.content).some(
-      (token) => token.name === 'clipboard',
-    );
+    const tokens = variableTokens(entry.data.content);
+    const needsClipboard = tokens.some((token) => token.name === 'clipboard');
     const context: Context = {
       selection: target?.document.getText(target.selection) ?? '',
       clipboard: needsClipboard ? await vscode.env.clipboard.readText() : '',
@@ -624,6 +949,10 @@ class Workbench implements vscode.Disposable {
         vscode.workspace.workspaceFolders?.[0]?.name ??
         '',
     };
+    if (tokens.some((token) => token.name === 'text'))
+      context.text = await this.textInput.request(token);
+    if (token?.isCancellationRequested) throw new vscode.CancellationError();
+    this.assertTrusted(entry);
     return generate(entry.data.content, context);
   }
 
@@ -662,36 +991,82 @@ class Workbench implements vscode.Disposable {
   }
 
   private async search(): Promise<void> {
+    if (this.searchBox) {
+      this.searchBox.show();
+      return;
+    }
     const box = vscode.window.createInputBox();
     box.title = 'Filter prompts (tag:value, category:value)';
     box.value = this.tree.query;
     this.searchBox = box;
-    const changed = box.onDidChangeValue((value) => {
-      this.tree.query = value;
-      this.tree.refresh();
-    });
-    const accepted = box.onDidAccept(() => box.hide());
-    box.onDidHide(() => {
-      changed.dispose();
-      accepted.dispose();
-      if (this.searchBox === box) this.searchBox = undefined;
+    const listeners: vscode.Disposable[] = [];
+    const cleanup = () => {
+      if (this.searchBox !== box) return;
+      this.searchBox = undefined;
+      this.disposeSearch = undefined;
+      for (const listener of listeners) listener.dispose();
       box.dispose();
-    });
-    box.show();
+    };
+    this.disposeSearch = cleanup;
+    listeners.push(
+      box.onDidChangeValue((value) => {
+        void this.setFilter(value).catch((error) => this.report(error));
+      }),
+      box.onDidAccept(() => box.hide()),
+      box.onDidHide(cleanup),
+    );
+    try {
+      box.show();
+    } catch (error) {
+      cleanup();
+      throw error;
+    }
   }
 
   async initialize(): Promise<void> {
+    void this.updatePromptCounts().catch((error) => this.report(error));
     // Initial sync runs in the background so activation stays within its time budget.
     // Operations are serialized by UserPromptSync's queue, so later persist calls remain ordered.
     void this.configurePromptSync().catch((error) => this.report(error));
     this.disposables.push({
       dispose: this.service.subscribe((scope) => {
+        void this.updatePromptCounts().catch((error) => this.report(error));
         if (scope === 'user')
           void this.userPromptSync.persist().catch((error) => this.report(error));
       }),
     });
     for (const [scope, root] of this.roots)
       this.disposables.push(watchLibrary(root, scope, this.service, (error) => this.report(error)));
+  }
+
+  private async updatePromptCounts(): Promise<void> {
+    if (this.disposed) return;
+    const update = ++this.countUpdate;
+    try {
+      const counts = await Promise.all(
+        [...this.roots.keys()].map(async (scope) => {
+          const entries = await this.service.search(scope, this.tree.query);
+          return [scope, entries.length] as const;
+        }),
+      );
+      if (update !== this.countUpdate) return;
+      for (const [scope, count] of counts) {
+        this.scopeCounts.set(scope, count);
+      }
+      this.tree.refresh();
+    } catch (error) {
+      if (update === this.countUpdate) {
+        this.scopeCounts.clear();
+        this.tree.refresh();
+      }
+      throw error;
+    }
+  }
+
+  private async expandLibraryScopes(): Promise<void> {
+    const options = { expand: true, select: false };
+    for (const scope of this.roots.keys())
+      await this.treeView.reveal({ kind: 'scope', scope }, options);
   }
 
   private async configurePromptSync(): Promise<void> {
@@ -703,12 +1078,16 @@ class Workbench implements vscode.Disposable {
   }
 
   dispose(): void {
+    this.disposed = true;
+    ++this.countUpdate;
+    this.disposeSearch?.();
     for (const disposable of this.disposables.reverse()) disposable.dispose();
   }
 }
 
 export async function start(context: vscode.ExtensionContext): Promise<void> {
   await vscode.commands.executeCommand('setContext', 'prompteur.hasCopiedPrompt', false);
+  await vscode.commands.executeCommand('setContext', 'prompteur.filterActive', false);
   const workbench = new Workbench(context);
   context.subscriptions.push(workbench);
   await workbench.initialize();

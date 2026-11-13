@@ -5,6 +5,7 @@ import {
   isPromptMarkdown,
   promptFolder,
   promptCategories,
+  PromptDocumentError,
   relativePath,
   type Entry,
   type Problem,
@@ -141,7 +142,16 @@ export class LibraryService {
         },
       };
     } catch (error) {
-      return { source, problem: { path, message: messageOf(error) } };
+      return {
+        source,
+        problem: {
+          path,
+          message: messageOf(error),
+          ...(error instanceof PromptDocumentError && error.unapprovedCategory
+            ? { unapprovedCategory: error.unapprovedCategory }
+            : {}),
+        },
+      };
     }
   }
 
