@@ -255,6 +255,72 @@ describe('release commands', () => {
     expect(tree().getTreeItem(scopeNode('workspace')).label).toBe('Workspace (1)');
     expect(tree().getTreeItem({ kind: 'root' }).label).toBe('Prompts (1)');
   });
+  it.each([false, true])(
+    'shows local prompts and counts before startup sync finishes (failure: %s)',
+    async (fail) => {
+      for (const disposable of context.subscriptions.splice(0)) disposable.dispose();
+      for (const base of [userRoot(), workspaceRoot()]) {
+        await fs.mkdir(join(base, 'prompts'), { recursive: true });
+        await fs.writeFile(
+          join(base, 'prompts', 'local.prompt.md'),
+          encodeMarkdown(newPrompt('Local')),
+        );
+      }
+      const remote = encodeMarkdown(newPrompt('Remote'));
+      await context.globalState.update('syncedUserPrompts', {
+        version: 1,
+        files: { 'prompts/remote.prompt.md': remote },
+        deleted: [],
+      });
+      let release!: () => void;
+      const pending = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const original = LocalFiles.prototype.write;
+      const write = vi.spyOn(LocalFiles.prototype, 'write').mockImplementation(async function (
+        this: LocalFiles,
+        scope,
+        path,
+        source,
+        expected,
+      ) {
+        if (scope === 'user' && path === 'prompts/remote.prompt.md') {
+          await pending;
+          if (fail) throw new Error('Startup sync failed');
+        }
+        await original.call(this, scope, path, source, expected);
+      });
+      try {
+        await activate(context as unknown as vscode.ExtensionContext);
+        await vi.waitFor(() => {
+          expect(write).toHaveBeenCalledWith('user', 'prompts/remote.prompt.md', remote, undefined);
+          expect(tree().getTreeItem({ kind: 'root' }).label).toBe('Prompts (2)');
+        });
+        for (const scope of ['user', 'workspace'] as const) {
+          expect(tree().getTreeItem(scopeNode(scope)).label).toBe(
+            `${scope === 'user' ? 'User' : 'Workspace'} (1)`,
+          );
+          expect((await entries(scope)).map((node) => node.entry.data.name)).toEqual(['Local']);
+        }
+        expect(messages.errors).toEqual([]);
+      } finally {
+        release();
+      }
+      if (fail) {
+        await vi.waitFor(() => expect(messages.errors).toContain('Prompteur: Startup sync failed'));
+        expect(tree().getTreeItem({ kind: 'root' }).label).toBe('Prompts (2)');
+        expect((await entries()).map((node) => node.entry.data.name)).toEqual(['Local']);
+      } else {
+        await vi.waitFor(() =>
+          expect(tree().getTreeItem({ kind: 'root' }).label).toBe('Prompts (3)'),
+        );
+        expect(tree().getTreeItem(scopeNode('user')).label).toBe('User (2)');
+        expect(tree().getTreeItem(scopeNode('workspace')).label).toBe('Workspace (1)');
+        expect((await entries()).map((node) => node.entry.data.name)).toEqual(['Local', 'Remote']);
+        expect(messages.errors).toEqual([]);
+      }
+    },
+  );
   it('reports count loading failures without showing a partial total and recovers on reload', async () => {
     for (const disposable of context.subscriptions.splice(0)) disposable.dispose();
     workspace.configuration.set('prompteur.syncUserPrompts', false);

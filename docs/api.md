@@ -21,7 +21,7 @@
 - `prompteur.showTags`: toggles row tag labels; defaults `true`. Search and tooltip links remain unchanged.
 - `prompteur.categoryCountMode`: `filtered` (default), `total`, or `hidden`. Search still determines which categories appear; counts use filtered matches or all valid prompts in each visible category.
 - `prompteur.groupByCategory`: `true` (default) groups rows; `false` shows a flat prompt list.
-- `prompteur.syncUserPrompts`: `true` (default) opts the User library snapshot into VS Code Settings Sync. Incoming changes reconcile on activation or **Reload Libraries**; Workspace prompts are excluded.
+- `prompteur.syncUserPrompts`: `true` (default) opts the User library snapshot into VS Code Settings Sync. Local prompts and counts load immediately without waiting for startup reconciliation. Successful background reconciliation refreshes the User library and counts; failures use native errors and leave local prompts available. **Reload Libraries** waits for reconciliation before refreshing libraries. Workspace prompts are excluded from sync.
 
 - `prompteur.search.matching`: `exact`, `fullText` (default), or `fuzzy`. Each phase runs over all eligible entries: whole-name exact first; full-text AND next unless exact-only; fuzzy whole-name fallback last when enabled. Apply category/tag constraints before phase selection.
 - `prompteur.search.caseSensitive`: `false` (default); affects names/free text only. Exact tag/category filters remain case-insensitive.
