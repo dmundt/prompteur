@@ -14,7 +14,7 @@ npm run package
 
 - Unit/integration coverage: metadata-only frontmatter; custom category creation, approval, persisted metadata validation, rename recovery, and User/Workspace removal guards; category count modes; settings defaults/overrides and gear command; comments/unknown fields; malformed delimiters/YAML/aliases/depth; exact body preservation; ignored YAML; path identity; conflicts/recovery; resource/path safety; search/filters/tooltips; 10k search; groups/batches/watchers; variables; CRUD/previews/Copy Text/prompt copy/paste and buffer enablement; isolated clipboard menu group and hidden legacy actions; legacy command compatibility; read-only Copilot prompt search/render, confirmation, and Workspace Trust; cancellation.
 
-- Filesystem tests: conflicts, stale writes/deletes, path confinement, oversized input.
+- Filesystem tests: conflicts, stale writes/deletes, path confinement, oversized input, and Windows control-character snapshots rejected before writes.
 - Release-boundary tests: sole view, contributed commands and one read-only tool; no import/export or extension dependency; old state preserved.
 - Native-save tests: preserve user formatting.
 - Text-input tests: single-line/repeated substitution, blank/size validation, cancel/disposal, concurrency, source context preservation, Trust recheck, and Copilot selection/cancellation.
@@ -22,7 +22,7 @@ npm run package
 - Input-display failure tests verify rejection, native error reporting for filtering, listener cleanup, and a successful retry unaffected by stale input events. Editor tests cover body-variable diagnostic offsets, recovery, close cleanup, and unchanged saved files.
 - Generated-output tests count the UTF-8 literal tail after substitution at the byte limit and reject one byte over.
 - Filesystem replacement tests preserve an external edit made after the initial source check, remove staging and lock files on conflict, and permit retry against the updated source.
-- Boundary tests cover category/tag counts and lengths, Markdown/file UTF-8 bytes, YAML depth/node counts, generated output, mocked cache entry/byte ceilings, filesystem file/directory enumeration, sync snapshot file size, Copilot query length and candidate truncation, custom-description lengths, portable path segments, and fuzzy thresholds/edit costs.
+- Boundary tests cover category/tag counts and lengths, Markdown/file UTF-8 bytes, YAML depth/node counts, generated output, mocked cache entry/byte ceilings, filesystem file/directory enumeration, sync snapshot file size, Copilot query length and candidate truncation, custom-description lengths, portable path segments including U+0000-U+001F, and fuzzy thresholds/edit costs.
 - Workflow integration tests use real isolated library files with mocked VS Code APIs/state: Prompts/User/Workspace expansion on view visibility; startup reconciliation and invalid reload recovery; create/save/copy/delete with dirty-edit protection and sync tombstones; Workspace Trust and Copilot rendering without prompt mutation.
 
 - Host smoke: isolated workspace/profile; Trust enabled; startup prompts disabled.
