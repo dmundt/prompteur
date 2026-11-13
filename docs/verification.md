@@ -19,11 +19,14 @@ npm run package
 - Native-save tests: preserve user formatting.
 - Text-input tests: single-line/repeated substitution, blank/size validation, cancel/disposal, concurrency, source context preservation, Trust recheck, and Copilot selection/cancellation.
 - Async boundary tests: cancellation or Trust loss during Copilot lookup, cancellation during rendering, input cancellation during listener registration, UTF-8 input byte limits, and sync retry after concurrent file edits.
+- Input-display failure tests verify rejection, native error reporting for filtering, listener cleanup, and a successful retry unaffected by stale input events. Editor tests cover body-variable diagnostic offsets, recovery, close cleanup, and unchanged saved files.
+- Generated-output tests count the UTF-8 literal tail after substitution at the byte limit and reject one byte over.
+- Filesystem replacement tests preserve an external edit made after the initial source check, remove staging and lock files on conflict, and permit retry against the updated source.
 - Boundary tests cover category/tag counts and lengths, Markdown/file UTF-8 bytes, YAML depth/node counts, generated output, mocked cache entry/byte ceilings, filesystem file/directory enumeration, sync snapshot file size, Copilot query length and candidate truncation, custom-description lengths, portable path segments, and fuzzy thresholds/edit costs.
 - Workflow integration tests use real isolated library files with mocked VS Code APIs/state: Prompts/User/Workspace expansion on view visibility; startup reconciliation and invalid reload recovery; create/save/copy/delete with dirty-edit protection and sync tombstones; Workspace Trust and Copilot rendering without prompt mutation.
 
 - Host smoke: isolated workspace/profile; Trust enabled; startup prompts disabled.
-- Checks Restricted Mode blocking, User prompt use, clipboard handoff, source preservation, removed Insert command, starters, and plaintext preview. Single-line input interaction is not covered by this smoke test.
+- Checks Restricted Mode blocking, User prompt use, clipboard handoff, source preservation, removed Insert command, starters, and plaintext preview. Prompt-record transfer verifies category override, saved output, unchanged source, and retained copy buffer after blocked Workspace operations. Preview retains source-editor context after opening a library copy. Single-line input interaction is not covered by this smoke test.
 - Host smoke verifies Language Model Tool registration when supported; tool search/render is unit-tested with a VS Code API mock. Tests and extension code make no model-provider requests.
 - Runner restores clipboard and removes temp workspace data.
 
