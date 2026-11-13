@@ -20,7 +20,7 @@ npm run package
 - Text-input tests: single-line/repeated substitution, blank/size validation, cancel/disposal, concurrency, source context preservation, Trust recheck, and Copilot selection/cancellation.
 - Async boundary tests: cancellation or Trust loss during Copilot lookup, cancellation during rendering, input cancellation during listener registration, UTF-8 input byte limits, and sync retry after concurrent file edits.
 - Boundary tests cover category/tag counts and lengths, Markdown/file UTF-8 bytes, YAML depth/node counts, generated output, mocked cache entry/byte ceilings, filesystem file/directory enumeration, sync snapshot file size, Copilot query length and candidate truncation, custom-description lengths, portable path segments, and fuzzy thresholds/edit costs.
-- Workflow integration tests use real isolated library files with mocked VS Code APIs/state: startup reconciliation and invalid reload recovery; create/save/copy/delete with dirty-edit protection and sync tombstones; Workspace Trust and Copilot rendering without prompt mutation.
+- Workflow integration tests use real isolated library files with mocked VS Code APIs/state: Prompts/User/Workspace expansion on view visibility; startup reconciliation and invalid reload recovery; create/save/copy/delete with dirty-edit protection and sync tombstones; Workspace Trust and Copilot rendering without prompt mutation.
 
 - Host smoke: isolated workspace/profile; Trust enabled; startup prompts disabled.
 - Checks Restricted Mode blocking, User prompt use, clipboard handoff, source preservation, removed Insert command, starters, and plaintext preview. Single-line input interaction is not covered by this smoke test.

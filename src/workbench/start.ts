@@ -133,6 +133,14 @@ class Workbench implements vscode.Disposable {
       showCollapseAll: true,
     });
     this.disposables.push(this.editor, this.textInput, this.tree, this.treeView);
+    let viewWasVisible = this.treeView.visible;
+    const expandScopes = () => void this.expandLibraryScopes().catch((error) => this.report(error));
+    this.disposables.push(
+      this.treeView.onDidChangeVisibility(({ visible }) => {
+        if (visible && !viewWasVisible) expandScopes();
+        viewWasVisible = visible;
+      }),
+    );
     this.disposables.push(
       vscode.workspace.onDidChangeConfiguration((event) => {
         if (
@@ -1053,6 +1061,12 @@ class Workbench implements vscode.Disposable {
       }
       throw error;
     }
+  }
+
+  private async expandLibraryScopes(): Promise<void> {
+    const options = { expand: true, select: false };
+    for (const scope of this.roots.keys())
+      await this.treeView.reveal({ kind: 'scope', scope }, options);
   }
 
   private async configurePromptSync(): Promise<void> {
