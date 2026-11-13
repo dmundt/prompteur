@@ -147,7 +147,16 @@ describe('native tree interactions', () => {
     expect(prompts[0]!.kind === 'entry' && prompts[0]!.entry.data.category).toBe('review');
     expect(tree.getTreeItem(prompts[0]!).description).toBe('#security');
     const tooltip = tree.getTreeItem(prompts[0]!).tooltip as MarkdownString;
-    expect(tooltip.value).toContain('Review overview');
+    expect(tooltip.value).toBe(
+      [
+        '**Review**',
+        '**Description** · Review overview',
+        '**Scope** · User',
+        `**Category** · [review](command:prompteur.filterFromTooltip?${encodeURIComponent(JSON.stringify(['category', 'review']))})`,
+        `**Tags** · [#security](command:prompteur.filterFromTooltip?${encodeURIComponent(JSON.stringify(['tag', 'security']))})`,
+        `**Path** · [prompts/review/a.prompt.md](command:prompteur.openPromptPath?${encodeURIComponent(JSON.stringify(['user', 'prompts/review/a.prompt.md']))})`,
+      ].join('  \n'),
+    );
     expect(tooltip.value).not.toContain('Copy Text:');
     expect(tooltip.value).not.toContain('Copy Prompt:');
     expect(tooltip.value).toContain('[review](command:prompteur.filterFromTooltip?');
@@ -165,6 +174,47 @@ describe('native tree interactions', () => {
     await service.refresh('user');
     expect(changed).toHaveBeenCalled();
     expect((await service.get('user')).entries).toHaveLength(1);
+    tree.dispose();
+  });
+  it('shows workspace scope and omits empty optional hover rows', async () => {
+    const { port, files } = memoryFiles();
+    files.set('workspace:prompts/example.prompt.md', encodeMarkdown(newPrompt('Example [safe]')));
+    const tree = new PromptTree(new LibraryService(port), () => true, vi.fn());
+    const category = (await tree.getChildren({ kind: 'scope', scope: 'workspace' }))[0]!;
+    const entry = (await tree.getChildren(category))[0]!;
+    const tooltip = tree.getTreeItem(entry).tooltip as MarkdownString;
+
+    expect(tooltip.value).toBe(
+      [
+        '**Example \\[safe\\]**',
+        '**Scope** · Workspace',
+        `**Category** · [explain](command:prompteur.filterFromTooltip?${encodeURIComponent(JSON.stringify(['category', 'explain']))})`,
+        `**Path** · [prompts/example.prompt.md](command:prompteur.openPromptPath?${encodeURIComponent(JSON.stringify(['workspace', 'prompts/example.prompt.md']))})`,
+      ].join('  \n'),
+    );
+    tree.dispose();
+  });
+  it('keeps multiline prompt metadata compact and escapes Markdown', async () => {
+    const { port, files } = memoryFiles();
+    files.set(
+      'user:prompts/example.prompt.md',
+      encodeMarkdown({
+        ...newPrompt('First\nSecond'),
+        description: 'First line\n[unsafe](command:evil.run)',
+      }),
+    );
+    const tree = new PromptTree(new LibraryService(port), () => false, vi.fn());
+    const category = (await tree.getChildren({ kind: 'scope', scope: 'user' }))[0]!;
+    const entry = (await tree.getChildren(category))[0]!;
+    const tooltip = tree.getTreeItem(entry).tooltip as MarkdownString;
+
+    expect(tooltip.value).toContain(
+      '**First Second**  \n**Description** · First line \\[unsafe\\](command:evil.run)',
+    );
+    expect(tooltip.value).not.toContain('\n\n');
+    expect(tooltip.isTrusted).toEqual({
+      enabledCommands: ['prompteur.filterFromTooltip', 'prompteur.openPromptPath'],
+    });
     tree.dispose();
   });
   it('shows an actionable empty state only when an active filter has no valid matches', async () => {
@@ -242,10 +292,12 @@ describe('native tree interactions', () => {
       return (tree.getTreeItem(entry!).tooltip as MarkdownString).value;
     };
 
-    expect(hover('context')).toContain('Context: Filename, Selection, Clipboard, Workspace, Text');
-    expect(hover('none')).not.toContain('Context:');
-    expect(hover('invalid')).toContain('Context unavailable: Unsupported variable: unknown');
-    expect(hover('unbalanced')).toContain('Context unavailable: Unbalanced variable braces');
+    expect(hover('context')).toContain(
+      '**Context** · Filename, Selection, Clipboard, Workspace, Text',
+    );
+    expect(hover('none')).not.toContain('**Context');
+    expect(hover('invalid')).toContain('**Context unavailable** · Unsupported variable: unknown');
+    expect(hover('unbalanced')).toContain('**Context unavailable** · Unbalanced variable braces');
     files.set(
       'user:prompts/context.prompt.md',
       encodeMarkdown({ ...newPrompt('context'), content: '{{workspace}}' }),
@@ -257,7 +309,7 @@ describe('native tree interactions', () => {
     );
     expect(updated).toBeDefined();
     expect((tree.getTreeItem(updated!).tooltip as MarkdownString).value).toContain(
-      'Context: Workspace',
+      '**Context** · Workspace',
     );
     expect(report).not.toHaveBeenCalled();
     tree.dispose();
