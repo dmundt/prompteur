@@ -1,7 +1,36 @@
 import * as assert from 'node:assert/strict';
 import * as vscode from 'vscode';
 import { decodeMarkdown } from '../../src/core/documents';
+import type { PromptTree } from '../../src/workbench/tree';
 import { assertLocalDuration } from '../timing';
+
+function replaceWindowMethod(name: string, value: unknown): () => void {
+  const descriptor = Object.getOwnPropertyDescriptor(vscode.window, name);
+  Object.defineProperty(vscode.window, name, { configurable: true, value });
+  return () => {
+    if (descriptor) Object.defineProperty(vscode.window, name, descriptor);
+    else Reflect.deleteProperty(vscode.window, name);
+  };
+}
+
+function waitForTreeRefresh(tree: PromptTree): { promise: Promise<void>; dispose: () => void } {
+  let subscription: vscode.Disposable | undefined;
+  let timeout: ReturnType<typeof setTimeout>;
+  const promise = new Promise<void>((resolve, reject) => {
+    subscription = tree.onDidChangeTreeData(() => resolve());
+    timeout = setTimeout(
+      () => reject(new Error('Tree did not refresh after a configuration change')),
+      3000,
+    );
+  });
+  return {
+    promise,
+    dispose: () => {
+      clearTimeout(timeout);
+      subscription?.dispose();
+    },
+  };
+}
 
 export async function run(): Promise<void> {
   const skipClipboard = process.env.PROMPTEUR_TEST_SKIP_CLIPBOARD === '1';
@@ -13,15 +42,130 @@ export async function run(): Promise<void> {
   const extension = vscode.extensions.getExtension('dmundt.prompteur');
   assert.ok(extension, 'Development extension must be available');
   const start = performance.now();
-  await extension.activate();
+  const originalCreateTreeView = vscode.window.createTreeView.bind(vscode.window);
+  let promptTree: PromptTree | undefined;
+  const restoreCreateTreeView = replaceWindowMethod(
+    'createTreeView',
+    <T>(id: string, options: vscode.TreeViewOptions<T>): vscode.TreeView<T> => {
+      if (id === 'prompteur.prompts')
+        promptTree = options.treeDataProvider as unknown as PromptTree;
+      return originalCreateTreeView(id, options);
+    },
+  );
+  try {
+    await extension.activate();
+  } finally {
+    restoreCreateTreeView();
+  }
   const activation = performance.now() - start;
   process.stdout.write(`[host] Activation: ${activation.toFixed(1)} ms\n`);
+  assert.ok(promptTree, 'Prompt tree provider must be registered');
+  const tree = promptTree;
   if (typeof vscode.lm?.registerTool === 'function')
     assert.ok(
       vscode.lm.tools.some((tool) => tool.name === 'prompteur_findPrompt'),
       'Copilot prompt search tool must register when the host supports Language Model Tools',
     );
   assertLocalDuration(activation, 200, 'Activation');
+  let inputCount = 0;
+  const restoreDescriptionInput = replaceWindowMethod('showInputBox', async () => {
+    inputCount++;
+    return inputCount === 1 ? 'research' : 'Test research category';
+  });
+  const restoreWarning = replaceWindowMethod('showWarningMessage', async () => 'Add Category');
+  try {
+    await vscode.commands.executeCommand('prompteur.addCategory');
+  } finally {
+    restoreWarning();
+    restoreDescriptionInput();
+  }
+  const categoriesFor = async (scope: 'user' | 'workspace'): Promise<string[]> =>
+    (await tree.getChildren({ kind: 'scope', scope }))
+      .filter((node) => node.kind === 'category')
+      .map((node) => {
+        const label = tree.getTreeItem(node).label;
+        if (typeof label !== 'string') throw new Error('Category label must be a string');
+        return label;
+      });
+  const scopeLabels = async (): Promise<(string | vscode.TreeItemLabel | undefined)[]> =>
+    (await tree.getChildren({ kind: 'root' })).map((node) => tree.getTreeItem(node).label);
+  const assertHeaderLabels = async (root: string, scopes: string[]): Promise<void> => {
+    const deadline = Date.now() + 3000;
+    while (Date.now() < deadline) {
+      if (
+        tree.getTreeItem({ kind: 'root' }).label === root &&
+        JSON.stringify(await scopeLabels()) === JSON.stringify(scopes)
+      )
+        return;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    assert.equal(tree.getTreeItem({ kind: 'root' }).label, root);
+    assert.deepEqual(await scopeLabels(), scopes);
+  };
+  const setCountMode = async (mode: 'filtered' | 'total' | 'hidden'): Promise<void> => {
+    const refresh = waitForTreeRefresh(tree);
+    try {
+      await vscode.workspace
+        .getConfiguration('prompteur')
+        .update('categoryCountMode', mode, vscode.ConfigurationTarget.Global);
+      await refresh.promise;
+    } finally {
+      refresh.dispose();
+    }
+  };
+  assert.deepEqual(await categoriesFor('user'), ['Plan (1)', 'Research (1)', 'Review (2)']);
+  assert.deepEqual(await categoriesFor('workspace'), ['Plan (1)', 'Research (1)', 'Review (2)']);
+  await assertHeaderLabels('Prompts (8)', ['User (4)', 'Workspace (4)']);
+  await setCountMode('total');
+  assert.deepEqual(await categoriesFor('user'), ['Plan (1)', 'Research (1)', 'Review (2)']);
+  await assertHeaderLabels('Prompts (8)', ['User (4)', 'Workspace (4)']);
+  await setCountMode('hidden');
+  assert.deepEqual(await categoriesFor('workspace'), ['Plan', 'Research', 'Review']);
+  await assertHeaderLabels('Prompts', ['User', 'Workspace']);
+  tree.query = 'needle';
+  await vscode.commands.executeCommand('prompteur.refresh');
+  await setCountMode('filtered');
+  assert.deepEqual(await categoriesFor('user'), ['Research (1)', 'Review (1)']);
+  assert.deepEqual(await categoriesFor('workspace'), ['Research (1)', 'Review (1)']);
+  await assertHeaderLabels('Prompts (4)', ['User (2)', 'Workspace (2)']);
+  await setCountMode('total');
+  assert.deepEqual(await categoriesFor('user'), ['Research (1)', 'Review (2)']);
+  await assertHeaderLabels('Prompts (8)', ['User (4)', 'Workspace (4)']);
+  await setCountMode('hidden');
+  assert.deepEqual(await categoriesFor('workspace'), ['Research', 'Review']);
+  await assertHeaderLabels('Prompts', ['User', 'Workspace']);
+  for (const scope of ['user', 'workspace'] as const) {
+    const nodes = await tree.getChildren({ kind: 'scope', scope });
+    assert.equal(nodes.filter((node) => node.kind === 'problem').length, 1);
+    assert.equal(nodes.filter((node) => node.kind === 'category').length, 2);
+  }
+  const restoreGrouping = waitForTreeRefresh(tree);
+  try {
+    await vscode.workspace
+      .getConfiguration('prompteur')
+      .update('groupByCategory', false, vscode.ConfigurationTarget.Global);
+    await restoreGrouping.promise;
+  } finally {
+    restoreGrouping.dispose();
+  }
+  for (const scope of ['user', 'workspace'] as const) {
+    const nodes = await tree.getChildren({ kind: 'scope', scope });
+    assert.equal(nodes.filter((node) => node.kind === 'category').length, 0);
+    assert.equal(nodes.filter((node) => node.kind === 'entry').length, 2);
+  }
+  await assertHeaderLabels('Prompts', ['User', 'Workspace']);
+  await setCountMode('total');
+  await assertHeaderLabels('Prompts (8)', ['User (4)', 'Workspace (4)']);
+  await setCountMode('filtered');
+  await assertHeaderLabels('Prompts (4)', ['User (2)', 'Workspace (2)']);
+  await vscode.commands.executeCommand('prompteur.clearSearch');
+  await vscode.workspace
+    .getConfiguration('prompteur')
+    .update('groupByCategory', true, vscode.ConfigurationTarget.Global);
+  await assertHeaderLabels('Prompts (8)', ['User (4)', 'Workspace (4)']);
+  process.stdout.write(
+    '[host] Category counts passed for live filtered/total/hidden modes, both scopes, custom and invalid categories, and flat view\n',
+  );
   const document = await vscode.workspace.openTextDocument({
     language: 'typescript',
     content: 'const answer = 42;',

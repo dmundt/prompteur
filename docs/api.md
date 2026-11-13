@@ -6,7 +6,7 @@
 - `LibraryService` filesystem port: `list`, `read`, expected-source `write`/`remove`.
 - Operations: lazy `get`, incremental/full `refresh`, configurable `search`, internal cross-scope `searchRanked`, validated `save`/`writeSource`, `delete`, subscriptions.
 - Snapshots contain entries/problems; treat as immutable.
-- The **Prompteur** view has an initially expanded **Prompts** root above User and available Workspace scopes. Whenever the view becomes visible, **Prompts** and each available scope are expanded without selecting a tree row. Scope labels show filtered valid entry counts in parentheses; the root label shows their sum. Counts load eagerly without blocking activation and update on filter, search-setting, and library changes. Zero matches display `(0)`; validation problems are excluded. `categoryCountMode` still controls category rows only. No `TreeView.badge` is assigned. Incomplete library loads do not publish partial totals; errors use native notifications.
+- The **Prompteur** view has an initially expanded **Prompts** root above User and available Workspace scopes. Whenever the view becomes visible, **Prompts** and each available scope are expanded without selecting a tree row. Scope labels follow `categoryCountMode`; the root sums scope counts or hides counts in `hidden` mode. Counts load eagerly without blocking activation and update on filter, search-setting, and library changes. Zero counts display `(0)`; validation problems are excluded. No `TreeView.badge` is assigned. Incomplete library loads do not publish partial totals; errors use native notifications.
 
 - Built-ins: `explain`, `plan`, `implement`, `review`, `test`, `debug`, `document`.
 - Users may approve profile-wide categories; runtime validates them. Remove a custom category only when no valid prompt uses it.
@@ -19,7 +19,7 @@
 - `prompteur.defaultScope`: applies to untargeted New, Add Starter Library, and Paste Prompt. Explicit tree targets win. `ask` shows the picker when both libraries exist; otherwise it selects User. Missing configured Workspace library errors; never redirect to User.
 - `prompteur.preferredCategory`: preselects an approved category; user confirmation remains required.
 - `prompteur.showTags`: toggles row tag labels; defaults `true`. Search and tooltip links remain unchanged.
-- `prompteur.categoryCountMode`: `filtered` (default), `total`, or `hidden`. Search still determines which categories appear; counts use filtered matches or all valid prompts in each visible category.
+- `prompteur.categoryCountMode`: `filtered` (default), `total`, or `hidden`, for root, scope, and category labels, including flat view. Search still determines which categories and prompts appear. `filtered` counts matching valid prompts; `total` counts all valid prompts in each scope/category; `hidden` removes counts.
 - `prompteur.groupByCategory`: `true` (default) groups rows; `false` shows a flat prompt list.
 - `prompteur.syncUserPrompts`: `true` (default) opts the User library snapshot into VS Code Settings Sync. Local prompts and counts load immediately without waiting for startup reconciliation. Successful background reconciliation refreshes the User library and counts; failures use native errors and leave local prompts available. **Reload Libraries** waits for reconciliation before refreshing libraries. Workspace prompts are excluded from sync.
 

@@ -15,7 +15,7 @@
 - No library-path configuration, ordering/usage sidecar, or generic transfer protocol.
 
 - Library reads deduplicate concurrent initial loads. Initial reads use at most 16 workers per scope.
-- Activation starts eager reads of available libraries in the background for filtered scope counts and their sum on an initially expanded Prompts root. When the Prompteur view becomes visible, reveal and expand Prompts and available User/Workspace scopes without selecting rows. Counts follow per-scope tree search; category count modes remain independent. No Activity Bar count badge.
+- Activation starts eager reads of available libraries in the background for filtered/total scope counts and their sum on an initially expanded Prompts root. When the Prompteur view becomes visible, reveal and expand Prompts and available User/Workspace scopes without selecting rows. Count mode applies to root, scopes, and categories; hidden mode omits counts. No Activity Bar count badge.
 - Cache stores source plus decoded prompt or validation error.
 - Watchers debounce 80 ms; publish one snapshot per burst. Create/delete rescans; edits reload changed files.
 - Enforce input budgets. Batch categories above 200 children.

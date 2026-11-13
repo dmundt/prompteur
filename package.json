@@ -87,7 +87,7 @@
           ],
           "default": "filtered",
           "scope": "window",
-          "description": "Choose whether category counts show filtered matches, all valid prompts, or stay hidden."
+          "description": "Choose whether Prompts, library, and category counts show filtered matches, all valid prompts, or stay hidden."
         },
         "prompteur.groupByCategory": {
           "type": "boolean",
