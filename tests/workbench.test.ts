@@ -144,6 +144,59 @@ describe('native tree interactions', () => {
     expect((await service.get('user')).entries).toHaveLength(1);
     tree.dispose();
   });
+  it('shows an actionable empty state only when an active filter has no valid matches', async () => {
+    const { port, files } = memoryFiles();
+    files.set(
+      'user:prompts/found.prompt.md',
+      encodeMarkdown({ ...newPrompt('Found'), category: 'review' }),
+    );
+    files.set('user:prompts/bad.prompt.md', '---\nversion: [\n---\n');
+    const report = vi.fn();
+    const scope: TreeNode = { kind: 'scope', scope: 'user' };
+    const tree = new PromptTree(new LibraryService(port), () => false, report);
+
+    tree.query = 'missing';
+    const noMatches = await tree.getChildren(scope);
+    expect(noMatches.map((node) => node.kind)).toEqual(['empty', 'problem']);
+    expect(tree.getTreeItem(noMatches[0]!)).toMatchObject({
+      label: 'No valid prompts match this filter.',
+      description: 'Select to clear filter',
+      contextValue: 'emptyState',
+      command: { command: 'prompteur.clearSearch', title: 'Clear Filter' },
+    });
+
+    tree.query = '';
+    const unfiltered = await tree.getChildren(scope);
+    expect(unfiltered.map((node) => node.kind)).toEqual(['category', 'problem']);
+    const category = unfiltered.find((node) => node.kind === 'category')!;
+    tree.query = 'missing';
+    expect(await tree.getChildren(category)).toEqual([{ kind: 'empty', scope: 'user' }]);
+
+    const flatTree = new PromptTree(
+      new LibraryService(port),
+      () => false,
+      report,
+      undefined,
+      undefined,
+      () => false,
+    );
+    flatTree.query = 'missing';
+    expect((await flatTree.getChildren(scope)).map((node) => node.kind)).toEqual([
+      'empty',
+      'problem',
+    ]);
+
+    const { port: failingPort } = memoryFiles();
+    vi.spyOn(failingPort, 'list').mockRejectedValue(new Error('Library unavailable'));
+    const failingTree = new PromptTree(new LibraryService(failingPort), () => false, report);
+    failingTree.query = 'missing';
+    expect(await failingTree.getChildren(scope)).toEqual([]);
+    expect(report).toHaveBeenCalledWith('Library unavailable');
+
+    tree.dispose();
+    flatTree.dispose();
+    failingTree.dispose();
+  });
   it('shows distinct saved prompt context in hover without reading values', async () => {
     const { port, files } = memoryFiles();
     const contents = [

@@ -14,7 +14,8 @@ export type TreeNode =
     }
   | { kind: 'entry'; scope: Scope; entry: Entry }
   | ({ kind: 'problem'; scope: Scope } & Problem)
-  | { kind: 'batch'; scope: Scope; label: string; children: TreeNode[] };
+  | { kind: 'batch'; scope: Scope; label: string; children: TreeNode[] }
+  | { kind: 'empty'; scope: Scope };
 
 const basename = (path: string): string => path.slice(path.lastIndexOf('/') + 1);
 const escapeLinkLabel = (value: string): string =>
@@ -99,6 +100,13 @@ export class PromptTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dis
     }
     if (node.kind === 'batch')
       return new vscode.TreeItem(node.label, vscode.TreeItemCollapsibleState.Collapsed);
+    if (node.kind === 'empty') {
+      const item = new vscode.TreeItem('No valid prompts match this filter.');
+      item.description = 'Select to clear filter';
+      item.contextValue = 'emptyState';
+      item.command = { command: 'prompteur.clearSearch', title: 'Clear Filter' };
+      return item;
+    }
     if (node.kind === 'category') {
       const name = node.category.charAt(0).toUpperCase() + node.category.slice(1);
       const countMode = this.categoryCountMode();
@@ -237,6 +245,8 @@ export class PromptTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dis
           entry,
         }));
       }
+      if (this.query.trim() && entries.length === 0)
+        nodes.unshift({ kind: 'empty', scope: node.scope });
       if (node.kind === 'scope')
         nodes.push(
           ...snapshot.problems.map((problem): TreeNode => ({
