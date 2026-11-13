@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Show an actionable tree row when the active prompt filter has no matches.
+
 ## 1.2.0
 
 - Add custom category rename across both libraries and muted `custom` row labels.
