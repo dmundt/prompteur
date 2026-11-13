@@ -48,7 +48,7 @@
 - Serialize library mutations/watchers with cache publication. Report subscriber failures without changing committed results.
 - External editors ignore locks; source checks are not portable atomic compare-and-swap.
 
-- Reject unsafe paths, traversal, Windows device names, symlinks/junctions, redirected ancestors.
+- Reject unsafe paths, traversal, Windows control characters (U+0000-U+001F), device names, symlinks/junctions, and redirected ancestors. Rename nonportable filenames on a filesystem that supports them before syncing; reject incoming snapshots without changing local prompts.
 - Skip directory symlinks. Not a sandbox against same-privilege concurrent filesystem changes.
 
 - Limits: 1 MiB/file; 128 MiB cached source; 50,000 files/directories; 32 MiB generated output.

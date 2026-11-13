@@ -1,4 +1,9 @@
-import { isPromptMarkdown, promptFolder, relativePath } from '../core/documents';
+import {
+  hasWindowsControlCharacters,
+  isPromptMarkdown,
+  promptFolder,
+  relativePath,
+} from '../core/documents';
 import { assertTextBudget, libraryByteLimit, libraryEntryLimit } from '../core/limits';
 import type { FilePort } from '../application/library';
 
@@ -43,6 +48,7 @@ function parseSnapshot(value: unknown): PromptSnapshot | undefined {
   const paths = Object.keys(candidate.files as object).sort();
   if (paths.length > libraryEntryLimit) return undefined;
   for (const path of paths) {
+    rejectWindowsControlPath(path);
     const source = (candidate.files as Record<string, unknown>)[path];
     if (!safePromptPath(path) || typeof source !== 'string') return undefined;
     assertTextBudget(source);
@@ -51,12 +57,22 @@ function parseSnapshot(value: unknown): PromptSnapshot | undefined {
     files[path] = source;
   }
   const deleted = [...new Set(candidate.deleted)];
+  for (const path of deleted) {
+    if (typeof path === 'string') rejectWindowsControlPath(path);
+  }
   if (deleted.some((path) => typeof path !== 'string' || !safePromptPath(path))) return undefined;
   return {
     version: 1,
     files,
     deleted: deleted.filter((path): path is string => typeof path === 'string').sort(),
   };
+}
+
+function rejectWindowsControlPath(path: string): void {
+  if (hasWindowsControlCharacters(path))
+    throw new Error(
+      `Synced User prompts have invalid data: path ${JSON.stringify(path)} contains Windows control characters (U+0000-U+001F). Rename it on a filesystem that supports it; local prompts were left unchanged.`,
+    );
 }
 
 function snapshot(files: Record<string, string>, deleted: Iterable<string>): PromptSnapshot {

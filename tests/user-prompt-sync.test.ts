@@ -1,4 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
+import * as fs from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { LocalFiles } from '../src/platform/local-files';
 import { UserPromptSync, userPromptSyncStateKey } from '../src/workbench/user-prompt-sync';
 import { documentByteLimit } from '../src/core/limits';
 import { memoryFiles } from './helpers';
@@ -169,20 +173,68 @@ describe('User prompt Settings Sync', () => {
   });
 
   it('rejects unsafe synced paths without changing local files', async () => {
-    const { port, files } = memoryFiles();
-    files.set('user:prompts/local.prompt.md', 'local prompt');
-    const state = new SyncState();
-    state.values.set(userPromptSyncStateKey, {
-      version: 1,
-      files: { '../outside.prompt.md': 'unsafe' },
-      deleted: [],
-    });
-    const sync = new UserPromptSync(state, port);
+    for (const path of [
+      '../outside.prompt.md',
+      'prompts/a\u0001b.prompt.md',
+      'prompts/a\nb.prompt.md',
+      'prompts/a\tb.prompt.md',
+      'prompts/a\rb.prompt.md',
+      'prompts/a\u001fb.prompt.md',
+    ]) {
+      const { port, files } = memoryFiles();
+      files.set('user:prompts/local.prompt.md', 'local prompt');
+      const state = new SyncState();
+      const incoming = {
+        version: 1,
+        files: { [path]: '---\nversion: 1\nname: Incoming\ncategory: review\n---\nBody\n' },
+        deleted: [],
+      };
+      state.values.set(userPromptSyncStateKey, incoming);
+      const sync = new UserPromptSync(state, port);
 
-    await expect(sync.configure(true)).rejects.toThrow('invalid data');
-    expect(files.get('user:prompts/local.prompt.md')).toBe('local prompt');
-    await expect(sync.persist()).rejects.toThrow('invalid data');
+      const error = path.startsWith('prompts/')
+        ? 'Windows control characters (U+0000-U+001F). Rename it'
+        : 'invalid data';
+      await expect(sync.configure(true)).rejects.toThrow(error);
+      expect(files.get('user:prompts/local.prompt.md')).toBe('local prompt');
+      expect(port.write).not.toHaveBeenCalled();
+      expect(port.remove).not.toHaveBeenCalled();
+      expect(state.get(userPromptSyncStateKey)).toEqual(incoming);
+      expect(state.get('userPromptSyncBaseline')).toBeUndefined();
+      await expect(sync.persist()).rejects.toThrow(error);
+    }
   });
+
+  it.skipIf(process.platform !== 'win32')(
+    'rejects Windows control-character snapshots before real filesystem writes',
+    async () => {
+      const root = await fs.mkdtemp(join(tmpdir(), 'prompteur-sync-path-'));
+      try {
+        const files = new LocalFiles((scope) => join(root, scope));
+        const paths = ['prompts/a\nb.prompt.md', 'prompts/a\u0001b.prompt.md'];
+        for (const path of paths) {
+          const state = new SyncState();
+          const incoming = {
+            version: 1,
+            files: {
+              [path]: '---\nversion: 1\nname: Incoming\ncategory: review\n---\nBody\n',
+            },
+            deleted: [],
+          };
+          state.values.set(userPromptSyncStateKey, incoming);
+
+          await expect(new UserPromptSync(state, files).configure(true)).rejects.toThrow(
+            'Rename it on a filesystem that supports it',
+          );
+          expect(state.get(userPromptSyncStateKey)).toEqual(incoming);
+          expect(state.get('userPromptSyncBaseline')).toBeUndefined();
+        }
+        expect(await fs.readdir(root)).toEqual([]);
+      } finally {
+        await fs.rm(root, { force: true, recursive: true });
+      }
+    },
+  );
 
   it('preserves a concurrent edit on conflict and retries without losing it', async () => {
     const { port, files } = memoryFiles();
