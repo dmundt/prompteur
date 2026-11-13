@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Show the active filter above the prompt tree and reuse the open filter input.
 - Show an actionable tree row when the active prompt filter has no matches.
 
 ## 1.2.0

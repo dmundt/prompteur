@@ -38,7 +38,7 @@ code --install-extension prompteur-1.2.0.vsix
 - **Copy Text** copies the rendered prompt for Chat or another editor.
 - Prompt hover lists context variables used by the saved prompt, without reading their values. Invalid placeholders are reported in the hover.
 - Hover over categories for their purpose, or User and Workspace for library storage, sync, and Trust guidance. Click the scope's folder location to reveal it in the system file manager.
-- The toolbar filter icon indicates an active filter. Select it to edit the query; use **Clear Filter** to remove it.
+- The toolbar filter icon indicates an active filter; `Filter: <query>` above the tree shows its text. Select the icon to edit the query, reusing an open filter input; use **Clear Filter** to remove it. Closing the input retains the filter for the current window session; filters are not persisted.
 
 - Prompt menu: **Copy Text**, separator, **Copy Prompt**, Preview, Edit, Delete.
 - **Copy Prompt** stores a window-local prompt record; **Paste Prompt** creates a file on User/Workspace scope or category. Paste is enabled after copying; category target overrides category; source remains.
