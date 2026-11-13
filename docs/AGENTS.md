@@ -26,7 +26,7 @@ Rules for API/command code and docs. Source: [api.md](./api.md).
 - Reuse normalized text for unchanged entries.
 - Share matching/case/ranking between library filtering and Copilot. Exact names precede full text; optional bounded fuzzy name fallback runs last. Tag/category filters remain exact and case-insensitive.
 - Rank by relevance or name; empty/filter-only queries stay alphabetical. Identity sorting never breaks semantic ties for Copilot selection.
-- `generate(content, context)` returns `{ text, missing }`; support exactly four variables.
+- `generate(content, context)` returns `{ text, missing }`; support `selection`, `clipboard`, `filename`, `workspace`, and `text`.
 
 ## Commands
 

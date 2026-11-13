@@ -4,15 +4,20 @@ import { LibraryService } from '../src/application/library';
 import { SearchIndex } from '../src/application/search';
 import { LocalFiles } from '../src/platform/local-files';
 import { promptCategories, promptFrontmatterSchema } from '../src/core/documents';
-import { variableTokens } from '../src/core/render';
+import { generate, variableTokens } from '../src/core/render';
 
 describe('bundled prompt starters', () => {
-  it('ships sixteen unique, editable prompts using the ordinary schema', async () => {
+  it('ships thirty-seven unique, editable prompts with at least five per category', async () => {
     const snapshot = await new LibraryService(
       new LocalFiles(() => resolve('resources/starter')),
     ).get('user');
     expect(snapshot.problems).toEqual([]);
-    expect(snapshot.entries).toHaveLength(16);
+    expect(snapshot.entries).toHaveLength(37);
+    for (const category of promptCategories)
+      expect(
+        snapshot.entries.filter((entry) => entry.data.category === category).length,
+        category,
+      ).toBeGreaterThanOrEqual(5);
     const paths = new Set<string>();
     const names = new Set<string>();
     for (const entry of snapshot.entries) {
@@ -37,6 +42,15 @@ describe('bundled prompt starters', () => {
       expect(names.has(entry.data.name)).toBe(false);
       names.add(entry.data.name);
       expect(() => variableTokens(entry.data.content)).not.toThrow();
+      const rendered = generate(entry.data.content, {
+        selection: 'Selected code or evidence',
+        text: 'Entered request',
+        clipboard: 'Clipboard content',
+        filename: 'example.ts',
+        workspace: 'project',
+      });
+      expect(rendered.missing).toEqual([]);
+      expect(rendered.text).not.toMatch(/\{\{[a-z]+\}\}/);
     }
   });
   it('satisfies security, generic technology-review and incident discovery examples', async () => {
@@ -74,9 +88,32 @@ describe('bundled prompt starters', () => {
       'plan-behavior-preserving-refactor',
       'document-feature-usage',
       'implement-scoped-change',
+      'create-issue',
+      'create-task',
     ])
       expect(snapshot.entries.some((entry) => entry.path === `prompts/${name}.prompt.md`)).toBe(
         true,
       );
+  });
+  it('renders explicit text for request-based starters', async () => {
+    const snapshot = await new LibraryService(
+      new LocalFiles(() => resolve('resources/starter')),
+    ).get('user');
+    for (const name of [
+      'create-issue',
+      'create-task',
+      'clarify-requirements',
+      'plan-smallest-useful-implementation',
+      'implement-scoped-change',
+    ]) {
+      const entry = snapshot.entries.find((item) => item.path === `prompts/${name}.prompt.md`);
+      expect(entry).toBeDefined();
+      const result = generate(entry!.data.content, {
+        text: 'Entered request',
+        workspace: 'project',
+      });
+      expect(result.missing).toEqual([]);
+      expect(result.text).toContain('Entered request');
+    }
   });
 });

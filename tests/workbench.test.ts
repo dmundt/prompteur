@@ -3,7 +3,7 @@ import type * as vscode from 'vscode';
 import { LibraryService } from '../src/application/library';
 import { PromptTree, type TreeNode } from '../src/workbench/tree';
 import { watchLibrary } from '../src/workbench/watch';
-import { MarkdownString, Uri, watchers } from './vscode-mock';
+import { MarkdownString, TreeItemCollapsibleState, Uri, watchers } from './vscode-mock';
 import { encodeMarkdown, newPrompt } from '../src/core/documents';
 import { memoryFiles } from './helpers';
 
@@ -12,6 +12,97 @@ afterEach(() => {
   watchers.splice(0);
 });
 describe('native tree interactions', () => {
+  it('tracks parent paths for native TreeView reveal', async () => {
+    const { port, files } = memoryFiles();
+    files.set('user:prompts/one.prompt.md', encodeMarkdown(newPrompt('One')));
+    const tree = new PromptTree(new LibraryService(port), () => false, vi.fn());
+    const root = (await tree.getChildren())[0]!;
+    const scope = (await tree.getChildren(root))[0]!;
+    const category = (await tree.getChildren(scope))[0]!;
+    const entry = (await tree.getChildren(category))[0]!;
+
+    expect(tree.getParent(root)).toBeUndefined();
+    expect(tree.getParent(scope)).toEqual(root);
+    expect(tree.getParent(category)).toEqual(scope);
+    expect(tree.getParent(entry)).toEqual(category);
+    tree.dispose();
+  });
+
+  it('escapes scope folder labels and passes only scope to the reveal command', () => {
+    const { port } = memoryFiles();
+    const root = Uri.file('C:\\Library [shared]\\prompts');
+    const tree = new PromptTree(
+      new LibraryService(port),
+      () => false,
+      vi.fn(),
+      undefined,
+      undefined,
+      undefined,
+      () => root,
+    );
+    const tooltip = tree.getTreeItem({ kind: 'scope', scope: 'user' }).tooltip as MarkdownString;
+    expect(tooltip.value).toContain('\\[shared\\]');
+    expect(tooltip.value).toContain(
+      `](command:prompteur.openLibraryFolder?${encodeURIComponent(JSON.stringify(['user']))})`,
+    );
+    expect(tooltip.isTrusted).toEqual({ enabledCommands: ['prompteur.openLibraryFolder'] });
+    expect(port.list).not.toHaveBeenCalled();
+    expect(port.read).not.toHaveBeenCalled();
+    tree.dispose();
+  });
+  it('shows scope and category help without reading library data', () => {
+    const { port } = memoryFiles();
+    const tree = new PromptTree(new LibraryService(port), () => true, vi.fn());
+    const user = tree.getTreeItem({ kind: 'scope', scope: 'user' });
+    const workspace = tree.getTreeItem({ kind: 'scope', scope: 'workspace' });
+    expect((user.tooltip as MarkdownString).value).toBe(
+      'Prompts stored in this VS Code profile; optional VS Code Settings Sync.',
+    );
+    expect((workspace.tooltip as MarkdownString).value).toBe(
+      'Prompts stored in the first workspace folder; writes, generation, and preview require Workspace Trust.',
+    );
+    expect(user).toMatchObject({ label: 'User', id: 'user', contextValue: 'scope' });
+    expect(workspace).toMatchObject({
+      label: 'Workspace',
+      id: 'workspace',
+      contextValue: 'scope',
+    });
+
+    const descriptions = [
+      ['explain', 'Understand code, behavior, and changes.'],
+      ['plan', 'Define requirements, scope, and implementation steps.'],
+      ['implement', 'Make scoped code changes.'],
+      ['review', 'Assess code, architecture, security, and readiness.'],
+      ['test', 'Design or add tests.'],
+      ['debug', 'Diagnose failures and investigate causes.'],
+      ['document', 'Write or improve documentation.'],
+    ] as const;
+    for (const [category, description] of descriptions) {
+      expect(tree.getTreeItem({ kind: 'category', scope: 'user', category }).tooltip).toBe(
+        description,
+      );
+    }
+    const mixedCase = tree.getTreeItem({
+      kind: 'category',
+      scope: 'workspace',
+      category: 'ReViEw',
+      filteredCount: 2,
+    });
+    expect(mixedCase).toMatchObject({
+      label: 'ReViEw (2)',
+      id: 'workspace:category:review',
+      contextValue: 'category',
+      tooltip: 'Assess code, architecture, security, and readiness.',
+    });
+    for (const category of ['Custom', '__proto__', 'constructor']) {
+      expect(tree.getTreeItem({ kind: 'category', scope: 'user', category }).tooltip).toBe(
+        'User-defined category for organizing prompts.',
+      );
+    }
+    expect(port.list).not.toHaveBeenCalled();
+    expect(port.read).not.toHaveBeenCalled();
+    tree.dispose();
+  });
   it('groups prompts by category, ignores old rule files, filters and repairs Markdown prompts', async () => {
     const { port, files } = memoryFiles();
     files.set(
@@ -30,7 +121,14 @@ describe('native tree interactions', () => {
     const tree = new PromptTree(service, () => true, report);
     const changed = vi.fn();
     tree.onDidChangeTreeData(changed);
-    const roots = await tree.getChildren();
+    const top = await tree.getChildren();
+    expect(top).toEqual([{ kind: 'root' }]);
+    expect(tree.getTreeItem(top[0]!)).toMatchObject({
+      label: 'Prompts',
+      id: 'prompts',
+      collapsibleState: TreeItemCollapsibleState.Expanded,
+    });
+    const roots = await tree.getChildren(top[0]);
     expect(roots).toHaveLength(2);
     expect(tree.getTreeItem(roots[0]!).label).toBe('User');
     expect(tree.getTreeItem(roots[0]!).iconPath).toBeUndefined();
@@ -38,6 +136,7 @@ describe('native tree interactions', () => {
     const children = await tree.getChildren(roots[0]);
     expect(children.map((node) => node.kind)).toEqual(['category', 'problem']);
     expect(tree.getTreeItem(children[0]!).contextValue).toBe('category');
+    expect(tree.getTreeItem(children[0]!).description).toBeUndefined();
     expect(tree.getTreeItem(children[0]!).label).toBe('Review (1)');
     expect(tree.getTreeItem(children[1]!).contextValue).toBe('problem');
     expect(tree.getTreeItem(children[0]!).iconPath).toBeUndefined();
@@ -68,10 +167,64 @@ describe('native tree interactions', () => {
     expect((await service.get('user')).entries).toHaveLength(1);
     tree.dispose();
   });
+  it('shows an actionable empty state only when an active filter has no valid matches', async () => {
+    const { port, files } = memoryFiles();
+    files.set(
+      'user:prompts/found.prompt.md',
+      encodeMarkdown({ ...newPrompt('Found'), category: 'review' }),
+    );
+    files.set('user:prompts/bad.prompt.md', '---\nversion: [\n---\n');
+    const report = vi.fn();
+    const scope: TreeNode = { kind: 'scope', scope: 'user' };
+    const tree = new PromptTree(new LibraryService(port), () => false, report);
+
+    tree.query = 'missing';
+    const noMatches = await tree.getChildren(scope);
+    expect(noMatches.map((node) => node.kind)).toEqual(['empty', 'problem']);
+    expect(tree.getTreeItem(noMatches[0]!)).toMatchObject({
+      label: 'No valid prompts match this filter.',
+      tooltip: 'No valid prompts match this filter.\nSelect to clear filter',
+      contextValue: 'emptyState',
+      command: { command: 'prompteur.clearSearch', title: 'Clear Filter' },
+    });
+    expect(tree.getTreeItem(noMatches[0]!).description).toBeUndefined();
+
+    tree.query = '';
+    const unfiltered = await tree.getChildren(scope);
+    expect(unfiltered.map((node) => node.kind)).toEqual(['category', 'problem']);
+    const category = unfiltered.find((node) => node.kind === 'category')!;
+    tree.query = 'missing';
+    expect(await tree.getChildren(category)).toEqual([{ kind: 'empty', scope: 'user' }]);
+
+    const flatTree = new PromptTree(
+      new LibraryService(port),
+      () => false,
+      report,
+      undefined,
+      undefined,
+      () => false,
+    );
+    flatTree.query = 'missing';
+    expect((await flatTree.getChildren(scope)).map((node) => node.kind)).toEqual([
+      'empty',
+      'problem',
+    ]);
+
+    const { port: failingPort } = memoryFiles();
+    vi.spyOn(failingPort, 'list').mockRejectedValue(new Error('Library unavailable'));
+    const failingTree = new PromptTree(new LibraryService(failingPort), () => false, report);
+    failingTree.query = 'missing';
+    expect(await failingTree.getChildren(scope)).toEqual([]);
+    expect(report).toHaveBeenCalledWith('Library unavailable');
+
+    tree.dispose();
+    flatTree.dispose();
+    failingTree.dispose();
+  });
   it('shows distinct saved prompt context in hover without reading values', async () => {
     const { port, files } = memoryFiles();
     const contents = [
-      ['context', '{{filename}} {{selection}} {{filename}} {{ clipboard }} {{workspace}}'],
+      ['context', '{{filename}} {{selection}} {{filename}} {{ clipboard }} {{workspace}} {{text}}'],
       ['none', 'No placeholders'],
       ['invalid', '{{selection}} {{unknown}}'],
       ['unbalanced', '{{selection'],
@@ -89,7 +242,7 @@ describe('native tree interactions', () => {
       return (tree.getTreeItem(entry!).tooltip as MarkdownString).value;
     };
 
-    expect(hover('context')).toContain('Context: Filename, Selection, Clipboard, Workspace');
+    expect(hover('context')).toContain('Context: Filename, Selection, Clipboard, Workspace, Text');
     expect(hover('none')).not.toContain('Context:');
     expect(hover('invalid')).toContain('Context unavailable: Unsupported variable: unknown');
     expect(hover('unbalanced')).toContain('Context unavailable: Unbalanced variable braces');
@@ -149,6 +302,40 @@ describe('native tree interactions', () => {
     const children = await tree.getChildren({ kind: 'scope', scope: 'user' });
     expect(children.map((node) => node.kind)).toEqual(['entry', 'entry']);
     expect(children.map((node) => tree.getTreeItem(node).label)).toEqual(['Plan', 'Review']);
+    tree.dispose();
+  });
+  it('does not traverse the whole snapshot for category or flat prompt rows', async () => {
+    const { port, files } = memoryFiles();
+    files.set(
+      'user:prompts/review.prompt.md',
+      encodeMarkdown({ ...newPrompt('Review'), category: 'review' }),
+    );
+    const service = new LibraryService(port);
+    const snapshot = await service.get('user');
+    vi.spyOn(service, 'get').mockResolvedValue({
+      ...snapshot,
+      get entries(): typeof snapshot.entries {
+        throw new Error('Unneeded whole-library traversal');
+      },
+    });
+    const report = vi.fn();
+    const tree = new PromptTree(
+      service,
+      () => false,
+      report,
+      undefined,
+      undefined,
+      () => false,
+    );
+    const category = await tree.getChildren({
+      kind: 'category',
+      scope: 'user',
+      category: 'review',
+    });
+    const flat = await tree.getChildren({ kind: 'scope', scope: 'user' });
+    expect(category.map((node) => tree.getTreeItem(node).label)).toEqual(['Review']);
+    expect(flat.map((node) => tree.getTreeItem(node).label)).toEqual(['Review']);
+    expect(report).not.toHaveBeenCalled();
     tree.dispose();
   });
   it('batches flat prompt rows without hiding repair problems', async () => {

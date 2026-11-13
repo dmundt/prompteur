@@ -8,6 +8,7 @@ import { decodeMarkdown, encodeMarkdown, newPrompt } from '../src/core/documents
 import { documentByteLimit } from '../src/core/limits';
 import { generate, variableTokens } from '../src/core/render';
 import { memoryFiles } from './helpers';
+import { assertLocalDuration } from './timing';
 
 vi.mock('../src/core/limits', async (original) => ({
   ...(await original<typeof import('../src/core/limits')>()),
@@ -49,8 +50,22 @@ describe('preserved safety and resource boundaries', () => {
     ).toThrow('byte limit');
     expect(() => generate('tail'.repeat(documentByteLimit * 9), {})).toThrow('byte limit');
     const start = performance.now();
-    expect(() => variableTokens('{{'.repeat(100_000))).toThrow('Unbalanced');
-    expect(performance.now() - start).toBeLessThan(250);
+    let error: unknown;
+    try {
+      variableTokens('{{'.repeat(100_000));
+    } catch (caught) {
+      error = caught;
+    }
+    const duration = performance.now() - start;
+    expect(error).toBeInstanceOf(Error);
+    expect(error).toMatchObject({ message: expect.stringContaining('Unbalanced') });
+    assertLocalDuration(duration, 250, 'Malformed delimiter scan');
+  });
+  it('accepts generated output at 32 MiB and rejects one byte over', () => {
+    const exact = 'x'.repeat(32 * documentByteLimit);
+    expect(generate(exact.slice(0, -1), {}).text).toHaveLength(exact.length - 1);
+    expect(generate(exact, {}).text).toBe(exact);
+    expect(() => generate(`${exact}x`, {})).toThrow('byte limit');
   });
   it('rejects junction/symlink ancestors above the library root', async () => {
     const root = await fixture();
@@ -74,9 +89,15 @@ describe('preserved safety and resource boundaries', () => {
     const local = new LocalFiles(() => root);
     await expect(local.read('user', 'large.yaml')).rejects.toThrow('byte limit');
     await expect(local.read('user', '.')).rejects.toThrow();
+    const exact = 'x'.repeat(documentByteLimit);
+    await local.write('user', 'exact.yaml', exact, undefined);
+    await expect(local.read('user', 'exact.yaml')).resolves.toBe(exact);
+    await expect(local.write('user', 'over-limit.yaml', `${exact}x`, undefined)).rejects.toThrow(
+      'byte limit',
+    );
     await local.write('user', 'a.yaml', 'first', undefined);
     await expect(local.write('user', 'a.yaml', 'second', 'stale')).rejects.toThrow('changed');
-    expect((await fs.readdir(root)).sort()).toEqual(['a.yaml', 'large.yaml']);
+    expect((await fs.readdir(root)).sort()).toEqual(['a.yaml', 'exact.yaml', 'large.yaml']);
   });
   it('enforces library entry and byte limits during loads, saves and reloads', async () => {
     const { port, files } = memoryFiles();
@@ -107,11 +128,43 @@ describe('preserved safety and resource boundaries', () => {
       'resource limit',
     );
   });
+  it('accepts library entry and cached-source limits exactly, rejecting one over', async () => {
+    for (const count of [3, 4, 5]) {
+      const { port, files } = memoryFiles();
+      for (let index = 0; index < count; index++) files.set(`user:prompts/${index}.prompt.md`, 'x');
+      if (count < 5)
+        expect((await new LibraryService(port).get('user')).problems).toHaveLength(count);
+      else await expect(new LibraryService(port).get('user')).rejects.toThrow('entry limit');
+    }
+
+    for (const bytes of [1023, 1024, 1025]) {
+      const { port, files } = memoryFiles();
+      files.set('user:prompts/size.prompt.md', 'x'.repeat(bytes));
+      if (bytes <= 1024)
+        expect((await new LibraryService(port).get('user')).problems).toHaveLength(1);
+      else await expect(new LibraryService(port).get('user')).rejects.toThrow('byte limit');
+    }
+  });
   it('caps filesystem enumeration rather than traversing unbounded trees', async () => {
-    const root = await fixture();
-    await Promise.all(
-      Array.from({ length: 5 }, (_, i) => fs.writeFile(join(root, `${i}.yaml`), 'test')),
-    );
-    await expect(new LocalFiles(() => root).list('user')).rejects.toThrow('entry limit');
+    for (const count of [3, 4, 5]) {
+      const root = await fixture();
+      await Promise.all(
+        Array.from({ length: count }, (_, index) =>
+          fs.writeFile(join(root, `${index}.yaml`), 'test'),
+        ),
+      );
+      if (count <= 4)
+        await expect(new LocalFiles(() => root).list('user')).resolves.toHaveLength(count);
+      else await expect(new LocalFiles(() => root).list('user')).rejects.toThrow('entry limit');
+    }
+
+    for (const count of [3, 4, 5]) {
+      const root = await fixture();
+      await Promise.all(
+        Array.from({ length: count }, (_, index) => fs.mkdir(join(root, `nested-${index}`))),
+      );
+      if (count <= 4) await expect(new LocalFiles(() => root).list('user')).resolves.toEqual([]);
+      else await expect(new LocalFiles(() => root).list('user')).rejects.toThrow('entry limit');
+    }
   });
 });

@@ -10,13 +10,16 @@
 - Workspace root: `.vscode/prompts/` in first local workspace.
 - User root: `prompts/` in current profile's extension storage.
 - Discover nested `.prompt.md` files under each root's `prompts/` subtree.
-- With `syncUserPrompts` enabled, sync the User library snapshot and approved categories through `globalState.setKeysForSync`; VS Code Settings Sync moves them between instances. Local Markdown files remain canonical; no `User/prompts` mirroring or direct network calls. Workspace prompts never sync through this feature.
+- With `syncUserPrompts` enabled, sync the User library snapshot, approved categories, and custom category descriptions through `globalState.setKeysForSync`; VS Code Settings Sync moves them between instances. Local Markdown files remain canonical; no `User/prompts` mirroring or direct network calls. Workspace prompts never sync through this feature.
 - Reconcile incoming snapshots on activation and **Reload Libraries**. Unique offline additions merge; local content wins same-path conflicts. Tombstones propagate deletions.
 
 - Frontmatter keys: `version`, `name`, `description`, `category`, `tags`. Markdown body is `PromptData.content`.
 - Required: version 1, nonempty name, approved category. Description/tags default empty.
 - Built-ins: `explain`, `plan`, `implement`, `review`, `test`, `debug`, `document`. Confirm profile-wide additions.
 - Normalize categories to lowercase; limit to 64 characters. Tags are strings.
+- `approvedPromptCategories` remains a profile-state string list. `promptCategoryDescriptions` maps normalized custom category names to optional single-line help (240 characters maximum). Missing descriptions use generic help; built-ins ignore stored descriptions. Removing an unused category removes its description.
+- Category rename migrates approved name and help, updating only saved prompts' frontmatter category. Multi-file rename is not atomic; expected-source rollback restores original files after failure where possible. If recovery is incomplete, retain both approved names and report paths; never overwrite concurrent edits.
+- Description metadata loads on activation, like approved categories; no live cross-window update guarantee. Existing categories need no migration; older extension versions ignore descriptions. Prompt format remains version 1. Malformed description metadata fails activation explicitly rather than being overwritten.
 - Identity is scope + relative path; display names may repeat.
 
 - `npm run schemas` generates metadata JSON Schema from Zod.
@@ -60,3 +63,4 @@
 - Starters are editable copies. Skip every occupied destination, including invalid files.
 - Summarize added, matching, and differing saved files; skip unsaved editors without saved files. Differences do not identify their cause.
 - Each add is atomic; installation is not. Report partial progress.
+- Entered `text` is not written to library files or extension state.

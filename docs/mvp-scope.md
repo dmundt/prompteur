@@ -11,9 +11,9 @@
 - Read-only Copilot prompt search/render tool; Workspace results require Trust and tool invocation is confirmed by VS Code.
 - Window-local prompt copy/paste across categories and libraries.
 - View settings: Default Scope (`ask`), Preferred Category (empty), Show Tags (`true`), Group by Category (`true`).
-- Variables: selection, clipboard, filename, workspace.
+- Variables: selection, clipboard, filename, workspace, explicitly entered single-line text.
 - On-demand plaintext preview snapshot.
-- 16 optional starters across seven built-in categories.
+- 37 optional starters across seven built-in categories, at least five per category.
 - Diagnostics, token highlighting, debounced watchers, bounded input, safe/conflict-aware writes.
 - Workspace Trust, explicit errors, unit/integration tests, VS Code host smoke test.
 

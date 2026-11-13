@@ -4,7 +4,7 @@
 
 - Local, Git-friendly Markdown prompts for developers who reuse prompts across projects.
 - Category/tag organization and full-text search.
-- Copy or preview generated text with selection, clipboard, filename, and workspace variables.
+- Copy or preview generated text with selection, clipboard, filename, workspace, and entered text variables.
 - User library in profile storage; Workspace library in `.vscode/prompts`.
 - No Prompteur account, direct model calls, or telemetry. Optional Copilot tool returns requested prompt text and used variables to the configured model after VS Code confirmation. User prompts sync through VS Code Settings Sync by default. Workspace writes, generation, and preview require Trust.
 - Stable release. Prompt file format version: 1.
@@ -18,7 +18,7 @@
 npm ci
 npm run build
 npm run package
-code --install-extension prompteur-1.1.0.vsix
+code --install-extension prompteur-1.2.0.vsix
 ```
 
 - Press F5 to open Extension Development Host.
@@ -37,6 +37,9 @@ code --install-extension prompteur-1.1.0.vsix
 - VS Code windows do not share selections; copy in the source window, then paste in the target window.
 - **Copy Text** copies the rendered prompt for Chat or another editor.
 - Prompt hover lists context variables used by the saved prompt, without reading their values. Invalid placeholders are reported in the hover.
+- Hover over categories for their purpose, or User and Workspace for library storage, sync, and Trust guidance. Click the scope's folder location to reveal it in the system file manager.
+- The toolbar filter icon indicates an active filter; `Filter: <query>` above the tree shows its text. Select the icon to edit the query, reusing an open filter input; use **Clear Filter** to remove it. Closing the input retains the filter for the current window session; filters are not persisted.
+- The **Prompteur** view opens with an expanded **Prompts** root containing User and available Workspace libraries. Labels show matching valid prompt counts in parentheses, for example **Prompts (38)** and **User (38)**; the root sums the scope counts. Counts update with filters, search settings, and library changes; no matches show **(0)**. Invalid prompts are excluded. Category Count Mode still controls category counts; no Activity Bar count badge is shown.
 
 - Prompt menu: **Copy Text**, separator, **Copy Prompt**, Preview, Edit, Delete.
 - **Copy Prompt** stores a window-local prompt record; **Paste Prompt** creates a file on User/Workspace scope or category. Paste is enabled after copying; category target overrides category; source remains.
@@ -57,6 +60,9 @@ code --install-extension prompteur-1.1.0.vsix
 
 - Built-in virtual categories: Explain, Plan, Implement, Review, Test, Debug, Document.
 - Add profile-wide categories only after confirmation. Remove unused categories with **Remove Prompt Category**; reassign prompts first.
+- Use **Add Prompt Category** in the Command Palette to approve a category without creating a prompt. A prompt with an unapproved category remains a warning row: right-click > **Approve Prompt Category**, then confirm. Typing a category into YAML does not approve it automatically; approval does not rewrite the prompt.
+- New custom categories ask for optional short descriptions (240 characters maximum). Right-click a custom category > **Edit Category Description**, or use that command in the Command Palette, to edit later. Blank restores generic hover help; Escape cancels. Descriptions apply to both libraries and sync with approved categories when **Sync User Prompts** is enabled. Built-in descriptions are read-only.
+- Custom category rows have a muted `custom` label. Right-click > **Rename Category...**, or use the Command Palette, to rename across both libraries after confirmation. Description, filenames, comments, and prompt bodies are preserved. Save/discard affected unsaved edits first; workspace changes require Trust. Repair invalid prompts before renaming. Update **Preferred Category** and active category filters separately if they reference the old name.
 - Tags cross categories; **Show Tags** controls row labels. Tooltip links filter exact tags/categories or open the Markdown file.
 - Filters use AND semantics; quote values with spaces (for example, `tag:"security review"`).
 - Search covers names, descriptions, categories, tags, content, and paths. Matching/case/ranking settings apply to both tree filtering and Copilot. Existing exact-name queries now hide broader tree matches; default ordering is relevance, not alphabetical. Empty/filter-only queries retain alphabetical browsing.
@@ -87,7 +93,7 @@ code --install-extension prompteur-1.1.0.vsix
 - Missing candidate path: reports not found; never substitutes another prompt. Refresh the search if a prompt was renamed or removed.
 - Tool output becomes model context, not text inserted into the Chat composer. Following the prompt depends on the model and your request.
 - The tool is read-only; it cannot create, edit, or delete prompts. Workspace prompt results require Trust.
-- Prompt text and requested selection, clipboard, filename, or workspace variables are shared with the configured model. Context comes from the same VS Code window.
+- Prompt text and requested selection, clipboard, filename, workspace, or entered text variables are shared with the configured model. Context comes from the same VS Code window.
 - Prompteur makes no direct model/provider calls. Copilot performs the requested task.
 
 ### Manual Handoff: Any Chat
@@ -121,7 +127,10 @@ Inspect {{filename}} in {{workspace}}.
 - Reject unknown fields, unsupported versions, malformed YAML, and aliases.
 - File path is identity; names may repeat. Filenames use readable slugs and numeric collision suffixes.
 
-- Variables: `selection`, `clipboard`, `filename`, `workspace`.
+- Variables: `selection`, `clipboard`, `filename`, `workspace`, `text`.
+- `{{text}}` opens a native single-line input. Press Enter to submit; Escape cancels generation. Blank input is rejected; input is limited to 1 MiB and reused for repeated placeholders. Only one input may be pending per window.
+- Text entry is requested only after choosing a prompt, including through Copilot. No selection/clipboard fallback. Prompteur does not save entered text or keep input history.
+- `{{text}}` requires Prompteur 1.2.0 or later; older versions reject it. Prompt format remains version 1. Existing installed prompts are not rewritten.
 - Expand once; collapse repeated blank lines. Empty selection is allowed. Missing filename/workspace context does not block copying; one notification lists missing values. Empty clipboard input requires confirmation. Preview lists missing context.
 - Unknown/malformed placeholders block generation. Read clipboard only when requested.
 
@@ -131,6 +140,7 @@ Inspect {{filename}} in {{workspace}}.
 
 - Workspace root: `.vscode/prompts/prompts/` in the first local workspace.
 - User root: `prompts/prompts/` in this extension's profile storage, typically `<user-data>/User/globalStorage/dmundt.prompteur/prompts/prompts/`.
+- Command Palette > **Prompteur: Reveal User Library Folder** reveals the library root in the system file manager; prompt files are in its `prompts/` subfolder. Create a prompt or add starters first if the library folder does not exist yet.
 
 ```text
 .vscode/prompts/
@@ -151,19 +161,21 @@ Inspect {{filename}} in {{workspace}}.
 
 ## Starters
 
-**Add Starter Library** copies 16 editable prompts:
+**Add Starter Library** copies 37 editable prompts, at least five per category:
 
-- **Explain:** Explain Selected Code.
-- **Plan:** Clarify Requirements; Plan Smallest Useful Implementation; Plan Behavior-Preserving Refactor.
-- **Implement:** Implement Scoped Change.
+- **Explain:** Explain Selected Code; Explain Execution Flow; Explain an API Contract; Explain a Configuration; Explain a Code Change.
+- **Plan:** Clarify Requirements; Plan Smallest Useful Implementation; Plan Behavior-Preserving Refactor; Plan a Data Migration; Plan a Dependency Upgrade.
+- **Implement:** Implement Scoped Change; Fix a Reproduced Bug; Implement an API Endpoint; Implement Input Validation; Implement Error Handling.
 - **Review:** Review Code; Review Complexity; Review Architecture; Review Security; Audit Release Readiness; Audit Implementation Completeness; Audit Accessibility.
-- **Test:** Generate Focused Unit Tests.
-- **Debug:** Triage Production Incident; Analyze Root Cause.
-- **Document:** Document Feature Usage.
+- **Test:** Generate Focused Unit Tests; Generate Integration Tests; Generate Regression Tests; Generate Boundary Tests; Plan End-to-End Tests.
+- **Debug:** Triage Production Incident; Analyze Root Cause; Diagnose a Failing Test; Investigate a Performance Problem; Diagnose a Build Failure.
+- **Document:** Document Feature Usage; Create Issue; Create Task; Document an API Contract; Write a Troubleshooting Guide.
 
+- Request-based starters use entered `text`; code, diff, configuration, and diagnostic starters use `selection`. Hover a prompt to inspect its context variables.
 - Installation is opt-in. Rerun after updates to add missing starters.
 - Never replace existing files, including invalid ones. Writes are safe per-file, not transactional; failures report completed count.
 - Completion reports added files and saved files that match or differ from the bundled versions. Differences can be edits or older versions. Unsaved editors without saved files are skipped; comparisons use saved contents.
+- To use `{{text}}` in older installed copies of Clarify Requirements, Plan Smallest Useful Implementation, or Implement Scoped Change, edit the prompt and replace `{{selection}}` with `{{text}}`. Preserve any custom edits. Keep `{{selection}}` if you prefer the original behavior.
 
 - No import/export or bundles. In-app copies use a temporary window-local buffer; use the filesystem across windows/apps.
 

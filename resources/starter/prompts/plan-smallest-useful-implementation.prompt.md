@@ -8,7 +8,7 @@ tags: [implementation, planning, mvp, simplicity]
 
 Plan the smallest useful implementation for this request:
 
-{{selection}}
+{{text}}
 
 - Use context from {{workspace}}; inspect existing patterns/helpers.
 - Trace changes across entry points, logic, storage, tests, and docs.
@@ -16,4 +16,3 @@ Plan the smallest useful implementation for this request:
 - Mark unverified locations and assumptions.
 - Prefer direct solutions. Defer unrelated cleanup, abstractions, settings, and future-proofing.
 - Ask for blocking context. Do not implement.
-- If selection is empty, request the intended change.
