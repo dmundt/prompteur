@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Show prompt scope and labeled metadata in a compact prompt hover.
+- Show prompt scope and metadata in a compact hover with a bold title, normal-weight labels, theme-muted text values, and file/invalid-context warning icons.
 
 ## 1.2.0
 

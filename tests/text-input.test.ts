@@ -106,4 +106,28 @@ describe('single-line prompt input', () => {
     await cancelled;
     input.dispose();
   });
+
+  it('cleans up a display failure so stale events cannot cancel the next request', async () => {
+    const input = new TextInput();
+    const failed = window.createInputBox();
+    const dispose = vi.spyOn(failed, 'dispose');
+    vi.spyOn(failed, 'show').mockImplementationOnce(() => {
+      throw new Error('Input display unavailable');
+    });
+    vi.spyOn(window, 'createInputBox').mockReturnValueOnce(failed);
+
+    await expect(input.request()).rejects.toThrow('Input display unavailable');
+    expect(dispose).toHaveBeenCalledOnce();
+
+    const next = input.request();
+    const recovered = expect(next).resolves.toBe('Recovered text');
+    const box = inputBoxes.at(-1)!;
+    failed.hidden.fire();
+    failed.accepted.fire();
+    box.value = 'Recovered text';
+    box.accepted.fire();
+    await recovered;
+    expect(dispose).toHaveBeenCalledOnce();
+    input.dispose();
+  });
 });
