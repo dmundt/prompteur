@@ -37,98 +37,26 @@ Run the smallest relevant check, then escalate if needed.
 - Add dependencies only when required; update manifest and lockfile together.
 - Comment only when clarification is needed.
 
-## Branch and release workflow
+## GitHub issues
 
-Use feature branches for changes and a release branch for integration. Do not implement directly on `main` or mix unrelated features in one commit. Release preparation authorizes feature commits, pull-request merges, and release metadata updates; ordinary edit requests do not authorize commits automatically.
+- Assign appropriate existing repository labels when creating every issue. Do not create new labels; if no existing label fits or labeling fails, report it.
 
-### Protected branches and remote publication
+## GitHub Flow and releases
 
-- Protect `main` and every `release/*` branch with the active GitHub ruleset **Protect main and release branches**. Require pull requests with zero required approvals and no required status checks; block force-pushes and deletion; configure no bypass actors.
-- Never commit or push directly to protected branches. Publish changes through pull requests and merge commits.
-- Publish every new release branch and each feature branch needed for a pull request to every configured push remote.
-- Publish every approved `main` and `release/*` update to every configured remote. Use that remote's pull-request flow when protection requires it; do not leave protected refs local-only or divergent.
-- Before stopping, verify protected branch refs match on all configured remotes. Report any remote that could not be updated.
-
-### 1. Inspect and confirm scope
-
-- Inspect `git status --short`, current branch, local branches, recent history, and the complete relevant diff.
-- Identify each feature/fix, its dependencies, tests, and directly related docs.
-- Confirm target version, base branch, feature boundaries, target remote(s), and any ambiguous inclusion. Default release base: latest published `main`; verify fetched remote refs and local branch state before branching.
-- Preserve unrelated changes. Never reset, discard, amend, rebase, force-push, or delete existing branches without explicit authorization.
-
-### 2. Create and publish the release branch
-
-- For release preparation, create `release/v<major>.<minor>.<patch>` from the confirmed published base before integrating features.
-- Keep `main` unchanged. Record its starting commit for final verification.
-- Reuse an existing release branch only after inspecting its history and confirming that it is the intended target. Never overwrite an existing branch.
-- Publish each new release branch to every configured push remote. Branch creation does not authorize direct updates to protected `main` or existing release branches.
-- Do not tag, publish, or merge the release into `main` unless separately requested.
-
-### 3. Create feature branches
-
-- Before implementation, create one `feat/<short-topic>` branch per feature or coherent user-facing fix; use an existing matching feature branch when appropriate.
-- Start independent features from the release branch. Start dependent features from the required feature tip or from the release after merging that prerequisite.
-- Record dependencies; do not describe dependent branches as independent.
-- Push each feature branch to every remote used for its pull request.
-- Keep code, behavior tests, and directly related documentation together. Avoid separate branches for incidental files or every small label change.
-
-### 4. Separate existing uncommitted work safely
-
-- If features already overlap in the worktree, preserve all modified/untracked in-scope files before splitting. Store temporary snapshots outside the repository and record content hashes.
-- Split shared files by coherent hunks or index-only staging. Do not stage entire mixed files into the wrong feature.
-- Preserve the final intended content; do not introduce new behavior while rearranging history.
-- Inspect each staged diff and run `git diff --cached --check` before committing.
-- Verify recombined feature content matches the saved final content before release metadata edits. Remove temporary snapshots only after committed content is verified.
-
-### 5. Validate and commit each feature
-
-- Run the smallest relevant tests/checks for the feature; fix failures caused by that feature.
-- Inspect `git diff --cached` and ensure only intended changes are staged.
-- Use Conventional Commits as specified below. Include this trailer on feature, merge, and release commits:
+- Keep `main` deployable. Base each independent, short-lived feature branch on the latest published `main`; use a descriptive name. Keep unrelated changes separate. Record dependencies when a branch must start from a prerequisite.
+- Make changes on the feature branch, with behavior tests and directly related documentation. Preserve unrelated work. Never reset, discard, amend, rebase, force-push, or delete existing branches without explicit authorization.
+- Publish feature branches needed for pull requests to every applicable remote. Open pull requests into `main`; address requested reviews and merge only after required checks pass. Use merge commits and include the co-author trailer below.
+- Ordinary edit requests do not authorize commits, pull-request merges, tags, or publication. Retain branches unless deletion is explicitly authorized.
+- Protect `main` and every existing or new `release/*` branch with the active GitHub ruleset **Protect main and release branches**. Require pull requests, zero approving reviews, and all six GitHub Actions quality matrix checks. Block force-pushes and deletion; configure no bypass actors.
+- Never commit or push directly to protected branches. Publish approved updates through pull requests to every configured remote. Verify protected refs match on all remotes; report any divergence or remote that could not be updated.
+- Release branches are not the default integration target. Create or update one only when explicitly requested, using the same protected-branch and remote-publication rules.
+- For release metadata, create a feature branch from published `main`. Choose SemVer from the included changes and assess compatibility. Run `npm version <version> --no-git-tag-version --ignore-scripts`; verify manifest and lockfile versions agree. Move user-facing changelog entries to the release version, retain `Unreleased`, and update the README VSIX example.
+- Before declaring a release ready, run `npm run coverage`, `npm run build`, `npm run lint`, `npm run format:check`, and `git diff --check`; run `npm run test:host` when extension-host behavior changed. Report unavailable validation. Do not package, tag, publish, or deploy without explicit authorization.
+- Include this trailer on feature, merge, and release commits:
 
   ```text
   Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
   ```
-
-- Do not amend existing commits or create an unrelated all-features snapshot commit as a substitute for feature separation.
-
-### 6. Merge features into the release
-
-- Open a pull request for each feature into the release branch on every configured remote; merge after required checks pass and any requested reviews complete.
-- Merge each feature in dependency order using a merge commit. Preserve one explicit merge commit per feature; do not squash or fast-forward feature integration.
-- Include the required co-author trailer in the merge commit body.
-- Resolve only understood conflicts on the feature branch; preserve both intended behaviors. Ask for guidance when intent is ambiguous, then rerun affected checks.
-- Feature commits may be prepared before integration; dependent branches must still merge in dependency order.
-
-### 7. Prepare release metadata
-
-- Choose SemVer from changes: patch for fixes, minor for backward-compatible features, major for incompatible public behavior or format changes. Assess migration and compatibility explicitly.
-- Create a release-metadata feature branch from the release branch. Run `npm version <version> --no-git-tag-version --ignore-scripts` there to update manifest and lockfile without creating a tag or running publication hooks.
-- Verify `package.json`, top-level lockfile version, and root package lockfile version agree.
-- Move relevant user-facing entries from `Unreleased` to `## <version>` in `CHANGELOG.md`; retain an empty `Unreleased` heading. Do not include internal refactors, tests, or tooling.
-- Update the README VSIX installation example and directly related version references. Do not rewrite historical release entries or overwrite existing VSIX files.
-- Validate, commit, publish, and merge release metadata through a pull request to every configured remote's release branch.
-
-### 8. Validate the integrated release
-
-- Run `npm run coverage`, `npm run build`, `npm run lint`, `npm run format:check`, and `git diff --check`. Coverage includes unit tests; build includes type checking.
-- Run `npm run test:host` when extension-host behavior changed. Report skipped/unavailable host validation explicitly; do not present mocked runner tests as host smoke execution.
-- Do not install/restore dependencies unless manifests changed or a required validation fails because dependencies/tools are missing.
-- Inspect generated-file changes; include only intended tracked outputs. Do not package, publish, or replace local VSIX files merely to validate a build.
-- Resolve failures introduced by the release before claiming it is ready.
-
-### 9. Verify release state
-
-- Inspect the release-metadata pull request and merge commit; do not commit directly to the protected release branch.
-- Verify every included feature tip is an ancestor of the release using `git merge-base --is-ancestor <feature-branch> <release-branch>`.
-- Confirm expected merge commits, matching release versions, unchanged `main` commit, matching remote release refs, and a clean worktree.
-- Do not stage unrelated work to obtain a clean status; if unrelated changes remain, preserve and report them.
-
-### 10. Stop at the agreed boundary
-
-- Leave the release branch checked out. Keep feature branches for traceability.
-- Report release branch, merged feature branches, version, validation results, and remaining limitations.
-- Stop. Keep protected branch updates published to every configured remote. No tag, GitHub release, Marketplace publication, or merge to `main` without a separate explicit request.
 
 ## Commit Messages
 
