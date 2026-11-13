@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Apply Category Count Mode to Prompts and User/Workspace counts as well as category counts; total mode ignores filters and hidden mode removes all counts.
 - Show prompt scope and metadata in a compact hover with a bold title, normal-weight labels, theme-muted text values, and file/invalid-context warning icons.
 - Reject Windows control characters in prompt paths; invalid synced snapshots remain untouched.
 

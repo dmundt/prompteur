@@ -7,11 +7,25 @@ import { downloadAndUnzipVSCode } from '@vscode/test-electron';
 
 const root = await realpath(await mkdtemp(join(tmpdir(), 'prompteur-host-')));
 const workspace = join(root, 'sample-project');
-await mkdir(join(workspace, '.vscode', 'prompts', 'prompts'), { recursive: true });
+const workspacePrompts = join(workspace, '.vscode', 'prompts', 'prompts');
+await mkdir(workspacePrompts, { recursive: true });
 await writeFile(
-  join(workspace, '.vscode', 'prompts', 'prompts', 'review.prompt.md'),
+  join(workspacePrompts, 'review.prompt.md'),
   '---\nversion: 1\nname: Review\ncategory: review\n---\nReview {{selection}} in {{filename}}\n',
 );
+await writeFile(
+  join(workspacePrompts, 'review-match.prompt.md'),
+  '---\nversion: 1\nname: Review Match\ncategory: review\n---\nneedle\n',
+);
+await writeFile(
+  join(workspacePrompts, 'plan.prompt.md'),
+  '---\nversion: 1\nname: Plan\ncategory: plan\n---\nother\n',
+);
+await writeFile(
+  join(workspacePrompts, 'research.prompt.md'),
+  '---\nversion: 1\nname: Research\ncategory: research\n---\nneedle\n',
+);
+await writeFile(join(workspacePrompts, 'invalid.prompt.md'), '---\nversion: [\n---\n');
 let executable = process.env.VSCODE_EXECUTABLE_PATH;
 if (
   !executable &&
@@ -33,14 +47,41 @@ try {
     cachePath: resolve('.vscode-test'),
   });
   const profile = join(root, 'profile');
-  await mkdir(join(profile, 'User'), { recursive: true });
+  const userPrompts = join(
+    profile,
+    'User',
+    'globalStorage',
+    'dmundt.prompteur',
+    'prompts',
+    'prompts',
+  );
+  await mkdir(userPrompts, { recursive: true });
   await writeFile(
     join(profile, 'User', 'settings.json'),
     JSON.stringify({
       'security.workspace.trust.enabled': true,
       'security.workspace.trust.startupPrompt': 'never',
+      'prompteur.categoryCountMode': 'filtered',
+      'prompteur.groupByCategory': true,
     }),
   );
+  await writeFile(
+    join(userPrompts, 'review-one.prompt.md'),
+    '---\nversion: 1\nname: Review One\ncategory: review\n---\nneedle\n',
+  );
+  await writeFile(
+    join(userPrompts, 'review-two.prompt.md'),
+    '---\nversion: 1\nname: Review Two\ncategory: review\n---\nother\n',
+  );
+  await writeFile(
+    join(userPrompts, 'plan.prompt.md'),
+    '---\nversion: 1\nname: Plan\ncategory: plan\n---\nother\n',
+  );
+  await writeFile(
+    join(userPrompts, 'research.prompt.md'),
+    '---\nversion: 1\nname: Research\ncategory: research\n---\nneedle\n',
+  );
+  await writeFile(join(userPrompts, 'invalid.prompt.md'), '---\nversion: [\n---\n');
   const args = [
     workspace,
     '--user-data-dir',

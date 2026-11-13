@@ -32,7 +32,7 @@ class Workbench implements vscode.Disposable {
   private readonly editor: NativeEditor;
   private readonly tree: PromptTree;
   private readonly treeView: vscode.TreeView<TreeNode>;
-  private readonly scopeCounts = new Map<Scope, number>();
+  private readonly scopeCounts = new Map<Scope, { filtered: number; total: number }>();
   private countUpdate = 0;
   private disposed = false;
   private readonly textInput = new TextInput();
@@ -126,7 +126,12 @@ class Workbench implements vscode.Disposable {
         this.approvedCategories.has(category)
           ? (this.categoryDescriptions.get(category) ?? '')
           : undefined,
-      (scope) => this.scopeCounts.get(scope),
+      (scope) => {
+        const mode = vscode.workspace
+          .getConfiguration('prompteur')
+          .get<'filtered' | 'total' | 'hidden'>('categoryCountMode', 'filtered');
+        return mode === 'hidden' ? undefined : this.scopeCounts.get(scope)?.[mode];
+      },
     );
     this.treeView = vscode.window.createTreeView('prompteur.prompts', {
       treeDataProvider: this.tree,
@@ -1046,7 +1051,8 @@ class Workbench implements vscode.Disposable {
       const counts = await Promise.all(
         [...this.roots.keys()].map(async (scope) => {
           const entries = await this.service.search(scope, this.tree.query);
-          return [scope, entries.length] as const;
+          const snapshot = await this.service.get(scope);
+          return [scope, { filtered: entries.length, total: snapshot.entries.length }] as const;
         }),
       );
       if (update !== this.countUpdate) return;
