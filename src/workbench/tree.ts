@@ -47,7 +47,7 @@ const categoryDescriptions = new Map<string, string>(
 
 export class PromptTree implements vscode.TreeDataProvider<TreeNode>, vscode.Disposable {
   private readonly changes = new vscode.EventEmitter<TreeNode | undefined>();
-  private readonly contextSummaries = new WeakMap<Entry, string>();
+  private readonly contextSummaries = new WeakMap<Entry, { label: string; value: string } | null>();
   private readonly parents = new WeakMap<TreeNode, TreeNode>();
   readonly onDidChangeTreeData = this.changes.event;
   private readonly unsubscribe: () => void;
@@ -169,19 +169,22 @@ export class PromptTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dis
     const tags = entry.data.tags.map((tag) => `#${tag}`).join(' ');
     if (this.showTags()) item.description = tags;
     const tooltip = new vscode.MarkdownString();
+    tooltip.appendMarkdown('**');
+    tooltip.appendText(entry.data.name.replace(/[\r\n]+/g, ' '));
+    tooltip.appendMarkdown('**');
     if (entry.data.description) {
-      tooltip.appendText(entry.data.description);
-      tooltip.appendMarkdown('\n\n');
+      tooltip.appendMarkdown('  \n**Description** · ');
+      tooltip.appendText(entry.data.description.replace(/[\r\n]+/g, ' '));
     }
-    tooltip.appendText('Category: ');
+    tooltip.appendMarkdown(`  \n**Scope** · ${entry.scope === 'user' ? 'User' : 'Workspace'}`);
     tooltip.appendMarkdown(
-      `[${escapeLinkLabel(entry.data.category)}](${commandUri('prompteur.filterFromTooltip', [
-        'category',
-        entry.data.category,
-      ])})`,
+      `  \n**Category** · [${escapeLinkLabel(entry.data.category)}](${commandUri(
+        'prompteur.filterFromTooltip',
+        ['category', entry.data.category],
+      )})`,
     );
     if (entry.data.tags.length) {
-      tooltip.appendMarkdown('\n\nTags: ');
+      tooltip.appendMarkdown('  \n**Tags** · ');
       tooltip.appendMarkdown(
         entry.data.tags
           .map(
@@ -199,19 +202,19 @@ export class PromptTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dis
       try {
         const names = new Set(variableTokens(entry.data.content).map((token) => token.name));
         context = names.size
-          ? `Context: ${[...names].map((name) => contextLabels[name]).join(', ')}`
-          : '';
+          ? { label: 'Context', value: [...names].map((name) => contextLabels[name]).join(', ') }
+          : null;
       } catch (error) {
-        context = `Context unavailable: ${messageOf(error)}`;
+        context = { label: 'Context unavailable', value: messageOf(error) };
       }
       this.contextSummaries.set(entry, context);
     }
     if (context) {
-      tooltip.appendMarkdown('\n\n');
-      tooltip.appendText(context);
+      tooltip.appendMarkdown(`  \n**${context.label}** · `);
+      tooltip.appendText(context.value);
     }
     tooltip.appendMarkdown(
-      `\n\n[${escapeLinkLabel(entry.path)}](${commandUri('prompteur.openPromptPath', [entry.scope, entry.path])})`,
+      `  \n**Path** · [${escapeLinkLabel(entry.path)}](${commandUri('prompteur.openPromptPath', [entry.scope, entry.path])})`,
     );
     tooltip.isTrusted = {
       enabledCommands: ['prompteur.filterFromTooltip', 'prompteur.openPromptPath'],
