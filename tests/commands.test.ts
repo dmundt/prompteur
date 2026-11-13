@@ -112,6 +112,32 @@ async function customCategoryPrompts() {
     node: { kind: 'category', scope: 'user', category: 'research' } satisfies TreeNode,
   };
 }
+async function customCategoryReviewPrompt() {
+  responses.input.push('Research', 'Explore options.');
+  await run('addCategory');
+  const node = await addPrompt();
+  return {
+    node,
+    path: join(userRoot(), node.entry.path),
+    categoryNode: {
+      kind: 'category',
+      scope: 'user',
+      category: 'research',
+    } satisfies TreeNode,
+  };
+}
+async function dirtyResearchPrompt() {
+  const setup = await customCategoryReviewPrompt();
+  const document = new FakeDocument(Uri.file(setup.path), setup.node.entry.source);
+  document.change(
+    setup.node.entry.source.replace(
+      `category: ${setup.node.entry.data.category}`,
+      'category: research',
+    ),
+  );
+  workspace.textDocuments.push(document);
+  return { ...setup, document };
+}
 async function destination(source = 'code') {
   const document = new FakeDocument(Uri.file(join(root, 'project', 'main.ts')), source);
   const editor = new FakeEditor(document);
@@ -2216,6 +2242,87 @@ describe('release commands', () => {
     for (const path of paths) expect(await fs.readFile(path, 'utf8')).toBe(source);
     expect(context.globalState.values.get('approvedPromptCategories')).toEqual(['research']);
   });
+  it.each(['renameCategory', 'removeCategory'] as const)(
+    'blocks %s when a dirty prompt is newly assigned to that category',
+    async (command) => {
+      const { node, path, document, categoryNode } = await dirtyResearchPrompt();
+      if (command === 'renameCategory') {
+        responses.input.push('Discovery');
+        await expect(run(command, categoryNode)).rejects.toThrow('Save or discard unsaved changes');
+      } else {
+        responses.quick.push('Research');
+        await expect(run(command)).rejects.toThrow('Save or discard unsaved changes');
+      }
+
+      expect(await fs.readFile(path, 'utf8')).toBe(node.entry.source);
+      expect(document.getText()).toContain('category: research');
+      expect(context.globalState.values.get('approvedPromptCategories')).toEqual(['research']);
+    },
+  );
+  it.each(['renameCategory', 'removeCategory'] as const)(
+    'allows %s with an unrelated dirty prompt',
+    async (command) => {
+      const { node, path, categoryNode } = await customCategoryReviewPrompt();
+      const document = new FakeDocument(Uri.file(path), node.entry.source);
+      document.change(`${node.entry.source}\nUnsaved body change`);
+      workspace.textDocuments.push(document);
+
+      if (command === 'renameCategory') {
+        responses.input.push('Discovery');
+        responses.warning.push('Rename Category');
+        await run(command, categoryNode);
+        expect(context.globalState.values.get('approvedPromptCategories')).toEqual(['discovery']);
+      } else {
+        responses.quick.push('Research');
+        responses.warning.push('Remove Category');
+        await run(command);
+        expect(context.globalState.values.get('approvedPromptCategories')).toEqual([]);
+      }
+
+      expect(await fs.readFile(path, 'utf8')).toBe(node.entry.source);
+      expect(document.isDirty).toBe(true);
+    },
+  );
+  it.each(['renameCategory', 'removeCategory'] as const)(
+    'allows %s after discarding the dirty category assignment',
+    async (command) => {
+      const { node, document, categoryNode } = await dirtyResearchPrompt();
+      document.source = node.entry.source;
+      document.isDirty = false;
+
+      if (command === 'renameCategory') {
+        responses.input.push('Discovery');
+        responses.warning.push('Rename Category');
+        await run(command, categoryNode);
+        expect(context.globalState.values.get('approvedPromptCategories')).toEqual(['discovery']);
+      } else {
+        responses.quick.push('Research');
+        responses.warning.push('Remove Category');
+        await run(command);
+        expect(context.globalState.values.get('approvedPromptCategories')).toEqual([]);
+      }
+    },
+  );
+  it.each(['renameCategory', 'removeCategory'] as const)(
+    'applies saved category usage rules after saving a dirty assignment before %s',
+    async (command) => {
+      const { path, document, categoryNode } = await dirtyResearchPrompt();
+      await saveDocument(document);
+
+      if (command === 'renameCategory') {
+        responses.input.push('Discovery');
+        responses.warning.push('Rename Category');
+        await run(command, categoryNode);
+        expect(await fs.readFile(path, 'utf8')).toContain('category: discovery');
+        expect(context.globalState.values.get('approvedPromptCategories')).toEqual(['discovery']);
+      } else {
+        responses.quick.push('Research');
+        await expect(run(command)).rejects.toThrow('1 prompt uses it. Reassign them first.');
+        expect(await fs.readFile(path, 'utf8')).toContain('category: research');
+        expect(context.globalState.values.get('approvedPromptCategories')).toEqual(['research']);
+      }
+    },
+  );
   it('requires invalid prompts to be repaired before category rename', async () => {
     const { node } = await customCategoryPrompts();
     await fs.writeFile(join(userRoot(), 'prompts', 'bad.prompt.md'), 'Invalid YAML');
