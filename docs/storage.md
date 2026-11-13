@@ -2,7 +2,7 @@
 
 - Prompts: Markdown with YAML frontmatter. Persist approved categories in profile state.
 - Store `defaultScope`, `preferredCategory`, `showTags`, `categoryCountMode`, `groupByCategory`, and `syncUserPrompts` in native VS Code configuration; no library-settings file.
-- `categoryCountMode`: `filtered` (default), `total`, or `hidden`; only affects grouped category rows.
+- `categoryCountMode`: `filtered` (default), `total`, or `hidden`; affects root, scope, and category counts, including flat view.
 - No database, ordering sidecar, usage store, or generated disk index.
 
 ## Layout and Model
