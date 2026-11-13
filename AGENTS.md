@@ -37,9 +37,21 @@ Run the smallest relevant check, then escalate if needed.
 - Add dependencies only when required; update manifest and lockfile together.
 - Comment only when clarification is needed.
 
+## GitHub issues
+
+- Assign appropriate existing repository labels when creating every issue. Do not create new labels; if no existing label fits or labeling fails, report it.
+
 ## Branch and release workflow
 
 Use feature branches for changes and a release branch for integration. Do not implement directly on `main` or mix unrelated features in one commit. Release preparation authorizes feature commits, pull-request merges, and release metadata updates; ordinary edit requests do not authorize commits automatically.
+
+### GitHub Flow for development
+
+- Keep `main` deployable. Use short-lived, descriptively named branches for small, focused changes.
+- Base independent work on the active release branch and keep it current without rewriting published history. Follow the dependency rules below for dependent work.
+- Publish feature branches and open pull requests into the release branch for discussion and validation. Complete requested reviews and checks before merging.
+- Integrate tested release branches into `main` through pull requests when explicitly requested. Do not deploy or publish without authorization.
+- Retain existing branches unless deletion is explicitly authorized.
 
 ### Protected branches and remote publication
 
