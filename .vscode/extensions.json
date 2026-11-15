@@ -1,3 +1,6 @@
 {
-  "recommendations": ["dmundt.prompteur"]
+  "recommendations": [
+    "dmundt.prompteur",
+    "dmundt.stemkeeper"
+  ]
 }
