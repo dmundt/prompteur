@@ -2,7 +2,7 @@
 
 ADR editing rules. Decisions live in ADR files.
 
-- Start at [index.md](./index.md); sync additions, renames, supersessions, and removals.
+- Start at [INDEX.md](./INDEX.md); sync additions, renames, supersessions, and removals.
 
 ## File conventions
 
