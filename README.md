@@ -36,7 +36,7 @@ code --install-extension prompteur-1.2.0.vsix
 - Selecting a placeholder in a prompt body does not provide context.
 - VS Code windows do not share selections; copy in the source window, then paste in the target window.
 - **Copy Text** copies the rendered prompt for Chat or another editor.
-- Prompt hover lists context variables used by the saved prompt, without reading their values. Invalid placeholders are reported in the hover.
+- Prompt hover uses a bold title, normal-weight labels, and theme-muted text values in compact rows. Horizontal separators follow the description when present and precede the file path. Category, tag, and path links keep native link colors. A file icon marks the path; a warning icon marks invalid placeholders. Context values are not read.
 - Hover over categories for their purpose, or User and Workspace for library storage, sync, and Trust guidance. Click the scope's folder location to reveal it in the system file manager.
 - The toolbar filter icon indicates an active filter; `Filter: <query>` above the tree shows its text. Select the icon to edit the query, reusing an open filter input; use **Clear Filter** to remove it. Closing the input retains the filter for the current window session; filters are not persisted.
 - The **Prompteur** view opens with an expanded **Prompts** root containing User and available Workspace libraries. Labels show matching valid prompt counts in parentheses, for example **Prompts (38)** and **User (38)**; the root sums the scope counts. Counts update with filters, search settings, and library changes; no matches show **(0)**. Invalid prompts are excluded. Category Count Mode still controls category counts; no Activity Bar count badge is shown.

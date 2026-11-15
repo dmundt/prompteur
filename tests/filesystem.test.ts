@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -13,6 +13,7 @@ async function setup() {
   return { root, files: new LocalFiles((scope) => join(root, scope)) };
 }
 afterEach(async () => {
+  vi.restoreAllMocks();
   await Promise.all(roots.splice(0).map((root) => fs.rm(root, { force: true, recursive: true })));
 });
 
@@ -47,6 +48,27 @@ describe('local filesystem adapter', () => {
     );
     await expect(restricted.remove('workspace', 'a.yaml', '')).rejects.toThrow('Untrusted');
     expect(await files.read('user', 'a.yaml')).toBe('first');
+  });
+  it('preserves external edits during a staged replacement and permits an explicit retry', async () => {
+    const { files, root } = await setup();
+    const destination = join(root, 'user', 'a.yaml');
+    await files.write('user', 'a.yaml', 'original', undefined);
+    const read = files.read.bind(files);
+    vi.spyOn(files, 'read').mockImplementationOnce(async (scope, path) => {
+      const source = await read(scope, path);
+      await fs.writeFile(destination, 'external edit');
+      return source;
+    });
+
+    await expect(files.write('user', 'a.yaml', 'staged edit', 'original')).rejects.toThrow(
+      'File changed on disk: a.yaml',
+    );
+    expect(await fs.readFile(destination, 'utf8')).toBe('external edit');
+    expect(await fs.readdir(join(root, 'user'))).toEqual(['a.yaml']);
+
+    await files.write('user', 'a.yaml', 'retried edit', 'external edit');
+    expect(await fs.readFile(destination, 'utf8')).toBe('retried edit');
+    expect(await fs.readdir(join(root, 'user'))).toEqual(['a.yaml']);
   });
   it('reloads manual filesystem edits through incremental service events', async () => {
     const { files, root } = await setup();
