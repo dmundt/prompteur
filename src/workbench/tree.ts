@@ -19,10 +19,13 @@ export type TreeNode =
   | { kind: 'empty'; scope: Scope };
 
 const basename = (path: string): string => path.slice(path.lastIndexOf('/') + 1);
+const escapeHtml = (value: string): string =>
+  value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const escapeLinkLabel = (value: string): string =>
-  value
+  escapeHtml(value)
     .replace(/[\r\n]+/g, ' ')
     .replace(/\\/g, '\\\\')
+    .replace(/\$\(/g, '\\\\$(')
     .replace(/([`*_{}[\]<>|])/g, '\\$1');
 const commandUri = (command: string, args: unknown[]): string =>
   `command:${command}?${encodeURIComponent(JSON.stringify(args))}`;
@@ -47,7 +50,7 @@ const categoryDescriptions = new Map<string, string>(
 
 export class PromptTree implements vscode.TreeDataProvider<TreeNode>, vscode.Disposable {
   private readonly changes = new vscode.EventEmitter<TreeNode | undefined>();
-  private readonly contextSummaries = new WeakMap<Entry, string>();
+  private readonly contextSummaries = new WeakMap<Entry, { label: string; value: string } | null>();
   private readonly parents = new WeakMap<TreeNode, TreeNode>();
   readonly onDidChangeTreeData = this.changes.event;
   private readonly unsubscribe: () => void;
@@ -169,19 +172,33 @@ export class PromptTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dis
     const tags = entry.data.tags.map((tag) => `#${tag}`).join(' ');
     if (this.showTags()) item.description = tags;
     const tooltip = new vscode.MarkdownString();
+    tooltip.supportThemeIcons = true;
+    tooltip.supportHtml = true;
+    const appendValue = (value: string): void => {
+      tooltip.appendMarkdown('<span style="color:var(--vscode-descriptionForeground);">');
+      tooltip.appendText(escapeHtml(value.replace(/[\r\n]+/g, ' ')));
+      tooltip.appendMarkdown('</span>');
+    };
+    tooltip.appendMarkdown('**');
+    tooltip.appendText(escapeHtml(entry.data.name.replace(/[\r\n]+/g, ' ')));
+    tooltip.appendMarkdown('**');
     if (entry.data.description) {
-      tooltip.appendText(entry.data.description);
-      tooltip.appendMarkdown('\n\n');
+      tooltip.appendMarkdown('  \nDescription · ');
+      appendValue(entry.data.description);
+      tooltip.appendMarkdown('\n\n---\n\n');
+    } else {
+      tooltip.appendMarkdown('  \n');
     }
-    tooltip.appendText('Category: ');
+    tooltip.appendMarkdown('Scope · ');
+    appendValue(entry.scope === 'user' ? 'User' : 'Workspace');
     tooltip.appendMarkdown(
-      `[${escapeLinkLabel(entry.data.category)}](${commandUri('prompteur.filterFromTooltip', [
-        'category',
-        entry.data.category,
-      ])})`,
+      `  \nCategory · [${escapeLinkLabel(entry.data.category)}](${commandUri(
+        'prompteur.filterFromTooltip',
+        ['category', entry.data.category],
+      )})`,
     );
     if (entry.data.tags.length) {
-      tooltip.appendMarkdown('\n\nTags: ');
+      tooltip.appendMarkdown('  \nTags · ');
       tooltip.appendMarkdown(
         entry.data.tags
           .map(
@@ -199,19 +216,21 @@ export class PromptTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dis
       try {
         const names = new Set(variableTokens(entry.data.content).map((token) => token.name));
         context = names.size
-          ? `Context: ${[...names].map((name) => contextLabels[name]).join(', ')}`
-          : '';
+          ? { label: 'Context', value: [...names].map((name) => contextLabels[name]).join(', ') }
+          : null;
       } catch (error) {
-        context = `Context unavailable: ${messageOf(error)}`;
+        context = { label: 'Context unavailable', value: messageOf(error) };
       }
       this.contextSummaries.set(entry, context);
     }
     if (context) {
-      tooltip.appendMarkdown('\n\n');
-      tooltip.appendText(context);
+      tooltip.appendMarkdown(
+        `  \n${context.label === 'Context unavailable' ? '$(warning) ' : ''}${context.label} · `,
+      );
+      appendValue(context.value);
     }
     tooltip.appendMarkdown(
-      `\n\n[${escapeLinkLabel(entry.path)}](${commandUri('prompteur.openPromptPath', [entry.scope, entry.path])})`,
+      `\n\n---\n\nPath · $(file) [${escapeLinkLabel(entry.path)}](${commandUri('prompteur.openPromptPath', [entry.scope, entry.path])})`,
     );
     tooltip.isTrusted = {
       enabledCommands: ['prompteur.filterFromTooltip', 'prompteur.openPromptPath'],

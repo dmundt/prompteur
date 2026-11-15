@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { LibraryService } from '../src/application/library';
 import { LocalFiles } from '../src/platform/local-files';
 import { decodeMarkdown, encodeMarkdown, newPrompt } from '../src/core/documents';
-import { documentByteLimit } from '../src/core/limits';
+import { documentByteLimit, generatedByteLimit } from '../src/core/limits';
 import { generate, variableTokens } from '../src/core/render';
 import { memoryFiles } from './helpers';
 import { assertLocalDuration } from './timing';
@@ -66,6 +66,16 @@ describe('preserved safety and resource boundaries', () => {
     expect(generate(exact.slice(0, -1), {}).text).toHaveLength(exact.length - 1);
     expect(generate(exact, {}).text).toBe(exact);
     expect(() => generate(`${exact}x`, {})).toThrow('byte limit');
+  });
+  it('counts the UTF-8 literal tail after substitution at the generated-output boundary', () => {
+    const clipboard = 'x'.repeat(generatedByteLimit - 2);
+    const rendered = generate('{{clipboard}}\u00e9', { clipboard });
+    expect(Buffer.byteLength(rendered.text, 'utf8')).toBe(generatedByteLimit);
+    expect(rendered.text.endsWith('\u00e9')).toBe(true);
+    expect(rendered.missing).toEqual([]);
+    expect(() => generate('{{clipboard}}\u00e9x', { clipboard })).toThrow(
+      'Generated prompt exceeds byte limit',
+    );
   });
   it('rejects junction/symlink ancestors above the library root', async () => {
     const root = await fixture();
