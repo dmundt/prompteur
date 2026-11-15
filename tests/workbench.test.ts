@@ -103,6 +103,67 @@ describe('native tree interactions', () => {
     expect(port.read).not.toHaveBeenCalled();
     tree.dispose();
   });
+
+  it('uses the displayed category label as the accessible name in every count mode', () => {
+    const { port } = memoryFiles();
+    let countMode: 'filtered' | 'total' | 'hidden' = 'filtered';
+    const tree = new PromptTree(
+      new LibraryService(port),
+      () => false,
+      vi.fn(),
+      undefined,
+      () => countMode,
+    );
+    const categories: TreeNode[] = [
+      {
+        kind: 'category',
+        scope: 'user',
+        category: 'explain',
+        filteredCount: 1,
+        totalCount: 4,
+      },
+      {
+        kind: 'category',
+        scope: 'user',
+        category: 'custom-alpha',
+        filteredCount: 1,
+        totalCount: 5,
+      },
+      {
+        kind: 'category',
+        scope: 'user',
+        category: 'custom-beta',
+        filteredCount: 2,
+        totalCount: 6,
+      },
+    ];
+    const modes = [
+      {
+        mode: 'filtered',
+        labels: ['Explain (1)', 'Custom-alpha (1)', 'Custom-beta (2)'],
+      },
+      {
+        mode: 'total',
+        labels: ['Explain (4)', 'Custom-alpha (5)', 'Custom-beta (6)'],
+      },
+      {
+        mode: 'hidden',
+        labels: ['Explain', 'Custom-alpha', 'Custom-beta'],
+      },
+    ] as const;
+
+    for (const { mode, labels } of modes) {
+      countMode = mode;
+      const items = categories.map((category) => tree.getTreeItem(category));
+      expect(items.map((item) => item.label)).toEqual(labels);
+      expect(items.map((item) => item.accessibilityInformation?.label)).toEqual(labels);
+      expect(items[1]?.tooltip).toBe('User-defined category for organizing prompts.');
+      expect(items[2]?.tooltip).toBe('User-defined category for organizing prompts.');
+    }
+
+    tree.dispose();
+  });
+
   it('groups prompts by category, ignores old rule files, filters and repairs Markdown prompts', async () => {
     const { port, files } = memoryFiles();
     files.set(

@@ -2,14 +2,22 @@ import { z } from 'zod';
 import { isAlias, isMap, isScalar, parseDocument, visit, type Document } from 'yaml';
 import { assertTextBudget, yamlDepthLimit } from './limits';
 
+export const hasWindowsControlCharacters = (value: string): boolean => {
+  for (const character of value) if (character.charCodeAt(0) <= 0x1f) return true;
+  return false;
+};
+
 export const relativePath = z
   .string()
   .min(1)
   .refine(
+    (value) => !hasWindowsControlCharacters(value),
+    'Path cannot contain Windows control characters (U+0000-U+001F)',
+  )
+  .refine(
     (value) =>
       !value.includes('\\') &&
       !value.includes(':') &&
-      !value.includes('\0') &&
       value
         .split('/')
         .every(

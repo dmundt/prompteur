@@ -91,6 +91,7 @@ export class PromptTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dis
     if (node.kind === 'root') {
       const item = new vscode.TreeItem('Prompts', vscode.TreeItemCollapsibleState.Expanded);
       item.id = 'prompts';
+      if (this.categoryCountMode() === 'hidden') return item;
       let total = 0;
       const scopes: Scope[] = this.workspaceAvailable() ? ['user', 'workspace'] : ['user'];
       for (const scope of scopes) {
@@ -103,7 +104,7 @@ export class PromptTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dis
     }
     if (node.kind === 'scope') {
       const name = node.scope === 'user' ? 'User' : 'Workspace';
-      const count = this.scopeCount(node.scope);
+      const count = this.categoryCountMode() === 'hidden' ? undefined : this.scopeCount(node.scope);
       const item = new vscode.TreeItem(
         count === undefined ? name : `${name} (${count})`,
         vscode.TreeItemCollapsibleState.Expanded,
@@ -142,6 +143,7 @@ export class PromptTree implements vscode.TreeDataProvider<TreeNode>, vscode.Dis
       const visibleCount = countMode === 'hidden' ? undefined : count;
       const label = visibleCount === undefined ? name : `${name} (${visibleCount})`;
       const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.Collapsed);
+      item.accessibilityInformation = { label };
       item.id = `${node.scope}:category:${node.category.toLowerCase()}`;
       const description = this.customCategoryDescription(node.category.toLowerCase());
       item.contextValue = description === undefined ? 'category' : 'customCategory';
