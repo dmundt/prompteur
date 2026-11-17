@@ -9,6 +9,7 @@ Shared development expectations for Stemlink and Prompteur. Product-specific bui
 - Keep core logic independent of VS Code APIs where practical.
 - Use existing runtime dependencies and built-in APIs; justify new runtime packages.
 - Update `package.json` and `package-lock.json` together.
+- Keep `@types/vscode` within the declared minimum VS Code minor using a tilde range; do not compile against newer host APIs.
 - Require Workspace Trust for workspace mutations, generation, and preview.
 - Keep local data local; do not add telemetry or extension-owned provider calls.
 
@@ -41,6 +42,7 @@ Run `npm run test:host` for extension-host behavior. Add focused tests for behav
 - Update related user and developer documentation with behavior changes.
 - Record only user-facing changes in `CHANGELOG.md`.
 - Add an ADR for architectural decisions and keep the ADR index current.
+- Name documentation indexes `INDEX.md` and keep extension icons in `media/`. Let generators own the formatting of generated vault indexes.
 - Keep documentation factual, concise, and free of unsupported claims.
 
 ## Dependencies and CI
@@ -49,6 +51,7 @@ Run `npm run test:host` for extension-host behavior. Add focused tests for behav
 - Feature branch CI installs dependencies and builds.
 - Pull request CI runs lint, typecheck, unit tests, and existing host tests.
 - Nightly/manual workflows run audits, formatting checks, coverage, and other expensive validation.
+- Cancel superseded validation runs on the same ref. Bound build jobs to 5 minutes, PR jobs to 10, heavy validation to 20, and each release job to 10; never automatically cancel publication.
 - Keep coverage gates appropriate to each runner's measured baseline. Manual compatibility validation covers supported minimum/stable VS Code on Windows, macOS, and Linux, including Restricted Mode.
 - Do not publish from a merge to `main`.
 

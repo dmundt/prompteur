@@ -1,5 +1,6 @@
 src/**
 .gitattributes
+.gitignore
 tests/**
 scripts/**
 AGENTS.md
@@ -14,8 +15,7 @@ node_modules/**
 coverage/**
 .github/**
 !dist/*.js
-docs/github-settings.md
-docs/engineering-standards.md
+docs/**
 .vscode/**
 dist/types/**
 dist/schema.cjs

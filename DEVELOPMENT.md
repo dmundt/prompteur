@@ -6,6 +6,7 @@
 - npm 10+; use npm bundled with a supported Node.js release and `npm ci`.
 - `engines.node` and `engines.npm` declare compatibility. npm normally warns rather than rejects incompatible engines; these fields are not an enforcement hook.
 - Desktop VS Code 1.96 or newer.
+- `@types/vscode` stays within 1.96.x to type-check against the minimum supported host API.
 
 ```sh
 npm ci
