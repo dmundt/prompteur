@@ -22,5 +22,3 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: xvfb-run -a npm run test:host
-        env:
-          VSCODE_TEST_VERSION: stable

@@ -1,15 +1,11 @@
 ## Summary
 
-<!-- Describe change and user impact. -->
+<!-- Describe the change and its user impact. -->
 
 ## Validation
 
 - [ ] `npm run lint`
 - [ ] `npm run typecheck`
 - [ ] `npm test`
-- [ ] `npm run build` (when applicable)
-
-## Checklist
-
-- [ ] PR targets `main`.
-- [ ] No secrets or private prompt content included.
+- [ ] Relevant host tests
+- [ ] Documentation updated
