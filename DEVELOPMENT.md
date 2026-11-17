@@ -28,7 +28,7 @@ npm run test:host
 - Pre-commit: `lint-staged` formats staged files and runs ESLint on staged JavaScript/TypeScript.
 - Pre-push: runs `npm run typecheck` and `npm test`.
 - Host smoke: `npm run test:host` runs the extension in VS Code; use it for host-specific failures.
-- **Compatibility Validation** is manual-only. It runs host smoke, including Restricted Mode checks, on Windows, macOS, and Linux against VS Code 1.96.0 and stable.
+- **Compatibility Validation** is manual-only. It runs host smoke, including Restricted Mode checks, on Windows, macOS, and Linux against VS Code 1.96.0 and stable, plus coverage on each platform with Node 22.
 - `npm run package` creates a local VSIX; it does not publish.
 
 ## Release
