@@ -430,9 +430,9 @@
     }
   },
   "scripts": {
-    "build": "npm run check && npm run schemas && esbuild src/extension.ts --bundle --platform=node --external:vscode --outfile=dist/extension.js --sourcemap --minify",
+    "build": "npm run typecheck && npm run schemas && esbuild src/extension.ts --bundle --platform=node --external:vscode --outfile=dist/extension.js --sourcemap --minify",
     "schemas": "esbuild scripts/schemas.ts --bundle --platform=node --packages=external --outfile=dist/schema.cjs && node dist/schema.cjs",
-    "check": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:host": "npm run build && esbuild tests/host/smoke.ts --bundle --platform=node --external:vscode --outfile=dist/host-smoke.cjs && node scripts/run-host-tests.mjs",
     "coverage": "vitest run --coverage",
@@ -440,7 +440,17 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "package": "vsce package --allow-missing-repository --no-rewrite-relative-links --no-dependencies",
-    "vscode:prepublish": "npm run build"
+    "vscode:prepublish": "npm run build",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{js,mjs,cjs,ts,tsx}": [
+      "prettier --write",
+      "eslint --max-warnings=0"
+    ],
+    "*.{json,jsonc,md,yml,yaml}": [
+      "prettier --write"
+    ]
   },
   "dependencies": {
     "yaml": "^2.8.1",
@@ -456,6 +466,8 @@
     "@xmldom/xmldom": "^0.9.12",
     "esbuild": "^0.28.2",
     "eslint": "^9.0.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
     "prettier": "^3.5.0",
     "typescript": "^5.7.0",
     "typescript-eslint": "^8.0.0",
