@@ -3,6 +3,7 @@
 ## Setup
 
 - Node.js 22.13 or newer.
+- Use npm bundled with Node.js 22; use `npm ci` instead of installing npm globally.
 - Desktop VS Code 1.96 or newer.
 
 ```sh
