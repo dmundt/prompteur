@@ -5,11 +5,16 @@ AGENTS.md
 **/AGENTS.md
 CONTRIBUTING.md
 DEVELOPMENT.md
+ARCHITECTURE.md
+SECURITY.md
+.nvmrc
 .husky/**
 node_modules/**
 coverage/**
 .github/**
+!dist/*.js
 docs/github-settings.md
+docs/engineering-standards.md
 .vscode/**
 dist/types/**
 dist/schema.cjs
