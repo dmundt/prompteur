@@ -23,12 +23,15 @@ npm test
 npm run build
 npm run format:check
 npm run test:host
+npm run test:ui
 ```
 
 - Pre-commit: `lint-staged` formats staged files and runs ESLint on staged JavaScript/TypeScript.
 - Pre-push: runs `npm run typecheck` and `npm test`.
-- Host smoke: `npm run test:host` runs the extension in VS Code; use it for host-specific failures.
-- **Compatibility Validation** is manual-only. It runs host smoke, including Restricted Mode checks, on Windows, macOS, and Linux against VS Code 1.96.0 and stable, plus coverage on each platform with Node 22.
+- `npm run test:mock` runs selected VS Code API mock tests; `npm test` includes them.
+- Host smoke: `npm run test:host` runs trusted and Restricted Mode extension-host fixtures in VS Code. Set `PROMPTEUR_CODE_PATH` to an installed executable or `VSCODE_TEST_VERSION` to select a downloaded version. The legacy `VSCODE_EXECUTABLE_PATH` is also supported.
+- `npm run test:ui` opens an isolated VS Code workspace and uses Playwright to select a real tree item and verify its editor tab. It uses the same host selection variables and opens a temporary loopback debugging endpoint; avoid running it on untrusted shared machines.
+- **Compatibility Validation** is manual-only. It runs host smoke, including Restricted Mode checks, and interactive UI tests on Windows, macOS, and Linux against VS Code 1.96.0 and stable, plus coverage on each platform with Node 22.
 - Run `npm run check:shared -- <peer-repository>` to compare shared engineering files against a local Stemlink checkout. Nightly validation compares against its published `main`.
 - `npm run package` creates a local VSIX; it does not publish.
 
@@ -65,7 +68,7 @@ Trusted Publishing must target `.github/workflows/publish.yml`; no publishing se
 ## CI
 
 - Feature branch push: install and build.
-- Pull request to `main`: install, lint, typecheck, unit tests, and host tests on stable VS Code.
+- Pull request to `main`: install, lint, typecheck, unit tests, host tests, and interactive UI smoke on stable VS Code.
 - Tag push `v*`: install, build, package, GitHub Release asset, and Marketplace publish.
 - Nightly/manual: audit, formatting, and coverage.
 - Manual compatibility: supported minimum/stable VS Code on three platforms, including Restricted Mode.

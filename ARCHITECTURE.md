@@ -8,4 +8,6 @@ Prompteur is a local VS Code extension for Markdown prompt libraries.
 - [`docs/architecture.md`](./docs/architecture.md) describes runtime components and data flow.
 - [`docs/adr/`](./docs/adr/) records architecture decisions.
 
+ESLint rejects VS Code imports from core and application, outward relative imports from those layers, and application imports from core.
+
 Prompt files and library paths are authoritative. User prompts live in profile storage; workspace prompts live in `.vscode/prompts`. Workspace Trust gates workspace mutations, generation, and preview. The approved Copilot Language Model Tool is read-only and returns requested prompt content only after VS Code confirmation.
