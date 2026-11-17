@@ -21,7 +21,18 @@
     "onLanguageModelTool:prompteur_findPrompt"
   ],
   "categories": [
-    "Other"
+    "Other",
+    "Snippets",
+    "Machine Learning"
+  ],
+  "keywords": [
+    "prompt library",
+    "markdown prompts",
+    "AI prompts",
+    "GitHub Copilot",
+    "prompt templates",
+    "prompt manager",
+    "local prompts"
   ],
   "main": "./dist/extension.js",
   "extensionKind": [
