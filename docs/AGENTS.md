@@ -2,7 +2,7 @@
 
 Rules for API/command code and docs. Source: [api.md](./api.md).
 
-- Start at [INDEX.md](./INDEX.md); sync additions, renames, and removals.
+- Start at [index.md](./index.md); sync additions, renames, and removals.
 
 ## Public surface
 

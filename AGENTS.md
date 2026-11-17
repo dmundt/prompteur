@@ -59,6 +59,7 @@ Run the smallest relevant check, then escalate if needed.
 - Update package and lockfile versions in a feature PR. After merge, tag the corresponding `main` commit `v<version>` and push the tag.
 - `.github/workflows/publish.yml` validates exact tag/version match, builds and packages the VSIX, creates a GitHub Release, and publishes to Marketplace through Trusted Publishing.
 - Keep prereleases marked as prereleases. Do not publish without an explicit request.
+- Use numeric package versions and the boolean `vsce.preRelease` for release-channel selection. SemVer prerelease suffixes are unsupported. Both lockfile versions must match the manifest.
 
 ## Validation and commits
 

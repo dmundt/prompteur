@@ -2,7 +2,7 @@
 
 Prompteur is a local VS Code extension for Markdown prompt libraries.
 
-- [`src/`](./src/) contains extension code and tests; keep core/application logic independent of VS Code APIs.
+- [`src/`](./src/) contains extension code; keep core/application logic independent of VS Code APIs.
 - [`tests/`](./tests/) contains unit tests and VS Code host smoke tests.
 - [`scripts/`](./scripts/) contains build and host-test helpers.
 - [`docs/architecture.md`](./docs/architecture.md) describes runtime components and data flow.

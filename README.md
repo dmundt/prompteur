@@ -12,7 +12,7 @@
 ## Install and Run
 
 - Desktop VS Code 1.96+.
-- Development: Node.js 22.13+.
+- Development: Node.js 22.13+ within major 22, or Node.js 24+, with npm 10+.
 
 ```sh
 npm ci

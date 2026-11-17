@@ -48,11 +48,13 @@ Run `npm run test:host` for extension-host behavior. Add focused tests for behav
 - Feature branch CI installs dependencies and builds.
 - Pull request CI runs lint, typecheck, unit tests, and existing host tests.
 - Nightly/manual workflows run audits, formatting checks, coverage, and other expensive validation.
+- Keep coverage gates appropriate to each runner's measured baseline. Manual compatibility validation covers supported minimum/stable VS Code on Windows, macOS, and Linux, including Restricted Mode.
 - Do not publish from a merge to `main`.
 
 ## Releases
 
 - Release from a matching `v<version>` tag on `main`.
+- Use numeric versions and explicit boolean `vsce.preRelease` for stable/prerelease selection. Validate the manifest and both lockfile versions; reject SemVer prerelease suffixes.
 - Validate the manifest version, build, and package a VSIX before publication.
 - Attach the VSIX to a GitHub Release and publish to Marketplace only through configured Trusted Publishing.
 - Keep release notes and version metadata aligned with the package.

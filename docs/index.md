@@ -23,8 +23,6 @@ Documentation index. Select the matching topic below.
 | Follow repository agent rules                       | [../AGENTS.md](../AGENTS.md#github-flow)               |
 | Follow agent rules for the docs                     | [AGENTS.md](./AGENTS.md)                               |
 | Follow agent rules for ADRs                         | [adr/AGENTS.md](./adr/AGENTS.md)                       |
-| Apply shared engineering practices                  | [engineering-standards.md](./engineering-standards.md) |
-| Report a security issue                             | [../SECURITY.md](../SECURITY.md)                       |
 
 ## Architecture Decision Records
 
