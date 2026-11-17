@@ -88,7 +88,7 @@ test('existing release assets must match the candidate VSIX', () => {
 });
 
 test('release verification CLI rejects a different existing VSIX', () => {
-  const directory = mkdtempSync(join(tmpdir(), 'prompteur-release-test-'));
+  const directory = mkdtempSync(join(tmpdir(), 'shared-release-test-'));
   try {
     const metadata = join(directory, 'release.json');
     const candidate = join(directory, 'x.vsix');
