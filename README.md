@@ -9,6 +9,12 @@
 - No Prompteur account, direct model calls, or telemetry. Optional Copilot tool returns requested prompt text and used variables to the configured model after VS Code confirmation. User prompts sync through VS Code Settings Sync by default. Workspace writes, generation, and preview require Trust.
 - Stable release. Prompt file format version: 1.
 
+## Documentation
+
+- [Install and run](#install-and-run) and [daily workflow](#daily-workflow)
+- [Development](./DEVELOPMENT.md), [contributing](./CONTRIBUTING.md), and [engineering standards](./docs/engineering-standards.md)
+- [Architecture](./ARCHITECTURE.md), [verification](./docs/verification.md), and [security](./SECURITY.md)
+
 ## Install and Run
 
 - Desktop VS Code 1.96+.

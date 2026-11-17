@@ -8,6 +8,7 @@ npm run format:check
 npm run test:coverage
 npm run build
 npm run test:host
+npm run test:ui
 npm run package
 ```
 
@@ -28,6 +29,7 @@ npm run package
 - Workflow integration tests use real isolated library files with mocked VS Code APIs/state: Prompts/User/Workspace expansion on view visibility; startup reconciliation and invalid reload recovery; create/save/copy/delete with dirty-edit protection and sync tombstones; Workspace Trust and Copilot rendering without prompt mutation.
 
 - Host smoke: separate isolated workspace/profile per run. The trusted run uses `@vscode/test-electron`'s `runTests`; the Restricted Mode run launches VS Code directly because `runTests` disables Workspace Trust. Both suppress startup prompts.
+- Interactive UI smoke: `npm run test:ui` opens the real workbench in an isolated profile, selects a category and prompt, and verifies the editor tab. It does not exercise clipboard or Restricted Mode. Use `npm run test:mock` for the Vitest suite with selected VS Code API mocks.
 - Checks Restricted Mode blocking, User prompt use, clipboard handoff, source preservation, removed Insert command, starters, and plaintext preview. Prompt-record transfer verifies category override, saved output, unchanged source, and retained copy buffer after blocked Workspace operations. Preview retains source-editor context after opening a library copy. Single-line input interaction is not covered by this smoke test.
 - Host smoke verifies Language Model Tool registration when supported; tool search/render is unit-tested with a VS Code API mock. Tests and extension code make no model-provider requests.
 - Runner restores clipboard and removes temp workspace data.
@@ -67,9 +69,9 @@ npm run package
 
 - Activity Bar SVG: XML/manifest test. Marketplace icon: PNG.
 - Feature-branch pushes run install and build; `main` pushes do not trigger branch CI.
-- Pull requests targeting `main` run install, lint, typecheck, unit tests, and host smoke on stable VS Code. **PR validation** is the required status check.
+- Pull requests targeting `main` run install, lint, typecheck, unit tests, host smoke, and interactive UI smoke on stable VS Code. **PR validation** is the required status check.
 - A `v*` tag push validates numeric manifest/tag and both lockfile versions, then runs install, build, and packaging; uploads the VSIX as an Actions artifact and GitHub Release asset; then publishes it to VS Code Marketplace using Trusted Publishing. The boolean `vsce.preRelease` selects the Marketplace channel and GitHub Release state. Both channels require distinct numeric versions; SemVer prerelease suffixes are rejected. `npm run test:release` covers this validation.
 - Nightly/manual validation runs audit, formatting, and coverage.
-- The manual-only **Compatibility Validation** workflow runs host smoke, including Restricted Mode checks, on Windows, macOS, and Linux against VS Code 1.96.0 and stable. Dispatch it after the workflow exists on the default branch; it never publishes.
+- The manual-only **Compatibility Validation** workflow runs host smoke, including Restricted Mode checks, and interactive UI tests on Windows, macOS, and Linux against VS Code 1.96.0 and stable. Dispatch it after the workflow exists on the default branch; it never publishes.
 - Release asset upload requires `contents: write`; Marketplace publishing requires `id-token: write` and a Trusted Publishing policy targeting `.github/workflows/publish.yml`.
 - Marketplace Trusted Publishing policy must target `.github/workflows/publish.yml` without a GitHub environment. The publish job requires `id-token: write`.
