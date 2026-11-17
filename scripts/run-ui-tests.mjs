@@ -36,22 +36,28 @@ async function stopChild(child, exited) {
   if (child?.pid && child.exitCode === null && child.signalCode === null && !child.kill())
     throw new Error('Could not terminate the VS Code test process.');
   if (exited) {
-    const controller = new globalThis.AbortController();
-    try {
-      await Promise.race([
-        exited,
-        delay(10_000, undefined, { signal: controller.signal }).then(() => {
-          throw new Error(`VS Code test process did not exit; temporary files remain at ${temp}.`);
-        }),
-      ]);
-    } finally {
-      controller.abort();
+    const waitForExit = async () => {
+      const controller = new globalThis.AbortController();
+      try {
+        return await Promise.race([
+          exited.then(() => true),
+          delay(10_000, false, { signal: controller.signal }),
+        ]);
+      } finally {
+        controller.abort();
+      }
+    };
+    if (!(await waitForExit())) {
+      child.kill('SIGKILL');
+      if (!(await waitForExit()))
+        throw new Error(`VS Code test process did not exit; temporary files remain at ${temp}.`);
     }
   }
 }
 let child;
 let browser;
 let exited;
+const errors = [];
 try {
   const workspace = join(temp, 'workspace');
   const profile = join(temp, 'profile');
@@ -119,12 +125,21 @@ try {
   await exerciseWorkbench(page);
   if (child.exitCode !== null || child.signalCode !== null)
     throw new Error('VS Code exited during the interactive test.');
+} catch (error) {
+  errors.push(error);
 } finally {
   try {
     if (browser) await browser.close();
-  } finally {
+  } catch (error) {
+    errors.push(error);
+  }
+  try {
     await stopChild(child, exited);
     await rm(temp, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+  } catch (error) {
+    errors.push(error);
   }
 }
+if (errors.length === 1) throw errors[0];
+if (errors.length > 1) throw new globalThis.AggregateError(errors, 'UI test and cleanup failed.');
 process.stdout.write('Interactive workbench test passed.\n');
