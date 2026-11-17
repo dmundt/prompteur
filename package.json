@@ -4,7 +4,7 @@
   "description": "Git-friendly local Markdown prompts with categories, tags, and clipboard generation.",
   "version": "1.2.0",
   "publisher": "dmundt",
-  "icon": "resources/icon.png",
+  "icon": "media/icon.png",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -56,7 +56,7 @@
         {
           "id": "prompteur",
           "title": "Prompteur",
-          "icon": "resources/activity/prompts.svg"
+          "icon": "media/prompts.svg"
         }
       ]
     },
