@@ -8,13 +8,13 @@ describe('Activity Bar icon', () => {
       icon: string;
       contributes: { viewsContainers: { activitybar: { icon: string }[] } };
     };
-    expect(manifest.icon).toBe('resources/icon.png');
+    expect(manifest.icon).toBe('media/icon.png');
     const png = await readFile(manifest.icon);
     expect(png.subarray(0, 8)).toEqual(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
     expect(png.readUInt32BE(16)).toBe(128);
     expect(png.readUInt32BE(20)).toBe(128);
     const path = manifest.contributes.viewsContainers.activitybar[0]?.icon;
-    expect(path).toBe('resources/activity/prompts.svg');
+    expect(path).toBe('media/prompts.svg');
     const source = await readFile(path!, 'utf8');
     const document = new DOMParser({
       onError: (level, message) => {
