@@ -7,13 +7,18 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   pr-validation:
     name: PR validation
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -22,5 +27,3 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: xvfb-run -a npm run test:host
-        env:
-          VSCODE_TEST_VERSION: stable

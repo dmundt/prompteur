@@ -17,3 +17,5 @@ Create or update an active ruleset targeting only `refs/heads/main`:
 Enable **Automatically delete head branches** after pull request merge. Keep `main` as the only long-lived branch. Do not protect or create `develop` or `release/*` branches.
 
 The PR workflow job ID is `pr-validation`; its required check name is **PR validation**. Update the ruleset if this name changes.
+
+Protect release tags matching `v[0-9]*` from update and deletion while allowing new tags.

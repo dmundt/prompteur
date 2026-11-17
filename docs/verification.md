@@ -5,7 +5,7 @@ npm run lint
 npm run typecheck
 npm test
 npm run format:check
-npm run coverage
+npm run test:coverage
 npm run build
 npm run test:host
 npm run package
@@ -68,7 +68,8 @@ npm run package
 - Activity Bar SVG: XML/manifest test. Marketplace icon: PNG.
 - Feature-branch pushes run install and build; `main` pushes do not trigger branch CI.
 - Pull requests targeting `main` run install, lint, typecheck, unit tests, and host smoke on stable VS Code. **PR validation** is the required status check.
-- A `v*` tag push runs install, build, and packaging; uploads the VSIX as an Actions artifact and GitHub Release asset; then publishes it to VS Code Marketplace using Trusted Publishing. The tag must exactly match the package version (`v<version>`). Prerelease versions publish as Marketplace prereleases.
-- Nightly/manual validation runs audit, lint, formatting, and coverage.
+- A `v*` tag push validates numeric manifest/tag and both lockfile versions, then runs install, build, and packaging; uploads the VSIX as an Actions artifact and GitHub Release asset; then publishes it to VS Code Marketplace using Trusted Publishing. The boolean `vsce.preRelease` selects the Marketplace channel and GitHub Release state. Both channels require distinct numeric versions; SemVer prerelease suffixes are rejected. `npm run test:release` covers this validation.
+- Nightly/manual validation runs audit, formatting, and coverage.
+- The manual-only **Compatibility Validation** workflow runs host smoke, including Restricted Mode checks, on Windows, macOS, and Linux against VS Code 1.96.0 and stable. Dispatch it after the workflow exists on the default branch; it never publishes.
 - Release asset upload requires `contents: write`; Marketplace publishing requires `id-token: write` and a Trusted Publishing policy targeting `.github/workflows/publish.yml`.
 - Marketplace Trusted Publishing policy must target `.github/workflows/publish.yml` without a GitHub environment. The publish job requires `id-token: write`.

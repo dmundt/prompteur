@@ -614,7 +614,7 @@ class Workbench implements vscode.Disposable {
         try {
           const saved = await this.service.readFile(entry.scope, entry.path);
           if (saved === entry.source) continue;
-          if (saved !== source) throw new Error('File changed during rename');
+          if (saved !== source) throw new Error('File changed during rename', { cause: error });
           this.assertCategoryWritable(entry);
           await this.service.writeSource(entry.scope, entry.path, entry.source, source);
         } catch (rollbackError) {
@@ -634,6 +634,7 @@ class Workbench implements vscode.Disposable {
             ? `Recovery incomplete; both categories remain approved. Check affected prompts: ${failures.join('; ')}`
             : 'Original prompts and category metadata restored.'
         }`,
+        { cause: error },
       );
     }
     if (this.copiedPrompt?.data.category === category)
@@ -731,6 +732,7 @@ class Workbench implements vscode.Disposable {
         throw new AggregateError(
           [error, rollbackError],
           `Category save failed: ${messageOf(error)}. Description rollback failed: ${messageOf(rollbackError)}`,
+          { cause: rollbackError },
         );
       }
       throw error;

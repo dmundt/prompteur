@@ -1,14 +1,14 @@
 # AGENTS.md
 
 Prompteur: VS Code extension for local, Git-friendly Markdown prompts with YAML frontmatter.
-Start at [docs/index.md](./docs/index.md).
+Start at [docs/INDEX.md](./docs/INDEX.md).
 
 ## Project layout
 
 - `src/`: extension source; core/application code stays VS Code-independent ([ADR 003](./docs/adr/003-local-safety-boundaries.md), [ADR 005](./docs/adr/005-copilot-prompt-tool.md)).
 - `tests/`: unit tests (`vitest`) and host smoke tests.
 - `scripts/`: build helpers (`schemas.ts`, `run-host-tests.mjs`).
-- `docs/`: documentation. Start at [docs/index.md](./docs/index.md); agent rules for docs are in [docs/AGENTS.md](./docs/AGENTS.md) and for ADRs in [docs/adr/AGENTS.md](./docs/adr/AGENTS.md).
+- `docs/`: documentation. Start at [docs/INDEX.md](./docs/INDEX.md); agent rules for docs are in [docs/AGENTS.md](./docs/AGENTS.md) and for ADRs in [docs/adr/AGENTS.md](./docs/adr/AGENTS.md).
 
 ## Validation commands
 
@@ -29,7 +29,7 @@ Run the smallest relevant check, then escalate if needed.
 - Keep UI boring, simple, functional, and native. Every visible element must serve a requirement or usability need.
 - Marketplace README introduction: 5–15 factual, scannable lines. No hype, unverifiable claims, or filler.
 - Keep README current; log only user-facing changes in CHANGELOG. Do not log internal refactors, tests, or tooling.
-- Update related docs with code. Keep [docs/index.md](./docs/index.md) synchronized.
+- Update related docs with code. Keep [docs/INDEX.md](./docs/INDEX.md) synchronized.
 - No extension-owned network/provider calls, telemetry, databases, or shell execution. The user-approved read-only Copilot prompt tool may return requested prompt content/context to the configured model.
 - No direct Chat composer insertion; **Copy Text** uses clipboard handoff until VS Code provides a supported API.
 - Require Workspace Trust for workspace mutations, generation, and preview.
@@ -59,17 +59,15 @@ Run the smallest relevant check, then escalate if needed.
 - Update package and lockfile versions in a feature PR. After merge, tag the corresponding `main` commit `v<version>` and push the tag.
 - `.github/workflows/publish.yml` validates exact tag/version match, builds and packages the VSIX, creates a GitHub Release, and publishes to Marketplace through Trusted Publishing.
 - Keep prereleases marked as prereleases. Do not publish without an explicit request.
+- Use numeric package versions and the boolean `vsce.preRelease` for release-channel selection. SemVer prerelease suffixes are unsupported. Both lockfile versions must match the manifest.
 
 ## Validation and commits
 
 - Run the smallest relevant checks. Standard local checks: `npm run lint`, `npm run typecheck`, `npm test`; `npm run build` includes typecheck.
 - PR CI runs host smoke on stable VS Code. Nightly/manual CI covers audit, formatting, and coverage.
+- Release tags must point to a commit on `main`; the tag workflow validates this before packaging or publishing.
 - Do not install/restore dependencies unless manifests changed or validation reports missing tools.
-- Use Conventional Commits as specified below. Include this trailer on feature and merge commits:
-
-  ```text
-  Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
-  ```
+- Use Conventional Commits as specified below. Do not add `Co-authored-by:` trailers.
 
 - Inspect staged changes and run `git diff --cached --check` before committing. Do not amend existing commits or stage unrelated work as a shortcut.
 
