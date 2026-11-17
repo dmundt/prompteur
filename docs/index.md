@@ -4,22 +4,27 @@ Documentation index. Select the matching topic below.
 
 ## Find the right document
 
-| If you need to...                                   | Read                                       |
-| --------------------------------------------------- | ------------------------------------------ |
-| Contribute using GitHub Flow                        | [../CONTRIBUTING.md](../CONTRIBUTING.md)   |
-| Set up, validate, or release locally                | [../DEVELOPMENT.md](../DEVELOPMENT.md)     |
-| Configure main branch protection                    | [github-settings.md](./github-settings.md) |
-| Understand the release boundaries                   | [mvp-scope.md](./mvp-scope.md)             |
-| Understand the component layout                     | [architecture.md](./architecture.md)       |
-| Change prompt file format, paths, or validation     | [storage.md](./storage.md)                 |
-| Change commands, `LibraryService`, or `SearchIndex` | [api.md](./api.md)                         |
-| Change tree icons                                   | [icons.md](./icons.md)                     |
-| Check test, build, or verification expectations     | [verification.md](./verification.md)       |
-| Check clean-room implementation constraints         | [clean-room.md](./clean-room.md)           |
-| Understand why a decision was made                  | [adr/](./adr/)                             |
-| Follow repository agent rules                       | [../AGENTS.md](../AGENTS.md#github-flow)   |
-| Follow agent rules for the docs                     | [AGENTS.md](./AGENTS.md)                   |
-| Follow agent rules for ADRs                         | [adr/AGENTS.md](./adr/AGENTS.md)           |
+| If you need to...                                   | Read                                                   |
+| --------------------------------------------------- | ------------------------------------------------------ |
+| Contribute using GitHub Flow                        | [../CONTRIBUTING.md](../CONTRIBUTING.md)               |
+| Set up, validate, or release locally                | [../DEVELOPMENT.md](../DEVELOPMENT.md)                 |
+| Review repository structure                         | [../ARCHITECTURE.md](../ARCHITECTURE.md)               |
+| Apply shared engineering practices                  | [engineering-standards.md](./engineering-standards.md) |
+| Report a security issue                             | [../SECURITY.md](../SECURITY.md)                       |
+| Configure main branch protection                    | [github-settings.md](./github-settings.md)             |
+| Understand the release boundaries                   | [mvp-scope.md](./mvp-scope.md)                         |
+| Understand the component layout                     | [architecture.md](./architecture.md)                   |
+| Change prompt file format, paths, or validation     | [storage.md](./storage.md)                             |
+| Change commands, `LibraryService`, or `SearchIndex` | [api.md](./api.md)                                     |
+| Change tree icons                                   | [icons.md](./icons.md)                                 |
+| Check test, build, or verification expectations     | [verification.md](./verification.md)                   |
+| Check clean-room implementation constraints         | [clean-room.md](./clean-room.md)                       |
+| Understand why a decision was made                  | [adr/](./adr/)                                         |
+| Follow repository agent rules                       | [../AGENTS.md](../AGENTS.md#github-flow)               |
+| Follow agent rules for the docs                     | [AGENTS.md](./AGENTS.md)                               |
+| Follow agent rules for ADRs                         | [adr/AGENTS.md](./adr/AGENTS.md)                       |
+| Apply shared engineering practices                  | [engineering-standards.md](./engineering-standards.md) |
+| Report a security issue                             | [../SECURITY.md](../SECURITY.md)                       |
 
 ## Architecture Decision Records
 

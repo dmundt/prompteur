@@ -1,6 +1,6 @@
 # Prompteur
 
-[![Pull Request CI](https://github.com/dmundt/prompteur/actions/workflows/quality.yml/badge.svg)](https://github.com/dmundt/prompteur/actions/workflows/quality.yml)
+[![Pull Request CI](https://github.com/dmundt/prompteur/actions/workflows/pull-request.yml/badge.svg)](https://github.com/dmundt/prompteur/actions/workflows/pull-request.yml)
 
 - Local, Git-friendly Markdown prompts for developers who reuse prompts across projects.
 - Category/tag organization and full-text search.
@@ -12,7 +12,7 @@
 ## Install and Run
 
 - Desktop VS Code 1.96+.
-- Development: Node.js 22.12+.
+- Development: Node.js 22.13+.
 
 ```sh
 npm ci
@@ -27,7 +27,7 @@ code --install-extension prompteur-1.2.0.vsix
 ## Development and Releases
 
 - Use GitHub Flow: branch from `main`, validate locally, push, open a PR to `main`, merge after **PR validation** passes, then delete the branch.
-- Local hooks run formatting and lint on staged files, then typecheck and unit tests before push. See [DEVELOPMENT.md](./DEVELOPMENT.md) and [CONTRIBUTING.md](./CONTRIBUTING.md).
+- Local hooks run formatting and lint on staged files, then typecheck and unit tests before push. See [DEVELOPMENT.md](./DEVELOPMENT.md), [CONTRIBUTING.md](./CONTRIBUTING.md), and [engineering standards](./docs/engineering-standards.md).
 - Releases are tag-driven. After a version PR merges to `main`, push its matching `v<version>` tag. The tag workflow builds/packages a VSIX and publishes to Marketplace using Trusted Publishing.
 
 ## Daily Workflow

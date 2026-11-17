@@ -64,12 +64,9 @@ Run the smallest relevant check, then escalate if needed.
 
 - Run the smallest relevant checks. Standard local checks: `npm run lint`, `npm run typecheck`, `npm test`; `npm run build` includes typecheck.
 - PR CI runs host smoke on stable VS Code. Nightly/manual CI covers audit, formatting, and coverage.
+- Release tags must point to a commit on `main`; the tag workflow validates this before packaging or publishing.
 - Do not install/restore dependencies unless manifests changed or validation reports missing tools.
-- Use Conventional Commits as specified below. Include this trailer on feature and merge commits:
-
-  ```text
-  Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
-  ```
+- Use Conventional Commits as specified below. Do not add `Co-authored-by:` trailers.
 
 - Inspect staged changes and run `git diff --cached --check` before committing. Do not amend existing commits or stage unrelated work as a shortcut.
 

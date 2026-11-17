@@ -2,14 +2,14 @@
 
 ## Setup
 
-- Node.js 22.12+
-- Desktop VS Code 1.96+
+- Node.js 22.13 or newer.
+- Desktop VS Code 1.96 or newer.
 
 ```sh
 npm ci
 ```
 
-`npm ci` installs Husky hooks through the `prepare` script.
+`npm ci` installs Husky hooks through `prepare`.
 
 ## Local checks
 
@@ -19,24 +19,25 @@ npm run typecheck
 npm test
 npm run build
 npm run format:check
+npm run test:host
 ```
 
 - Pre-commit: `lint-staged` formats staged files and runs ESLint on staged JavaScript/TypeScript.
 - Pre-push: runs `npm run typecheck` and `npm test`.
-- Host smoke: `npm run test:host`. PR CI runs it on stable VS Code; run locally to diagnose host-specific failures.
+- Host smoke: `npm run test:host` runs the extension in VS Code; use it for host-specific failures.
 - `npm run package` creates a local VSIX; it does not publish.
 
 ## Release
 
-Release only from a tag on `main`; never publish on merge:
+Release only from a tag on `main`; merging a pull request never publishes:
 
-1. Update `package.json` and `package-lock.json` version through a feature PR:
+1. Update `package.json` and `package-lock.json` in a feature pull request:
 
    ```sh
    npm version <version> --no-git-tag-version --ignore-scripts
    ```
 
-2. Merge the version PR to `main`.
+2. Merge the version change to `main`.
 3. Create and push a matching tag:
 
    ```sh
@@ -46,13 +47,13 @@ Release only from a tag on `main`; never publish on merge:
    git push origin v<version>
    ```
 
-4. `.github/workflows/publish.yml` validates the tag, builds and packages the VSIX, uploads it as an Actions artifact and GitHub Release asset, then publishes to the VS Code Marketplace using Trusted Publishing.
+4. `.github/workflows/publish.yml` validates the version and `main` ancestry, builds and packages the VSIX, uploads it as an Actions artifact and GitHub Release asset, then publishes through Marketplace Trusted Publishing.
 
-Prerelease versions use VS Code Marketplace prerelease publishing. Trusted Publishing must target `.github/workflows/publish.yml`; no publishing secret is required.
+Prerelease versions use Marketplace prerelease publishing. Trusted Publishing must target `.github/workflows/publish.yml`; no publishing secret is required.
 
 ## CI
 
-- Feature push, excluding `main`: install and build.
-- Pull request to `main`: install, lint, typecheck, unit tests, host smoke on stable VS Code.
-- Tag push `v*`: install, build, package, release asset, Marketplace publish.
+- Feature branch push: install and build.
+- Pull request to `main`: install, lint, typecheck, unit tests, and host tests on stable VS Code.
+- Tag push `v*`: install, build, package, GitHub Release asset, and Marketplace publish.
 - Nightly/manual: audit, formatting, and coverage.
