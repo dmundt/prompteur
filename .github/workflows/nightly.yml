@@ -26,3 +26,19 @@ jobs:
       - run: npm audit
       - run: npm run format:check
       - run: npm run test:coverage
+
+  shared-drift:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - uses: actions/checkout@v7
+        with:
+          repository: dmundt/stemlink
+          ref: main
+          path: .shared-peer
+          persist-credentials: false
+      - run: npm run check:shared -- .shared-peer

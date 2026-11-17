@@ -26,7 +26,7 @@ npm run build
 npm run format:check
 ```
 
-Run `npm run test:host` for extension-host behavior. Add focused tests for behavior changes. Keep platform-wide or expensive validation out of the standard pull-request path unless a change requires it.
+Run `npm run test:host` for extension-host behavior. Host tests exercise core workflows, Restricted Mode trust guards, and relevant failure or recovery paths. Add focused tests for behavior changes. Keep platform-wide or expensive validation out of the standard pull-request path unless a change requires it.
 
 ## GitHub Flow and pull requests
 
@@ -64,3 +64,4 @@ Run `npm run test:host` for extension-host behavior. Add focused tests for behav
 - Attach the VSIX to a GitHub Release and publish to Marketplace only through configured Trusted Publishing.
 - Before retrying Marketplace publication, verify an existing GitHub Release is published in the requested channel and its existing VSIX asset matches the package byte for byte.
 - Keep release notes and version metadata aligned with the package.
+- Keep the release verifier and its tests identical across both repositories. Nightly validation compares them, these standards, and community templates against the other repository's published `main`. Coordinate changes across both repositories; transient drift during integration fails the nightly check.

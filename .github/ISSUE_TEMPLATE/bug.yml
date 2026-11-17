@@ -29,6 +29,6 @@ body:
     id: logs
     attributes:
       label: Relevant output
-      description: Remove secrets and private prompt/workspace content before sharing.
+      description: Remove secrets and private vault, prompt, or workspace content before sharing.
     validations:
       required: false
