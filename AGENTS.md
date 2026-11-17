@@ -21,6 +21,8 @@ Run the smallest relevant check, then escalate if needed.
 - Full build: `npm run build`
 - Host tests: `npm run test:host`
 
+Host tests use `PROMPTEUR_CODE_PATH` if set, then `VSCODE_EXECUTABLE_PATH`, a local VS Code installation if available, or a downloaded stable build. Set `VSCODE_TEST_VERSION` to download a specific version.
+
 ## Change rules
 
 - Keep changes surgical; leave unrelated defects untouched.

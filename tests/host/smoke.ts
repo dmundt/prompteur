@@ -34,11 +34,13 @@ function waitForTreeRefresh(tree: PromptTree): { promise: Promise<void>; dispose
 
 export async function run(): Promise<void> {
   const skipClipboard = process.env.PROMPTEUR_TEST_SKIP_CLIPBOARD === '1';
+  const restricted = process.env.PROMPTEUR_TEST_RESTRICTED === '1';
   assert.equal(
     vscode.workspace.workspaceFolders?.[0]?.uri.scheme,
     'file',
     'Smoke fixture must open a local workspace',
   );
+  assert.equal(vscode.workspace.isTrusted, !restricted, 'Fixture workspace trust must match mode');
   const extension = vscode.extensions.getExtension('dmundt.prompteur');
   assert.ok(extension, 'Development extension must be available');
   const start = performance.now();
@@ -66,7 +68,7 @@ export async function run(): Promise<void> {
       vscode.lm.tools.some((tool) => tool.name === 'prompteur_findPrompt'),
       'Copilot prompt search tool must register when the host supports Language Model Tools',
     );
-  assertLocalDuration(activation, 200, 'Activation');
+  if (restricted) assertLocalDuration(activation, 200, 'Activation');
   let inputCount = 0;
   const restoreDescriptionInput = replaceWindowMethod('showInputBox', async () => {
     inputCount++;
@@ -166,6 +168,7 @@ export async function run(): Promise<void> {
   process.stdout.write(
     '[host] Category counts passed for live filtered/total/hidden modes, both scopes, custom and invalid categories, and flat view\n',
   );
+  if (!restricted) return;
   const document = await vscode.workspace.openTextDocument({
     language: 'typescript',
     content: 'const answer = 42;',

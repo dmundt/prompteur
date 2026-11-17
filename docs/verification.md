@@ -27,7 +27,7 @@ npm run package
 - Boundary tests cover category/tag counts and lengths, Markdown/file UTF-8 bytes, YAML depth/node counts, generated output, mocked cache entry/byte ceilings, filesystem file/directory enumeration, sync snapshot file size, Copilot query length and candidate truncation, custom-description lengths, portable path segments including U+0000-U+001F, and fuzzy thresholds/edit costs.
 - Workflow integration tests use real isolated library files with mocked VS Code APIs/state: Prompts/User/Workspace expansion on view visibility; startup reconciliation and invalid reload recovery; create/save/copy/delete with dirty-edit protection and sync tombstones; Workspace Trust and Copilot rendering without prompt mutation.
 
-- Host smoke: isolated workspace/profile; Trust enabled; startup prompts disabled.
+- Host smoke: separate isolated workspace/profile per run. The trusted run uses `@vscode/test-electron`'s `runTests`; the Restricted Mode run launches VS Code directly because `runTests` disables Workspace Trust. Both suppress startup prompts.
 - Checks Restricted Mode blocking, User prompt use, clipboard handoff, source preservation, removed Insert command, starters, and plaintext preview. Prompt-record transfer verifies category override, saved output, unchanged source, and retained copy buffer after blocked Workspace operations. Preview retains source-editor context after opening a library copy. Single-line input interaction is not covered by this smoke test.
 - Host smoke verifies Language Model Tool registration when supported; tool search/render is unit-tested with a VS Code API mock. Tests and extension code make no model-provider requests.
 - Runner restores clipboard and removes temp workspace data.
@@ -56,7 +56,7 @@ npm run package
 - `VSCODE_TEST_VERSION`: select host version; default `stable`.
 - Feature and PR CI run on Ubuntu with Node.js 22. PR host smoke uses Xvfb and stable VS Code. Machine-dependent timing budgets run locally only when `CI` is unset or empty.
 - Local budgets: activation under 200 ms, each cached 10k-entry search under 200 ms, and malformed delimiter scanning under 250 ms. Measurements depend on local load and instrumentation; rerun without coverage to assess timing.
-- `VSCODE_EXECUTABLE_PATH`: use installed host.
+- `PROMPTEUR_CODE_PATH`: use an installed host; takes precedence over `VSCODE_EXECUTABLE_PATH`, which remains supported.
 - `PROMPTEUR_TEST_SKIP_CLIPBOARD=1`: skip failed native clipboard precondition. This does not certify clipboard behavior; unit tests cover copy logic.
 
 - Run commands for current results. Audit/remediation files are historical.
