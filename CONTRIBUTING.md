@@ -15,7 +15,7 @@ Do not push directly to `main` or create `develop`, release, or long-lived featu
 
 ## Before opening a pull request
 
-Install dependencies and Git hooks with `npm ci`. Pre-commit formats staged files and lints staged TypeScript; pre-push runs typecheck and unit tests.
+Install dependencies and Git hooks with `npm ci`. Pre-commit formats staged files and lints staged JavaScript/TypeScript; pre-push runs typecheck and unit tests. Run relevant host tests for extension behavior changes.
 
 ```sh
 npm run lint
@@ -29,8 +29,8 @@ Keep pull requests focused. Describe behavior changes and list validation perfor
 ## Changes and commits
 
 - Add focused tests for behavior changes.
-- Update user-facing documentation with behavior changes.
-- Add architecture decisions to [the ADRs](./docs/adr/) and keep the documentation index current.
+- Update user-facing documentation and `CHANGELOG.md` only for user-facing changes.
+- Follow [the ADR index](./docs/adr/INDEX.md) for architectural decisions.
 - Follow [shared engineering standards](./docs/engineering-standards.md).
 - Use Conventional Commits: `<type>: <description>`.
 - Do not add `Co-authored-by:` trailers.
