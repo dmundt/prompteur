@@ -3,9 +3,13 @@ tests/**
 scripts/**
 AGENTS.md
 **/AGENTS.md
+CONTRIBUTING.md
+DEVELOPMENT.md
+.husky/**
 node_modules/**
 coverage/**
 .github/**
+docs/github-settings.md
 .vscode/**
 dist/types/**
 dist/schema.cjs

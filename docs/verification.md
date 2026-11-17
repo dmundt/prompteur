@@ -2,6 +2,8 @@
 
 ```sh
 npm run lint
+npm run typecheck
+npm test
 npm run format:check
 npm run coverage
 npm run build
@@ -52,7 +54,7 @@ npm run package
 ## Host and Release Configuration
 
 - `VSCODE_TEST_VERSION`: select host version; default `stable`.
-- CI: Windows/Linux/macOS; VS Code 1.96.0 and stable. Functional assertions run in CI and locally; machine-dependent timing budgets run locally only when `CI` is unset or empty.
+- Feature and PR CI run on Ubuntu with Node.js 22. PR host smoke uses Xvfb and stable VS Code. Machine-dependent timing budgets run locally only when `CI` is unset or empty.
 - Local budgets: activation under 200 ms, each cached 10k-entry search under 200 ms, and malformed delimiter scanning under 250 ms. Measurements depend on local load and instrumentation; rerun without coverage to assess timing.
 - `VSCODE_EXECUTABLE_PATH`: use installed host.
 - `PROMPTEUR_TEST_SKIP_CLIPBOARD=1`: skip failed native clipboard precondition. This does not certify clipboard behavior; unit tests cover copy logic.
@@ -64,7 +66,9 @@ npm run package
 - Earlier host exposed non-file profile storage; local-path fallback and regression test fixed it.
 
 - Activity Bar SVG: XML/manifest test. Marketplace icon: PNG.
-- CI builds local-installable VSIX on pushes and pull requests.
-- Publishing a GitHub release runs the full CI matrix, then attaches its VSIX to the release and publishes the same VSIX to VS Code Marketplace using Trusted Publishing. Release tags must match the package version, with an optional `v` prefix. GitHub prereleases publish as Marketplace prereleases.
-- Release asset upload requires `contents: write` and fails rather than replacing an existing asset.
+- Feature-branch pushes run install and build; `main` pushes do not trigger branch CI.
+- Pull requests targeting `main` run install, lint, typecheck, unit tests, and host smoke on stable VS Code. **PR validation** is the required status check.
+- A `v*` tag push runs install, build, and packaging; uploads the VSIX as an Actions artifact and GitHub Release asset; then publishes it to VS Code Marketplace using Trusted Publishing. The tag must exactly match the package version (`v<version>`). Prerelease versions publish as Marketplace prereleases.
+- Nightly/manual validation runs audit, lint, formatting, and coverage.
+- Release asset upload requires `contents: write`; Marketplace publishing requires `id-token: write` and a Trusted Publishing policy targeting `.github/workflows/publish.yml`.
 - Marketplace Trusted Publishing policy must target `.github/workflows/publish.yml` without a GitHub environment. The publish job requires `id-token: write`.
