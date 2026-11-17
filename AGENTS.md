@@ -43,29 +43,29 @@ Run the smallest relevant check, then escalate if needed.
 
 ## Branch and release workflow
 
-Use feature branches for changes and a release branch for integration. Do not implement directly on `main` or mix unrelated features in one commit. Release preparation authorizes feature commits, pull-request merges, and release metadata updates; ordinary edit requests do not authorize commits automatically.
+Use feature branches for changes and a release branch for integration. Do not implement directly on `main` or mix unrelated features in one commit. Only changes targeting protected `main` require a pull request; run CI for pull requests targeting `main`. For merges into non-main branches, build and test locally; do not run remote CI. Release preparation authorizes feature commits, pull-request merges, and release metadata updates; ordinary edit requests do not authorize commits automatically.
 
 ### GitHub Flow for development
 
 - Keep `main` deployable. Use short-lived, descriptively named branches for small, focused changes.
 - Base independent work on the active release branch and keep it current without rewriting published history. Follow the dependency rules below for dependent work.
-- Publish feature branches and open pull requests into the release branch for discussion and validation. Complete requested reviews and checks before merging.
+- Merge features into non-main branches after local build and test validation; pull requests are optional for these branches.
 - Integrate tested release branches into `main` through pull requests when explicitly requested. Do not deploy or publish without authorization.
 - Retain existing branches unless deletion is explicitly authorized.
 
 ### Protected branches and remote publication
 
-- Protect `main` and every `release/*` branch with the active GitHub ruleset **Protect main and release branches**. Require pull requests with zero required approvals and no required status checks; block force-pushes and deletion; configure no bypass actors.
-- Never commit or push directly to protected branches. Publish changes through pull requests and merge commits.
-- Publish every new release branch and each feature branch needed for a pull request to every configured push remote.
-- Publish every approved `main` and `release/*` update to every configured remote. Use that remote's pull-request flow when protection requires it; do not leave protected refs local-only or divergent.
-- Before stopping, verify protected branch refs match on all configured remotes. Report any remote that could not be updated.
+- Protect only `main` with the active GitHub ruleset **Protect main and release branches**. Require pull requests with zero required approvals and no required status checks; block force-pushes and deletion; configure no bypass actors.
+- Never commit or push directly to protected `main`; merge changes through pull requests after CI passes.
+- Non-main branches, including `release/*`, may be merged without pull requests after local build and test validation. Do not run remote CI for these merges.
+- Publish branches and updates to configured remotes when needed; do not leave protected `main` refs local-only or divergent.
+- Before stopping, verify protected `main` refs match on all configured remotes. Report any remote that could not be updated.
 
 ### 1. Inspect and confirm scope
 
 - Inspect `git status --short`, current branch, local branches, recent history, and the complete relevant diff.
 - Identify each feature/fix, its dependencies, tests, and directly related docs.
-- Confirm target version, base branch, feature boundaries, target remote(s), and any ambiguous inclusion. Default release base: latest published `main`; verify fetched remote refs and local branch state before branching.
+- Confirm target version, base branch, feature boundaries, target remote(s), and any ambiguous inclusion. Default release base: latest published `main`; verify fetched remote refs and local branch state before branching. Require a pull request only when the target is `main`.
 - Preserve unrelated changes. Never reset, discard, amend, rebase, force-push, or delete existing branches without explicit authorization.
 
 ### 2. Create and publish the release branch
@@ -73,7 +73,7 @@ Use feature branches for changes and a release branch for integration. Do not im
 - For release preparation, create `release/v<major>.<minor>.<patch>` from the confirmed published base before integrating features.
 - Keep `main` unchanged. Record its starting commit for final verification.
 - Reuse an existing release branch only after inspecting its history and confirming that it is the intended target. Never overwrite an existing branch.
-- Publish each new release branch to every configured push remote. Branch creation does not authorize direct updates to protected `main` or existing release branches.
+- Publish a release branch to configured remotes when needed. Branch creation does not authorize direct updates to protected `main`.
 - Do not tag, publish, or merge the release into `main` unless separately requested.
 
 ### 3. Create feature branches
@@ -81,7 +81,7 @@ Use feature branches for changes and a release branch for integration. Do not im
 - Before implementation, create one `feat/<short-topic>` branch per feature or coherent user-facing fix; use an existing matching feature branch when appropriate.
 - Start independent features from the release branch. Start dependent features from the required feature tip or from the release after merging that prerequisite.
 - Record dependencies; do not describe dependent branches as independent.
-- Push each feature branch to every remote used for its pull request.
+- Push feature branches only when remote publication or a pull request is needed.
 - Keep code, behavior tests, and directly related documentation together. Avoid separate branches for incidental files or every small label change.
 
 ### 4. Separate existing uncommitted work safely
@@ -104,11 +104,11 @@ Use feature branches for changes and a release branch for integration. Do not im
 
 - Do not amend existing commits or create an unrelated all-features snapshot commit as a substitute for feature separation.
 
-### 6. Merge features into the release
+### 6. Merge features into non-main branches
 
-- Open a pull request for each feature into the release branch on every configured remote; merge after required checks pass and any requested reviews complete.
-- Merge each feature in dependency order using a merge commit. Preserve one explicit merge commit per feature; do not squash or fast-forward feature integration.
-- Include the required co-author trailer in the merge commit body.
+- Run the relevant build and tests locally before merging; do not run remote CI for non-main branch merges.
+- Merge each feature in dependency order. Preserve one explicit merge commit per feature; do not squash or fast-forward feature integration.
+- Use a pull request and wait for CI only when the merge target is protected `main`.
 - Resolve only understood conflicts on the feature branch; preserve both intended behaviors. Ask for guidance when intent is ambiguous, then rerun affected checks.
 - Feature commits may be prepared before integration; dependent branches must still merge in dependency order.
 
@@ -119,7 +119,7 @@ Use feature branches for changes and a release branch for integration. Do not im
 - Verify `package.json`, top-level lockfile version, and root package lockfile version agree.
 - Move relevant user-facing entries from `Unreleased` to `## <version>` in `CHANGELOG.md`; retain an empty `Unreleased` heading. Do not include internal refactors, tests, or tooling.
 - Update the README VSIX installation example and directly related version references. Do not rewrite historical release entries or overwrite existing VSIX files.
-- Validate, commit, publish, and merge release metadata through a pull request to every configured remote's release branch.
+- Validate release metadata locally, then commit and merge it into the non-main release branch without remote CI. Use a pull request and CI only if targeting `main`.
 
 ### 8. Validate the integrated release
 
@@ -131,7 +131,7 @@ Use feature branches for changes and a release branch for integration. Do not im
 
 ### 9. Verify release state
 
-- Inspect the release-metadata pull request and merge commit; do not commit directly to the protected release branch.
+- Inspect the release-metadata merge commit. Do not commit directly to protected `main`; use a pull request when integrating into `main`.
 - Verify every included feature tip is an ancestor of the release using `git merge-base --is-ancestor <feature-branch> <release-branch>`.
 - Confirm expected merge commits, matching release versions, unchanged `main` commit, matching remote release refs, and a clean worktree.
 - Do not stage unrelated work to obtain a clean status; if unrelated changes remain, preserve and report them.
@@ -140,7 +140,7 @@ Use feature branches for changes and a release branch for integration. Do not im
 
 - Leave the release branch checked out. Keep feature branches for traceability.
 - Report release branch, merged feature branches, version, validation results, and remaining limitations.
-- Stop. Keep protected branch updates published to every configured remote. No tag, GitHub release, Marketplace publication, or merge to `main` without a separate explicit request.
+- Stop. Keep protected `main` updates published to every configured remote. No tag, GitHub release, Marketplace publication, or merge to `main` without a separate explicit request.
 
 ## Commit Messages
 
