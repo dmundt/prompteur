@@ -53,7 +53,7 @@ Run `npm run test:host` for extension-host behavior. Add focused tests for behav
 - Pull request CI runs lint, typecheck, unit tests, and existing host tests.
 - Nightly/manual workflows run audits, formatting checks, coverage, and other expensive validation.
 - Cancel superseded validation runs on the same ref. Bound build jobs to 5 minutes, PR jobs to 10, heavy validation to 20, and each release job to 10; never automatically cancel publication.
-- Keep coverage gates appropriate to each runner's measured baseline. Manual compatibility validation covers supported minimum/stable VS Code on Windows, macOS, and Linux, including Restricted Mode.
+- Gate coverage at 95% lines, 91% branches, and 93% functions. Retain additional runner-specific gates and document differing coverage scopes; percentages are not directly comparable. Manual compatibility validation covers supported minimum/stable VS Code on Windows, macOS, and Linux, including Restricted Mode.
 - Do not publish from a merge to `main`.
 
 ## Releases
