@@ -136,6 +136,7 @@ export class LocalFiles implements FilePort {
       if (codeIs(error, 'EEXIST'))
         throw new Error(
           `Library file busy. If no Prompteur writer remains, remove stale lock: ${lockPath}`,
+          { cause: error },
         );
       throw error;
     }
