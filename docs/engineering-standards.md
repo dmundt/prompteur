@@ -5,6 +5,7 @@ Shared development expectations for Stemlink and Prompteur. Product-specific bui
 ## Code and dependencies
 
 - Keep changes focused, typed, and consistent with existing patterns.
+- Use Prettier with single quotes, trailing commas, 100-column width, and LF line endings. Git attributes normalize text files; preserve binary assets.
 - Keep core logic independent of VS Code APIs where practical.
 - Use existing runtime dependencies and built-in APIs; justify new runtime packages.
 - Update `package.json` and `package-lock.json` together.
