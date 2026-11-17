@@ -11,7 +11,7 @@ npm run test:host
 npm run package
 ```
 
-- Coverage gate: 91% for lines, statements, functions, branches across `src/`, including VS Code adapters.
+- Coverage gates across `src/`, including VS Code adapters: 95% lines, 91% branches, 93% functions, and 91% statements.
 - Remove tests for removed features; do not retain compatibility scaffolding.
 
 - Unit/integration coverage: metadata-only frontmatter; custom category creation, approval, persisted metadata validation, rename recovery, and User/Workspace removal guards; category count modes; settings defaults/overrides and gear command; comments/unknown fields; malformed delimiters/YAML/aliases/depth; exact body preservation; ignored YAML; path identity; conflicts/recovery; resource/path safety; search/filters/tooltips; 10k search; groups/batches/watchers; variables; CRUD/previews/Copy Text/prompt copy/paste and buffer enablement; isolated clipboard menu group and hidden legacy actions; legacy command compatibility; read-only Copilot prompt search/render, confirmation, and Workspace Trust; cancellation.
