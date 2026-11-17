@@ -62,4 +62,5 @@ Run `npm run test:host` for extension-host behavior. Add focused tests for behav
 - Use numeric versions and explicit boolean `vsce.preRelease` for stable/prerelease selection. Validate the manifest and both lockfile versions; reject SemVer prerelease suffixes.
 - Validate the manifest version, build, and package a VSIX before publication.
 - Attach the VSIX to a GitHub Release and publish to Marketplace only through configured Trusted Publishing.
+- Before retrying Marketplace publication, verify an existing GitHub Release is published in the requested channel and its existing VSIX asset matches the package byte for byte.
 - Keep release notes and version metadata aligned with the package.
