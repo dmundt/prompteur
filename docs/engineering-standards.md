@@ -48,6 +48,7 @@ Run `npm run test:host` for extension-host behavior. Add focused tests for behav
 ## Dependencies and CI
 
 - Use weekly Dependabot updates for npm and GitHub Actions.
+- Keep automatic VS Code typings updates within the supported minimum minor. Review Node typings, TypeScript, and lint-staged major upgrades manually against supported APIs, compiler peers, and minimum Node versions.
 - Feature branch CI installs dependencies and builds.
 - Pull request CI runs lint, typecheck, unit tests, and existing host tests.
 - Nightly/manual workflows run audits, formatting checks, coverage, and other expensive validation.
