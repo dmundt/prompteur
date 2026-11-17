@@ -76,8 +76,14 @@ jobs:
           PRERELEASE: ${{ needs.package.outputs.prerelease }}
         run: |
           VSIX="prompteur-${VERSION}.vsix"
-          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq ".assets[].name" | grep -Fxq "$VSIX"; then
+          RELEASE_DIR="$(mktemp -d)"
+          trap 'rm -rf "$RELEASE_DIR"' EXIT
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease,assets > "$RELEASE_DIR/release.json" 2>/dev/null; then
+            if jq -e --arg name "$VSIX" '.assets | any(.name == $name)' "$RELEASE_DIR/release.json" >/dev/null; then
+              gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "$VSIX" --dir "$RELEASE_DIR"
+              node scripts/release.mjs --verify-existing "$RELEASE_DIR/release.json" "$VSIX" "$RELEASE_DIR/$VSIX"
+            else
+              node scripts/release.mjs --verify-existing "$RELEASE_DIR/release.json" "$VSIX"
               gh release upload "$TAG" "$VSIX" --repo "$GITHUB_REPOSITORY"
             fi
           elif [ "$PRERELEASE" = "true" ]; then

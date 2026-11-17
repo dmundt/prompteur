@@ -57,6 +57,8 @@ Use numeric `major.minor.patch` versions only. Set `vsce.preRelease` in `package
 
 The workflow validates the tag, manifest, and both lockfile versions before installing dependencies. GitHub Release creation precedes Marketplace publication: a release-asset failure blocks publication, while a Marketplace failure can leave a GitHub Release available. Inspect both results; rerun transient failures. Correct source/configuration failures through a new version/tag, never by moving protected tags.
 
+On retry, an existing GitHub Release must already be published in the requested channel. If its VSIX asset exists, its bytes must match the newly built VSIX before Marketplace publication; a mismatch fails without replacing the asset. Builds can produce different archive bytes, so investigate a mismatch and release a new version if the same artifact cannot be reproduced.
+
 Trusted Publishing must target `.github/workflows/publish.yml`; no publishing secret is required.
 
 ## CI
