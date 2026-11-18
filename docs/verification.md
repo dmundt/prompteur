@@ -51,7 +51,7 @@ npm run package
   8. With a name-prefix match plus a lower-ranked body match, verify Best Match returns the former; Require Choice returns metadata for both. Alphabetical ordering must not change Best Match selection.
   9. Try a misspelled synthetic name with Fuzzy enabled; verify edit-limit boundaries and equal-distance ambiguity. Confirm empty/filter-only browsing remains alphabetical.
 - Use synthetic fixture prompts/context for manual checks. Do not send private prompt or clipboard content merely to validate the integration.
-- Record actual host/Copilot results and any blocked stages separately; never infer interactive success from unit tests.
+- Run discovery, approval (deny, then retry and approve), and candidate follow-up checks separately in local Copilot Chat and the Agents window. If **Find Prompteur Prompt** is absent, mark that surface unverified and check **Copy Text** as the fallback. Record the VS Code version, session type, and blocked stages; never infer interactive success from host registration.
 
 ## Host and Release Configuration
 

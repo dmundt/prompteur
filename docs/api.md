@@ -1,6 +1,6 @@
 # Internal API and Commands
 
-- No public prompt-library API or direct model requests. The read-only `prompteur_findPrompt` VS Code Language Model Tool searches and renders prompts for Copilot Chat/Agents.
+- No public prompt-library API or direct model requests. The read-only `prompteur_findPrompt` VS Code Language Model Tool searches and renders prompts in sessions that expose it. It is not a separate agent plugin. Use **Copy Text** when the session does not expose the tool.
 - Async command failures show native errors and reject; cancellations do not mutate.
 
 - `LibraryService` filesystem port: `list`, `read`, expected-source `write`/`remove`.
