@@ -105,6 +105,7 @@ code --install-extension prompteur-1.2.0.vsix
 - Missing candidate path: reports not found; never substitutes another prompt. Refresh the search if a prompt was renamed or removed.
 - Tool output becomes model context, not text inserted into the Chat composer. Following the prompt depends on the model and your request.
 - The tool is read-only; it cannot create, edit, or delete prompts. Workspace prompt results require Trust.
+- Tool availability depends on the session. If **Find Prompteur Prompt** is absent in Copilot Chat or the Agents window, use **Copy Text** and paste the prompt manually.
 - Prompt text and requested selection, clipboard, filename, workspace, or entered text variables are shared with the configured model. Context comes from the same VS Code window.
 - Prompteur makes no direct model/provider calls. Copilot performs the requested task.
 
